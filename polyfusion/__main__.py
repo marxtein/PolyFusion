@@ -1,12 +1,12 @@
-"""Headless CLI for the ETSC core (stdlib only).
+"""Headless CLI for the PolyFusion (stdlib only).
 
 Examples
 --------
-    python -m etsc_core --list
-    python -m etsc_core --preset ITER
-    python -m etsc_core --config mirror --preset BEAM
-    python -m etsc_core --config mirror --preset BEAM --set Ti=20 ni0=4e20
-    python -m etsc_core --params case.json
+    python -m polyfusion --list
+    python -m polyfusion --preset ITER
+    python -m polyfusion --config mirror --preset BEAM
+    python -m polyfusion --config mirror --preset BEAM --set Ti=20 ni0=4e20
+    python -m polyfusion --params case.json
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def _parse_set(items):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="etsc_core", description="ETSC 0-D core")
+    ap = argparse.ArgumentParser(prog="polyfusion", description="ETSC 0-D core")
     ap.add_argument("--config", default="tokamak", help="configuration name")
     ap.add_argument("--preset", help="preset name (see --list)")
     ap.add_argument("--params", help="JSON file with parameter overrides")

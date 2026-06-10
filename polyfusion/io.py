@@ -2,7 +2,7 @@
 
 Every UI (local web, PySide, plain JS, or a script) drives the core through
 the narrow ``dict -> dict`` interface here.  Config-agnostic: route to any
-configuration in :data:`etsc_core.configs.REGISTRY` via the ``config`` arg
+configuration in :data:`polyfusion.configs.REGISTRY` via the ``config`` arg
 (default ``"tokamak"`` for backward compatibility).
 """
 

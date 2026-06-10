@@ -1,6 +1,6 @@
 """Literature benchmarks (independent cross-checks against published results).
 
-Run: python etsc_core/tests/test_literature_benchmark.py
+Run: python polyfusion/tests/test_literature_benchmark.py
 
 1. Reactivity <sigma-v> vs the Bosch-Hale NF 32 (1992) 611 *parameterization*
    (Table VII).  Our code computes <sigma-v> by numerically integrating the
@@ -21,7 +21,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from etsc_core.reactivity import reactivity  # noqa: E402
+from polyfusion.reactivity import reactivity  # noqa: E402
 
 PASS = True
 

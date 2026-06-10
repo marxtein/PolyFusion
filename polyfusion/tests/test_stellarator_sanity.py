@@ -1,6 +1,6 @@
 """Physical-limit sanity checks for the 0-D stellarator model.
 
-Run: python etsc_core/tests/test_stellarator_sanity.py
+Run: python polyfusion/tests/test_stellarator_sanity.py
 Also checks that, with current physics reused from funsc, the stellarator and
 tokamak give identical fusion power for the same geometry/profile inputs
 (confinement closure differs, fusion physics does not).
@@ -11,8 +11,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from etsc_core.configs import solve_stellarator  # noqa: E402
-from etsc_core import funsc  # noqa: E402
+from polyfusion.configs import solve_stellarator  # noqa: E402
+from polyfusion import funsc  # noqa: E402
 
 BASE = dict(R0=18.0, A=10.0, kappa=1.0, delta=0.0, Sn=0.5, ST=1.0, ni0=2e20,
             Ti0=15.0, fT=1.0, fsig=1.0, f1=0.5, B0=5.0, iota=1.0, tauE=1.0,

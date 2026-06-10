@@ -1,6 +1,6 @@
 """Physical-limit sanity checks for the 0-D FRC model (no golden baseline yet).
 
-Run: python etsc_core/tests/test_frc_sanity.py
+Run: python polyfusion/tests/test_frc_sanity.py
 """
 
 import math
@@ -8,7 +8,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from etsc_core.configs import solve_frc  # noqa: E402
+from polyfusion.configs import solve_frc  # noqa: E402
 
 BASE = dict(r_s=0.6, l_s=6.0, r_w=0.8, B_e=6.0, Ti=20.0, Te=15.0, icase=1)
 

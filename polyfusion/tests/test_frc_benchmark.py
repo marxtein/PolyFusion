@@ -1,6 +1,6 @@
 """FRC module verification (docs/25): rigid-rotor analytics + LSX anchor.
 
-Run: python etsc_core/tests/test_frc_benchmark.py
+Run: python polyfusion/tests/test_frc_benchmark.py
 
 1. ANALYTIC identities of the rigid-rotor profile, checked against
    independent numerical integration:
@@ -21,8 +21,8 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from etsc_core.configs import solve_frc  # noqa: E402
-from etsc_core.configs.frc import _solve_K  # noqa: E402
+from polyfusion.configs import solve_frc  # noqa: E402
+from polyfusion.configs.frc import _solve_K  # noqa: E402
 
 PASS = True
 

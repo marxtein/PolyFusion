@@ -1,6 +1,6 @@
 """Physical-limit sanity checks for the 0-D dipole model (no golden baseline yet).
 
-Run: python etsc_core/tests/test_dipole_sanity.py
+Run: python polyfusion/tests/test_dipole_sanity.py
 """
 
 import math
@@ -8,7 +8,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from etsc_core.configs import solve_dipole  # noqa: E402
+from polyfusion.configs import solve_dipole  # noqa: E402
 
 BASE = dict(r_ring=1.0, R_p=10.0, B_ring=10.0, n0=1e21, Ti0=30.0, Te0=20.0,
             tauE=5.0, icase=2)

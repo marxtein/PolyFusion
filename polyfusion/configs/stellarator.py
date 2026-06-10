@@ -62,7 +62,7 @@ def solve_stellarator(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
                       f_ren=1.0) -> StellaratorResult:
     """Evaluate the 0-D stellarator power balance at one operating point.
 
-    Parameters mirror :func:`etsc_core.tokamak.funsc` except ``Ip`` is replaced
+    Parameters mirror :func:`polyfusion.tokamak.funsc` except ``Ip`` is replaced
     by ``iota`` (rotational transform at r/a=2/3) and ``f_ren`` (ISS04
     configuration renormalization factor, ~1 for the database mean).
     """

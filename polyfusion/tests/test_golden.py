@@ -15,7 +15,7 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from etsc_core import funsc  # noqa: E402
+from polyfusion import funsc  # noqa: E402
 
 HERE = os.path.dirname(__file__)
 GOLDEN = json.load(open(os.path.join(HERE, "golden.json"), encoding="utf-8"))

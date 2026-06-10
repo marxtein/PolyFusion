@@ -1,6 +1,6 @@
 """Physical-limit sanity checks for the 0-D mirror model (no golden baseline yet).
 
-Run: python etsc_core/tests/test_mirror_sanity.py
+Run: python polyfusion/tests/test_mirror_sanity.py
 Verifies monotonicity and limit behaviour that any correct mirror model must obey.
 """
 
@@ -9,7 +9,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from etsc_core.configs import solve_mirror  # noqa: E402
+from polyfusion.configs import solve_mirror  # noqa: E402
 
 # BEAM-like reference point (Realta-class HTS mirror), D-T.
 BASE = dict(a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0,

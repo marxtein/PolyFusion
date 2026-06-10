@@ -1,6 +1,6 @@
 """Mirror module verification (docs/20): analytic identities + regime physics.
 
-Run: python etsc_core/tests/test_mirror_benchmark.py
+Run: python polyfusion/tests/test_mirror_benchmark.py
 
 No public worked-number table exists for MCTrans++ (the paper is
 methodological), so per docs/18 the mirror is verified by:
@@ -22,8 +22,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from etsc_core.configs import solve_mirror  # noqa: E402
-from etsc_core.configs.base import MIRROR_PRESETS  # noqa: E402
+from polyfusion.configs import solve_mirror  # noqa: E402
+from polyfusion.configs.base import MIRROR_PRESETS  # noqa: E402
 
 QE, MP = 1.6022e-19, 1.6726e-27
 PASS = True

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>ETSC · 多位形零维系统设计台</title>
+<title>PolyFusion &middot; 多位形零维系统设计台</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -250,11 +250,11 @@ async function init(){
   run.onclick=runScan;preset.onchange=loadPreset;
   helpBtn.onclick=()=>document.getElementById('help').classList.add('on');
   document.getElementById('helpX').onclick=()=>document.getElementById('help').classList.remove('on');
-  saveP.onclick=()=>dl('etsc_'+CUR+'_params.json',JSON.stringify(VALS,null,2));
+  saveP.onclick=()=>dl('polyfusion_'+CUR+'_params.json',JSON.stringify(VALS,null,2));
   loadP.onclick=()=>document.getElementById('fileIn').click();
   document.getElementById('fileIn').onchange=onLoadFile;
-  expJson.onclick=()=>LASTRUN&&dl('etsc_'+CUR+'_point.json',JSON.stringify(LASTRUN,null,2));
-  expCsv.onclick=()=>LASTSCAN&&dl('etsc_'+CUR+'_popcon.csv',scanCsv(LASTSCAN));
+  expJson.onclick=()=>LASTRUN&&dl('polyfusion_'+CUR+'_point.json',JSON.stringify(LASTRUN,null,2));
+  expCsv.onclick=()=>LASTSCAN&&dl('polyfusion_'+CUR+'_popcon.csv',scanCsv(LASTSCAN));
   applyLang();
   selectConfig(Object.keys(CONFIGS)[0]);
 }

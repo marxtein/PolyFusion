@@ -2,7 +2,7 @@
 
 Replaces the ``eval``-based loop of ``scan2d_sc.m``: vary two named parameters
 over value vectors and collect every numeric output on the grid, for *any*
-configuration described by a :class:`~etsc_core.configs.base.ConfigSpec`.
+configuration described by a :class:`~polyfusion.configs.base.ConfigSpec`.
 """
 
 from __future__ import annotations

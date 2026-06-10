@@ -1,4 +1,4 @@
-"""ETSC core: modular Python port of the ENN tokamak 0-D system code.
+"""PolyFusion: modular Python port of the ENN tokamak 0-D system code.
 
 Public API:
     funsc(...)        -> Result   single-point 0-D power balance

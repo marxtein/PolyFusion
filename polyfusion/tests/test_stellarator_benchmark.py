@@ -1,6 +1,6 @@
 """Stellarator literature benchmark (docs/23).
 
-Run: python etsc_core/tests/test_stellarator_benchmark.py
+Run: python polyfusion/tests/test_stellarator_benchmark.py
 
 Anchor: the Wendelstein 7-X June-2018 record discharge (IPP press release;
 Nucl. Fusion divertor-operation papers): n̄_e = 0.8e20 m^-3, T_i(0) ≈ 3.4 keV,
@@ -20,7 +20,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from etsc_core.configs import solve_stellarator  # noqa: E402
+from polyfusion.configs import solve_stellarator  # noqa: E402
 
 PASS = True
 

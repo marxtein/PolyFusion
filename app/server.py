@@ -1,8 +1,8 @@
-"""Minimal local web server for the ETSC POC (option A, confirmed stack).
+"""Minimal local web server for the PolyFusion (option A, confirmed stack).
 
 Stdlib only (no Flask): serves a single Plotly page and exposes the
 config-agnostic compute core over a narrow JSON API.  Works for every
-configuration in ``etsc_core.configs.REGISTRY`` (tokamak, mirror, …).
+configuration in ``polyfusion.configs.REGISTRY`` (tokamak, mirror, …).
 
     python app/server.py            # then open http://127.0.0.1:8765
 """
@@ -17,9 +17,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from etsc_core.io import run_case, list_configs   # noqa: E402
-from etsc_core.configs.base import get             # noqa: E402
-from etsc_core.scan import scan2d, best_region_mask  # noqa: E402
+from polyfusion.io import run_case, list_configs   # noqa: E402
+from polyfusion.configs.base import get             # noqa: E402
+from polyfusion.scan import scan2d, best_region_mask  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOST, PORT = "127.0.0.1", 8765
@@ -113,7 +113,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"ETSC POC serving at http://{HOST}:{PORT}  (Ctrl+C to stop)")
+    print(f"PolyFusion serving at http://{HOST}:{PORT}  (Ctrl+C to stop)")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

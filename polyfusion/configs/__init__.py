@@ -1,6 +1,6 @@
 """Per-configuration 0-D models + the config-agnostic registry.
 
-Tokamak lives in ``etsc_core.tokamak`` (the original ETSC core).  Additional
+Tokamak lives in ``polyfusion.tokamak`` (the original PolyFusion).  Additional
 magnetic configurations live here.  :mod:`base` exposes them through a uniform
 :class:`ConfigSpec` registry so front-ends and the scanner are config-agnostic.
 """

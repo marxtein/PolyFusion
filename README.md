@@ -1,6 +1,6 @@
-# DigitalFusion
+# PolyFusion Zero-D Platform
 
-Multi-configuration 0-D fusion system code with web GUI.
+多位形零维聚变系统设计平台 — Multi-configuration 0-D fusion system design platform with web GUI.
 
 ## Supported Configurations
 
@@ -16,15 +16,15 @@ Multi-configuration 0-D fusion system code with web GUI.
 
 ```bash
 pip install -r requirements.txt
-python -m etsc_core              # CLI single-point
+python -m polyfusion              # CLI single-point
 python app/server.py             # Web GUI → http://127.0.0.1:8765
 ```
 
 ## Structure
 
 ```
-etsc_core/        Compute core (tokamak 0-D solver, reactivity, presets)
-etsc_core/configs/ Per-configuration models (mirror, FRC, dipole, stellarator)
+polyfusion/        Compute core (tokamak 0-D solver, reactivity, presets)
+polyfusion/configs/ Per-configuration models (mirror, FRC, dipole, stellarator)
 app/              Web GUI (stdlib HTTP server + Plotly-based SPA)
 ```
 
