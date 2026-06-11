@@ -184,7 +184,7 @@ const META={
   f_aux_e:['外部加热电子份额','aux-heating electron fraction','','conf','f<sub>aux,e</sub>'],
   BT0:['环向场','toroidal field','T','field','B<sub>T0</sub>'],B0:['磁场','field','T','field','B<sub>0</sub>'],B_vac:['中心真空场','central vacuum field','T','field','B<sub>vac</sub>'],
   B_e:['外加轴向场','external field','T','field','B<sub>e</sub>'],B_ring:['环表面场','coil field','T','field','B<sub>ring</sub>'],
-  Ip:['等离子体电流','plasma current','MA','field','I<sub>p</sub>'],iota:['旋转变换','rotational transform','','field','ι'],
+  Ip:['等离子体电流','plasma current','MA','field','I<sub>p</sub>'],iota:['旋转变换 (0=用几何值)','rotational transform (0 = geometric)','','field','ι'],
   f1:['燃料配比','fuel mix','','fuel','f<sub>1</sub>'],fHe:['氦灰份额','helium ash','','fuel','f<sub>He</sub>'],fimp:['杂质份额','impurity','','fuel','f<sub>imp</sub>'],Zimp:['杂质电荷','impurity charge','','fuel','Z<sub>imp</sub>'],
   imp_name:['线辐射元素 (Mavrin; 关闭=只算轫致)','line-radiation species (off = brems only)','','fuel','imp'],
   tauE:['能量约束时间 (托卡马克/仿星器:0=按定标律解)','confinement time (tok/stell: 0=solve from scaling)','s','conf','τ<sub>E</sub>'],
@@ -198,9 +198,9 @@ const META={
   delta_h:['轴螺旋偏移','helical axis excursion','m','geo','δ<sub>h</sub>'],
   etabar:['近轴形参 η̄ (0=旋转椭圆模式)','near-axis etabar (0 = rotating-ellipse mode)','1/m','geo','η̄'],
   ring_model:['有限环几何 (0=点偶极,1=载流环)','finite-ring geometry (0=point,1=loop)','','geo','ring'],
-  f_alpha:['α沉积份额','alpha deposit fraction','','conf','f<sub>α</sub>'],
+  f_alpha:['α沉积份额 (留空=损失锥自动)','alpha deposit fraction (blank = loss-cone auto)','','conf','f<sub>α</sub>'],
   B_expand:['端部扩张比','expander ratio','','conf','B<sub>exp</sub>'],
-  phi_i_over_Te:['电势比','potential ratio','','conf','φ<sub>i</sub>/T<sub>e</sub>'],lnLambda:['库仑对数','Coulomb log','','conf','ln Λ']};
+  phi_i_over_Te:['电势比 (0=自动 T<sub>e</sub>·lnR)','potential ratio (0 = auto Te lnR)','','conf','φ<sub>i</sub>/T<sub>e</sub>'],lnLambda:['库仑对数','Coulomb log','','conf','ln Λ']};
 // config display names per language
 const CFGN={tokamak:['托卡马克','Tokamak'],mirror:['磁镜','Mirror'],frc:['场反位形','FRC'],dipole:['偶极场','Dipole'],stellarator:['仿星器','Stellarator']};
 const cfgL=n=>{const c=CFGN[n]||[n,n];return LANG==='zh'?c[0]:c[1];};
@@ -216,15 +216,15 @@ const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub
   Qfus_raw:'Q<sub>raw</sub>',ignited:'ignited',valid:'valid',kappa_eff:'κ<sub>eff</sub>',elong_max:'e<sub>max</sub>',helicity:'N<sub>hel</sub>',etabar:'η̄',coll_ratio:'λ<sub>ii</sub>/RL',
   P_line:'P<sub>line</sub>',Ecrit:'E<sub>crit</sub>',f_fast_ion:'f<sub>fast→i</sub>',tau_eq_ie:'τ<sub>ie</sub>',P_ei:'P<sub>ei</sub>',tau_eta:'τ<sub>η</sub>',tauN_o_taueta:'τ<sub>N</sub>/τ<sub>η</sub>',ring_model:'ring',
   Te0:'T<sub>e0</sub>',fT_used:'f<sub>T,used</sub>',te_mode:'T<sub>e</sub>mode',te_resid:'R<sub>e,ch</sub>',Te0_used:'T<sub>e0</sub><sup>slv</sup>',f_alpha_used:'f<sub>α,used</sub>',nu_eff_ang:'ν<sub>eff</sub>',Sn_sugg:'S<sub>n</sub><sup>Ang</sup>',
-  tauE_used:'τ<sub>E,used</sub>',taue_mode:'τ<sub>E</sub>mode'};
+  tauE_used:'τ<sub>E,used</sub>',taue_mode:'τ<sub>E</sub>mode',Pth:'P<sub>th</sub>',ring_model:'ring'};
 const pk=k=>PR[k]?`<span class="sym">${PR[k]}</span>`:k;
 const chipLab=s=>{const u=(s.label.match(/\[[^\]]+\]/)||[''])[0];return (PR[s.f]?`<span class="sym">${PR[s.f]}</span>`:s.f)+(u?' '+u:'');};
 const GROUPS=[['rx','反应','Reaction'],['geo','几何','Geometry'],['prof','剖面','Profile'],['plasma','等离子体','Plasma'],['field','场·电流','Field·Current'],['fuel','燃料·杂质','Fuel·Impurity'],['conf','约束·修正','Confinement·Factors']];
 const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',P_ei:'MW',tau_eq_ie:'s',tau_eta:'s',Ecrit:'keV',Te0:'keV',Te0_used:'keV',te_resid:'MW',tauE_used:'s'};
-const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','P_ei','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth']],
+const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','P_ei','Pth','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth']],
   ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tauE_used','taue_mode','tau_eq_ie','tau_eta','tauN_o_taueta','ntau']],
-  ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_ring','beta_o_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain']],
-  ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','fTavg','fnavg','Sp','Sw','L_ax','L_in','A_throat','flux_p','lambda_ii','coll_ratio','nbar','kappa_s','kappa_eff','elong_max','helicity','N_fp','Ecrit','f_fast_ion','Te0','fT_used','Te0_used','te_mode','te_resid','f_alpha_used','nu_eff_ang','Sn_sugg','valid']]];
+  ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_avg','beta_null','beta_ring','beta_o_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain']],
+  ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','fTavg','fnavg','Sp','Sw','L_ax','L_in','A_throat','flux_p','lambda_ii','coll_ratio','nbar','kappa_s','kappa_eff','elong_max','helicity','N_fp','Ecrit','f_fast_ion','Te0','fT_used','Te0_used','te_mode','te_resid','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
 const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_c','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','beta_o_limit']);
 const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 28 40 28 32 28 24 30 14 40 8Z"/>',
   mirror:'<path d="M10 20Q32 30 54 20M10 44Q32 34 54 44"/><circle cx="12" cy="32" r="8"/><circle cx="52" cy="32" r="8"/>',
@@ -343,8 +343,16 @@ function buildParams(){
         html+=`<div class="fld"><label title="${tip}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span>${u}</label><input type="number" step="any" data-p="${p}" ${dn?'data-sc="1e20"':''} value="${fmtIn(dn?VALS[p]*1e-20:VALS[p])}"></div>`;}
     }html+='</div>';}
   const box=document.getElementById('params');box.innerHTML=html;
+  // selecting a line-radiation species auto-fills Zimp with its nuclear
+  // charge (full-stripping approx; edit manually for <Z>(Te) of Kr/Xe/W —
+  // coronal <Z> self-consistency is queued as a later physics batch)
+  const IMPZ={He:2,Li:3,Be:4,C:6,N:7,O:8,Ne:10,Ar:18,Kr:36,Xe:54,W:74};
   box.querySelectorAll('[data-p]').forEach(el=>el.oninput=()=>{
-    if(el.dataset.p==='imp_name'){if(el.value)VALS.imp_name=el.value;else delete VALS.imp_name;}
+    if(el.dataset.p==='imp_name'){
+      if(el.value){VALS.imp_name=el.value;
+        if(IMPZ[el.value]){VALS.Zimp=IMPZ[el.value];
+          const zEl=box.querySelector('[data-p="Zimp"]');if(zEl)zEl.value=IMPZ[el.value];}}
+      else delete VALS.imp_name;}
     else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
     clearTimeout(timer);timer=setTimeout(()=>{updateA0();fitScanRanges();recompute();},280);});
 }

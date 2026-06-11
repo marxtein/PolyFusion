@@ -243,7 +243,9 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
     nbar = ne0 * math.sqrt(math.pi) / 2 * math.gamma(Sn + 1) / math.gamma(Sn + 1.5)
 
     # ---------- ambipolar potentials [keV] ----------
-    phi_i = (phi_i_over_Te * Te0) if phi_i_over_Te is not None else Te0 * math.log(R_mirror)
+    # phi_i_over_Te: None or 0 = auto (Te*ln R); > 0 = explicit override
+    phi_i = ((phi_i_over_Te * Te0) if (phi_i_over_Te is not None and phi_i_over_Te > 0)
+             else Te0 * math.log(R_mirror))
     K = math.sqrt(mi / ME) * (Ti0 / Te0) ** 1.5 * (phi_i / Ti0) * math.exp(phi_i / Ti0)
     phi_e = _solve_phi_e_over_Te(K) * Te0
 

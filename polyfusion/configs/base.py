@@ -486,6 +486,11 @@ for _p in STELL_PRESETS.values():
     _p.setdefault("H_fac", 1.0)
 for _p in MIRROR_PRESETS.values():
     _p.setdefault("f_aux_e", 0.5)
+    _p.setdefault("B_expand", 100.0)      # solver defaults made visible in UI
+    _p.setdefault("lnLambda", 17.0)
+    _p.setdefault("phi_i_over_Te", 0.0)   # 0 = auto Te*lnR (sentinel)
+for _p in STELL_PRESETS.values():
+    _p.setdefault("iota", 0.0)            # 0 = use geometric transform
 for _p in DIPOLE_PRESETS.values():
     _p.setdefault("ring_model", 0)
 
