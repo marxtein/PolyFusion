@@ -29,9 +29,12 @@ from dataclasses import dataclass, asdict
 
 import numpy as np
 
+from dataclasses import replace as _dc_replace
+
 from ..constants import QE, MP, ME, MU0, MEC2
 from ..reactivity import reactivity
 from ..tokamak import _REACTIONS, twotemp_diagnostics, line_radiation_profile
+from ..twotemp import solve_channel_balance
 
 _KEV_J = 1e3 * QE
 _LN_LAMBDA = 17.0
@@ -77,6 +80,10 @@ class MirrorResult:
     f_fast_ion: float # fast-product energy fraction to ions
     tau_eq_ie: float  # ion-electron equilibration time [s]
     P_ei: float       # ion->electron exchange power [MW] (diagnostic)
+    f_alpha_used: float  # charged-product deposition fraction actually used
+    Te0_used: float   # electron temperature actually used [keV]
+    te_mode: float    # 0 = Te0 input, 1 = solved, 0.5 = pinned
+    te_resid: float   # electron-channel residual at solution [MW]
     strcase: str
 
     def as_dict(self) -> dict:
@@ -102,17 +109,53 @@ def _solve_phi_e_over_Te(K: float) -> float:
 
 def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
                  Sn=0.0, ST=0.0, g=0.0, fsig=1.0, f_throat=0.1,
-                 f_alpha=1.0, B_expand=100.0,
+                 f_alpha=None, B_expand=100.0,
                  Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
                  phi_i_over_Te=None, lnLambda=_LN_LAMBDA,
-                 imp_name=None) -> MirrorResult:
+                 imp_name=None, f_aux_e=0.5) -> MirrorResult:
     """Evaluate the 0-D mirror power balance at one operating point.
 
     Parameters (SI / keV / m^-3); see docs/24 §3 for the full table.
     ``Sn``/``ST`` are the radial peaking exponents (0 = flat, tokamak family),
     ``g`` the plasma-wall gap, ``f_throat`` the throat length fraction of L_c.
+
+    Batch-2 physics (docs/30):
+    * ``f_alpha = None`` (default) now computes the prompt loss-cone bound
+      sqrt(1 - 1/R_mc): an isotropically born charged product is lost at
+      birth with the loss-cone solid-angle fraction.  Pass ``f_alpha = 1``
+      to recover the old closed-trap idealisation.
+    * ``Te0 = 0`` solves the electron temperature self-consistently from the
+      electron-channel balance (alpha electron share + P_ei + f_aux_e*Pheat
+      = brems + cycl + line + electron end loss); the GDT-type Te << Ti
+      hierarchy becomes an OUTPUT instead of an input.
     """
     rx = _REACTIONS[icase]
+
+    if not 0.0 <= f_aux_e <= 1.0:
+        raise ValueError(f"f_aux_e must be in [0, 1] (got {f_aux_e})")
+    if Te0 == 0:
+        def _eval(te):
+            return solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, te,
+                                Sn=Sn, ST=ST, g=g, fsig=fsig, f_throat=f_throat,
+                                f_alpha=f_alpha, B_expand=B_expand, Rw=Rw,
+                                icase=icase, f1=f1, fHe=fHe, fimp=fimp,
+                                Zimp=Zimp, phi_i_over_Te=phi_i_over_Te,
+                                lnLambda=lnLambda, imp_name=imp_name,
+                                f_aux_e=f_aux_e)
+
+        def _resid(te, res):
+            # electron share of the end loss (phi_e + Te per escaping electron)
+            Ptrans_e = ((res.ne0 * res.phi_e / (1 + Sn)
+                         + res.ne0 * te / (1 + Sn + ST))
+                        * _KEV_J * res.Vp / res.tau_c * 1e-6)
+            heat = ((1 - res.f_fast_ion) * res.f_alpha_used * (res.Pfus - res.Pn)
+                    + res.P_ei + f_aux_e * max(res.Pheat, 0.0))
+            return heat - (res.Pbrem + res.Pcycl + res.P_line + Ptrans_e)
+
+        te, res, r, conv = solve_channel_balance(
+            _eval, _resid, max(0.005, 0.01 * Ti0), 1.5 * Ti0)
+        return _dc_replace(res, te_mode=1.0 if conv else 0.5, te_resid=r,
+                           Te0_used=te)
 
     # --- input-domain guards (audit P0) ---
     if a_c <= 0 or L_c <= 0 or B_vac <= 0:
@@ -133,7 +176,7 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
         raise ValueError(f"wall reflectivity Rw must be in [0, 1] (got {Rw})")
     if not 0.0 <= f_throat <= 0.5:
         raise ValueError(f"f_throat must be in [0, 0.5] (got {f_throat})")
-    if not 0.0 <= f_alpha <= 1.0:
+    if f_alpha is not None and not 0.0 <= f_alpha <= 1.0:
         raise ValueError(f"f_alpha must be in [0, 1] (got {f_alpha})")
     if B_expand < 1.0:
         raise ValueError(f"expander ratio B_expand must be >= 1 (got {B_expand})")
@@ -165,6 +208,13 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
     beta_avg = beta / (1 + Sn + ST)
     B0 = B_vac * math.sqrt(1 - beta)
     R_mc = R_mirror / math.sqrt(1 - beta)
+
+    # charged-product deposition: default = prompt loss-cone bound (docs/30
+    # batch 2).  An isotropically born alpha falls in the loss cone with
+    # solid-angle fraction 1 - sqrt(1 - 1/R_mc); the deposited fraction is
+    # the complement.  Ignores scattering INTO the cone during slow-down, so
+    # it is an OPTIMISTIC bound — explicit f_alpha input overrides.
+    f_alpha_used = math.sqrt(1.0 - 1.0 / R_mc) if f_alpha is None else f_alpha
 
     # ---------- geometry: cylinder + flux-mapped throat regions ----------
     L_th = f_throat * L_c
@@ -259,8 +309,8 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
     P_line = line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx)
 
     P_charged = rx["fion"] * Pfus
-    P_alpha_loss = (1.0 - f_alpha) * P_charged
-    Pheat = Pbrem + Pcycl + P_line + Ptrans - f_alpha * P_charged
+    P_alpha_loss = (1.0 - f_alpha_used) * P_charged
+    Pheat = Pbrem + Pcycl + P_line + Ptrans - f_alpha_used * P_charged
     ignited = 1.0 if Pheat <= 0 else 0.0
     Qfus_raw = Pfus / Pheat if Pheat != 0 else math.inf
     Qfus = Pfus / Pheat if Pheat > 0 else 1000.0
@@ -291,5 +341,6 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
         Vp=Vp, Sp=Sp, Sw=Sw, A_throat=A_throat,
         ne0=ne0, nbar=nbar, Zeff=Zeff, M=M, fTavg=fTavg, fnavg=fnavg,
         P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
-        P_ei=P_ei, strcase=rx["name"],
+        P_ei=P_ei, f_alpha_used=f_alpha_used, Te0_used=Te0,
+        te_mode=0.0, te_resid=0.0, strcase=rx["name"],
     )

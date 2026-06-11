@@ -44,9 +44,12 @@ from dataclasses import dataclass, asdict
 
 import numpy as np
 
+from dataclasses import replace as _dc_replace
+
 from ..constants import QE, MU0, MEC2
 from ..reactivity import reactivity
 from ..tokamak import _REACTIONS, twotemp_diagnostics, line_radiation_profile
+from ..twotemp import solve_channel_balance
 from ..nearaxis import solve_near_axis
 
 _KEV_J = 1e3 * QE
@@ -183,6 +186,10 @@ class StellaratorResult:
     f_fast_ion: float # fraction of fast-product energy deposited on ions
     tau_eq_ie: float  # ion-electron equilibration time [s]
     P_ei: float       # ion->electron exchange power [MW] (diagnostic)
+    Te0: float        # central electron temperature actually used [keV]
+    fT_used: float    # Te0/Ti0 actually used (input, or solved when fT=0)
+    te_mode: float    # 0 = fT input, 1 = solved, 0.5 = pinned (not converged)
+    te_resid: float   # electron-channel residual at solution [MW]
     strcase: str
 
     def as_dict(self) -> dict:
@@ -203,8 +210,8 @@ def _check_inputs(R0, A, kappa_s, N_fp, delta_h, Sn, ST, fT, B0, tauE,
         raise ValueError(f"delta_h must satisfy 0 <= delta_h < R0 (got {delta_h})")
     if Sn < 0 or ST < 0:
         raise ValueError(f"profile exponents must be >= 0 (got Sn={Sn}, ST={ST})")
-    if fT <= 0:
-        raise ValueError(f"fT must be > 0 (got {fT})")
+    if fT < 0:
+        raise ValueError(f"fT must be >= 0 (got {fT}; 0 = solve Te self-consistently)")
     if B0 <= 0 or tauE <= 0:
         raise ValueError(f"B0 and tauE must be > 0 (got B0={B0}, tauE={tauE})")
     if not 0.0 <= f1 <= 1.0:
@@ -224,7 +231,7 @@ def _check_inputs(R0, A, kappa_s, N_fp, delta_h, Sn, ST, fT, B0, tauE,
 def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                       B0, tauE, fHe, fimp, Zimp, Rw, g, icase,
                       delta_h=0.0, iota=None, f_ren=1.0,
-                      etabar=0.0, imp_name=None) -> StellaratorResult:
+                      etabar=0.0, imp_name=None, f_aux_e=0.5) -> StellaratorResult:
     """Evaluate the 0-D stellarator power balance at one operating point.
 
     Geometry inputs replace the tokamak's (kappa, delta, Ip):
@@ -243,6 +250,29 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                   f1, fHe, fimp, Zimp, Rw, g, fsig, etabar)
     if iota is not None and iota != 0 and iota < 0:
         raise ValueError(f"explicit iota must be > 0 (got {iota})")
+    if not 0.0 <= f_aux_e <= 1.0:
+        raise ValueError(f"f_aux_e must be in [0, 1] (got {f_aux_e})")
+
+    # fT = 0: solve Te self-consistently from the electron-channel balance
+    # (docs/30 batch 2; same closure as the tokamak — shared loss structure)
+    if fT == 0:
+        def _eval(ft):
+            return solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0,
+                                     ft, fsig, f1, B0, tauE, fHe, fimp, Zimp,
+                                     Rw, g, icase, delta_h=delta_h, iota=iota,
+                                     f_ren=f_ren, etabar=etabar,
+                                     imp_name=imp_name, f_aux_e=f_aux_e)
+
+        def _resid(ft, res):
+            Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
+            heat = ((1 - res.f_fast_ion) * (res.Pfus - res.Pn) + res.P_ei
+                    + f_aux_e * max(res.Pheat, 0.0))
+            return heat - (res.Pbrem + res.Pcycl + res.P_line + Eth_e / tauE)
+
+        ft, res, r, conv = solve_channel_balance(_eval, _resid, 0.03, 2.5)
+        return _dc_replace(res, te_mode=1.0 if conv else 0.5, te_resid=r,
+                           fT_used=ft, Te0=ft * Ti0)
+
     a = R0 / A
 
     # --- geometry: near-axis (etabar != 0) or rotating ellipse (legacy) ---
@@ -372,5 +402,6 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         Sp=Sp, Sw=Sw, ne0=ne0, nbar=nbar, M=M, Zeff=Zeff,
         kappa_s=kappa_s, N_fp=N_fp, etabar=etabar,
         P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
-        P_ei=P_ei, strcase=rx["name"],
+        P_ei=P_ei, Te0=Te0, fT_used=fT, te_mode=0.0, te_resid=0.0,
+        strcase=rx["name"],
     )

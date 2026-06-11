@@ -15,7 +15,10 @@ import numpy as np
 
 from .constants import QE, MU0, MEC2
 from .reactivity import reactivity
-from .twotemp import critical_energy, ion_deposition_fraction, equilibration_time, p_ei_exchange
+from dataclasses import replace as _dc_replace
+
+from .twotemp import (critical_energy, ion_deposition_fraction, equilibration_time,
+                      p_ei_exchange, solve_channel_balance)
 from .impurity import lz_line_net, SPECIES as _IMP_SPECIES
 
 # Per-reaction parameters: charges, mass numbers, charged-fraction fion,
@@ -109,6 +112,12 @@ class Result:
     f_fast_ion: float  # fraction of fast-product energy deposited on ions
     tau_eq_ie: float   # ion-electron equilibration time [s] (peak params)
     P_ei: float     # ion->electron collisional exchange power [MW] (diagnostic)
+    Te0: float      # central electron temperature actually used [keV]
+    fT_used: float  # Te0/Ti0 actually used (input, or solved when fT=0)
+    te_mode: float  # 0 = fT input (legacy), 1 = Te solved self-consistently
+    te_resid: float # electron-channel residual at the solution [MW]
+    nu_eff_ang: float  # Angioni effective collisionality 0.1 Zeff n19 R/<Te>^2
+    Sn_sugg: float  # density-peaking exponent suggested by Angioni scaling
     strcase: str    # reaction label
 
     def as_dict(self) -> dict:
@@ -117,12 +126,39 @@ class Result:
 
 def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
           BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
-          imp_name=None) -> Result:
+          imp_name=None, f_aux_e=0.5) -> Result:
     """Evaluate the 0-D power balance for one operating point.
 
     See parameter table in ``docs/01_托卡马克代码说明文档.md`` (§3) for units.
+
+    ``fT = 0`` activates the SELF-CONSISTENT electron temperature mode
+    (docs/30 batch 2): Te0 is solved from the 0-D electron-channel balance
+        (1-f_i) P_charged + P_ei + f_aux_e * max(P_heat, 0)
+            = P_brem + P_cycl + P_line + E_th,e / tauE
+    with ``f_aux_e`` = electron fraction of the external heating (0.5
+    default; NBI ~0.5, ECH ~1).  fT then becomes an OUTPUT (``fT_used``);
+    ``te_mode``/``te_resid`` report mode and convergence.
     """
     rx = _REACTIONS[icase]
+
+    if not 0.0 <= f_aux_e <= 1.0:
+        raise ValueError(f"f_aux_e must be in [0, 1] (got {f_aux_e})")
+    if fT == 0:
+        def _eval(ft):
+            return funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, ft, fsig, f1,
+                         BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
+                         imp_name=imp_name, f_aux_e=f_aux_e)
+
+        def _resid(ft, res):
+            Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
+            heat = ((1 - res.f_fast_ion) * (res.Pfus - res.Pn) + res.P_ei
+                    + f_aux_e * max(res.Pheat, 0.0))
+            return heat - (res.Pbrem + res.Pcycl + res.P_line + Eth_e / tauE)
+
+        ft, res, r, conv = solve_channel_balance(_eval, _resid, 0.03, 2.5)
+        # te_mode: 1 = solved & converged, 0.5 = pinned at a bracket endpoint
+        return _dc_replace(res, te_mode=1.0 if conv else 0.5, te_resid=r,
+                           fT_used=ft, Te0=ft * Ti0)
 
     # --- input-domain guards (audit P0: no complex/inf results may escape) ---
     if R0 <= 0 or A <= 0 or kappa <= 0:
@@ -131,8 +167,8 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         raise ValueError(f"triangularity delta must be in (-1, 1) (got {delta})")
     if Sn < 0 or ST < 0:
         raise ValueError(f"profile exponents must be >= 0 (got Sn={Sn}, ST={ST})")
-    if fT <= 0:
-        raise ValueError(f"fT must be > 0 (got {fT})")
+    if fT < 0:
+        raise ValueError(f"fT must be >= 0 (got {fT}; 0 = solve Te self-consistently)")
     if not 0.0 <= f1 <= 1.0:
         raise ValueError(f"f1 must be in [0, 1] (got {f1})")
     if fHe < 0 or fimp < 0 or fHe + fimp >= 1.0:
@@ -244,6 +280,14 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M)
     P_ei = pei * Vp / (1 + 2 * Sn + ST) * 1e-6   # peak-weighted estimate [MW]
 
+    # --- Angioni density-peaking suggestion (docs/30 batch 2, diagnostic) ---
+    # nu_n = 1.347 - 0.117 ln(nu_eff) - 4.03 betaT,  nu_eff = 0.1 Zeff n19 R/<Te>^2
+    # (Angioni NF 2007); for our profile family peak/<n> = 1+Sn exactly, so the
+    # scaling's suggested exponent is Sn_sugg = nu_n - 1.  Compare with your input.
+    nu_eff = 0.1 * Zeff * (ne0 / (1 + Sn) * 1e-19) * R0 / (Te0 / (1 + ST)) ** 2
+    nu_n = max(1.347 - 0.117 * math.log(nu_eff) - 4.03 * betaT, 1.0)
+    Sn_sugg = nu_n - 1.0
+
     return Result(
         Eth=Eth, H98=H98, HST=HST, Pheat=Pheat, Pn=Pn, Pfus=Pfus, Pwall=Pwall,
         Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
@@ -251,5 +295,6 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         Pbrem=Pbrem, Pcycl=Pcycl, Vp=Vp, betap=betap, Sp=Sp, ne0=ne0, M=M,
         fTavg=fTavg, fnavg=fnavg, Sw=Sw, Pth=Pth, Zeff=Zeff,
         P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
-        P_ei=P_ei, strcase=rx["name"],
+        P_ei=P_ei, Te0=Te0, fT_used=fT, te_mode=0.0, te_resid=0.0,
+        nu_eff_ang=nu_eff, Sn_sugg=Sn_sugg, strcase=rx["name"],
     )

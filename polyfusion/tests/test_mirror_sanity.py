@@ -54,9 +54,11 @@ def main():
     pb = solve_mirror(**{**BASE, "icase": 5, "Ti0": 100.0, "Te0": 100.0, "f1": 0.9})
     allok &= _ok(math.isfinite(pb.Pfus) and pb.Pfus > 0, f"p-B11 runs (Pfus={pb.Pfus:.3f}MW)")
     # 9. v2 flat-profile limit reproduces v1 numbers exactly (Sn=ST=0,g=0,f_throat=0)
+    # f_alpha=1.0 explicit: v1 assumed full charged-product deposition; the
+    # batch-2 default is the loss-cone bound sqrt(1-1/R_mc) (docs/30)
     flat = solve_mirror(a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, ni0=3e20,
                         Ti0=15.0, Te0=10.0, Sn=0.0, ST=0.0, g=0.0, f_throat=0.0,
-                        Rw=0.8, icase=1)
+                        Rw=0.8, icase=1, f_alpha=1.0)
     # Pfus/Q carry the funsc quadrature convention (2*sum(x)*dx = 1.01) now
     # that the mirror uses the tokamak-identical profile integral: v1*1.0100.
     v1 = dict(Pfus=49.871, Qfus=1.125, tau_c=0.2512, beta=0.336, phi_i=23.03)

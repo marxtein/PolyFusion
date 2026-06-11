@@ -28,7 +28,7 @@ from .stellarator import solve_stellarator, section_outlines
 _MIRROR_PARAMS = ["a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0",
                   "Sn", "ST", "g", "fsig", "f_throat", "f_alpha", "B_expand", "Rw",
                   "icase", "f1", "fHe", "fimp", "Zimp", "phi_i_over_Te", "lnLambda",
-                  "imp_name"]
+                  "imp_name", "f_aux_e"]
 _FRC_PARAMS = ["r_s", "l_s", "r_w", "B_e", "Ti", "Te", "f_shape", "fsig", "Rw",
                "icase", "f1", "fHe", "fimp", "Zimp", "imp_name"]
 _DIPOLE_PARAMS = ["r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
@@ -36,7 +36,7 @@ _DIPOLE_PARAMS = ["r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
                   "ring_model", "imp_name"]
 _STELL_PARAMS = ["R0", "A", "kappa_s", "N_fp", "delta_h", "etabar", "Sn", "ST",
                  "ni0", "Ti0", "fT", "fsig", "f1", "B0", "iota", "tauE", "fHe",
-                 "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name"]
+                 "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name", "f_aux_e"]
 
 # Mirror machine presets (open-field, Realta/Budker class).  v2: radial
 # peaking Sn/ST, wall gap g, throat fraction f_throat (docs/24).
@@ -374,9 +374,12 @@ def _stell_cross(p: dict) -> list[str]:
 
 TOKAMAK = ConfigSpec(
     name="tokamak", label="托卡马克 Tokamak",
-    params=TOKAMAK_PARAMS + ["imp_name"], required=TOKAMAK_PARAMS,
-    positive=["R0", "A", "kappa", "ni0", "Ti0", "BT0", "Ip", "tauE", "fT", "Zimp"],
-    bounds={**_COMMON_BOUNDS, "delta": (-0.999, 0.999)},
+    params=TOKAMAK_PARAMS + ["imp_name", "f_aux_e"], required=TOKAMAK_PARAMS,
+    # fT moved from positive to bounds: fT = 0 now means "solve Te
+    # self-consistently" (docs/30 batch 2), so zero is a legal input.
+    positive=["R0", "A", "kappa", "ni0", "Ti0", "BT0", "Ip", "tauE", "Zimp"],
+    bounds={**_COMMON_BOUNDS, "delta": (-0.999, 0.999),
+            "fT": (0.0, None), "f_aux_e": (0.0, 1.0)},
     presets=TOKAMAK_PRESETS,
     contour_fields=["Pfus", "Qfus", "Pheat", "betaN", "nbar_o_nGw", "H98"],
     scan_defaults=dict(xkey="Ti0", ykey="ni0", xmin=20, xmax=200, ymin=0.5e20, ymax=4e20),
@@ -394,10 +397,12 @@ MIRROR = ConfigSpec(
     name="mirror", label="磁镜 Magnetic Mirror",
     params=_MIRROR_PARAMS,
     required=["a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0", "icase"],
-    positive=["a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0", "Zimp"],
+    # Te0 moved from positive to bounds: Te0 = 0 = solve electron channel.
+    positive=["a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Zimp"],
     bounds={**_COMMON_BOUNDS, "f_throat": (0.0, 0.5), "f_alpha": (0.0, 1.0),
             "B_expand": (1.0, None), "lnLambda": (1.0, None),
-            "phi_i_over_Te": (0.0, None)},
+            "phi_i_over_Te": (0.0, None), "Te0": (0.0, None),
+            "f_aux_e": (0.0, 1.0)},
     cross=_mirror_cross,
     presets=MIRROR_PRESETS,
     contour_fields=["Pfus", "Qfus", "Ptrans", "beta", "tau_c", "ntau"],
@@ -447,10 +452,12 @@ STELLARATOR = ConfigSpec(
     name="stellarator", label="仿星器 Stellarator",
     params=_STELL_PARAMS,
     required=[p for p in _STELL_PARAMS
-              if p not in ("f_ren", "iota", "delta_h", "etabar", "imp_name")],
+              if p not in ("f_ren", "iota", "delta_h", "etabar", "imp_name",
+                           "f_aux_e")],
     positive=["R0", "A", "kappa_s", "N_fp", "ni0", "Ti0", "B0", "tauE",
-              "fT", "Zimp", "f_ren"],
-    bounds={**_COMMON_BOUNDS, "delta_h": (0.0, None), "N_fp": (1.0, None)},
+              "Zimp", "f_ren"],
+    bounds={**_COMMON_BOUNDS, "delta_h": (0.0, None), "N_fp": (1.0, None),
+            "fT": (0.0, None), "f_aux_e": (0.0, 1.0)},
     cross=_stell_cross,
     presets=STELL_PRESETS,
     contour_fields=["Pfus", "Qfus", "Pheat", "betaT", "nbar_o_Sudo", "H_ISS04"],

@@ -96,3 +96,51 @@ def p_ei_exchange(n_i: float, Ti_keV: float, Te_keV: float, Z: float, A: float,
     """
     tau = equilibration_time(n_i, Te_keV, Z, A, lnLambda)
     return 1.5 * n_i * (Ti_keV - Te_keV) * _KEV_J / tau
+
+
+def solve_channel_balance(evaluate, residual, lo: float, hi: float,
+                          n_scan: int = 16, iters: int = 48):
+    """Generic 1-D self-consistency solver for the electron channel.
+
+    ``evaluate(v)`` runs the full configuration solver at parameter value
+    ``v`` (e.g. fT or Te0) and returns its result; ``residual(v, res)``
+    returns the electron-channel power imbalance [MW] (heating - losses,
+    positive when electrons would heat up).  The root is bracketed by a
+    coarse scan (the mirror residual is not guaranteed monotone: tau_c
+    itself grows with Te), then refined by bisection.
+
+    Returns (v, result, residual_MW, converged_flag).  If no sign change
+    exists in [lo, hi] the closest endpoint is returned with flag 0 —
+    callers expose the flag so a pinned solution is never mistaken for a
+    converged one (audit honesty rule).
+    """
+    import numpy as _np
+
+    grid = _np.geomspace(lo, hi, n_scan)
+    prev_v, prev_res, prev_r = None, None, None
+    bracket = None
+    for v in grid:
+        res = evaluate(float(v))
+        r = residual(float(v), res)
+        if prev_r is not None and prev_r > 0 >= r:
+            bracket = (prev_v, float(v))
+            break
+        prev_v, prev_res, prev_r = float(v), res, r
+    else:
+        # no sign change: electrons pinned at an endpoint
+        if prev_r is not None and prev_r > 0:
+            return prev_v, prev_res, prev_r, 0.0          # even hottest: net heating
+        res = evaluate(lo)
+        return lo, res, residual(lo, res), 0.0            # even coldest: net cooling
+
+    a, b = bracket
+    res_m, r_m, mid = res, r, b
+    for _ in range(iters):
+        mid = 0.5 * (a + b)
+        res_m = evaluate(mid)
+        r_m = residual(mid, res_m)
+        if r_m > 0:
+            a = mid
+        else:
+            b = mid
+    return mid, res_m, r_m, 1.0
