@@ -190,6 +190,8 @@ class StellaratorResult:
     fT_used: float    # Te0/Ti0 actually used (input, or solved when fT=0)
     te_mode: float    # 0 = fT input, 1 = solved, 0.5 = pinned (not converged)
     te_resid: float   # electron-channel residual at solution [MW]
+    tauE_used: float  # confinement time actually used [s]
+    taue_mode: float  # 0 = tauE input, 1 = solved from ISS04 (tauE=0)
     strcase: str
 
     def as_dict(self) -> dict:
@@ -212,8 +214,9 @@ def _check_inputs(R0, A, kappa_s, N_fp, delta_h, Sn, ST, fT, B0, tauE,
         raise ValueError(f"profile exponents must be >= 0 (got Sn={Sn}, ST={ST})")
     if fT < 0:
         raise ValueError(f"fT must be >= 0 (got {fT}; 0 = solve Te self-consistently)")
-    if B0 <= 0 or tauE <= 0:
-        raise ValueError(f"B0 and tauE must be > 0 (got B0={B0}, tauE={tauE})")
+    if B0 <= 0 or tauE < 0:
+        raise ValueError(f"B0 must be > 0 and tauE >= 0 "
+                         f"(got B0={B0}, tauE={tauE}; tauE=0 = solve from ISS04)")
     if not 0.0 <= f1 <= 1.0:
         raise ValueError(f"f1 must be in [0, 1] (got {f1})")
     if fHe < 0 or fimp < 0 or fHe + fimp >= 1.0:
@@ -231,7 +234,8 @@ def _check_inputs(R0, A, kappa_s, N_fp, delta_h, Sn, ST, fT, B0, tauE,
 def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                       B0, tauE, fHe, fimp, Zimp, Rw, g, icase,
                       delta_h=0.0, iota=None, f_ren=1.0,
-                      etabar=0.0, imp_name=None, f_aux_e=0.5) -> StellaratorResult:
+                      etabar=0.0, imp_name=None, f_aux_e=0.5,
+                      H_fac=1.0) -> StellaratorResult:
     """Evaluate the 0-D stellarator power balance at one operating point.
 
     Geometry inputs replace the tokamak's (kappa, delta, Ip):
@@ -252,6 +256,25 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         raise ValueError(f"explicit iota must be > 0 (got {iota})")
     if not 0.0 <= f_aux_e <= 1.0:
         raise ValueError(f"f_aux_e must be in [0, 1] (got {f_aux_e})")
+    if H_fac <= 0:
+        raise ValueError(f"H_fac must be > 0 (got {H_fac})")
+
+    # tauE = 0: solve the confinement time PREDICTIVELY from ISS04 — find
+    # tauE such that H_ISS04 = H_fac (implicit: tau_ISS04 depends on P_L)
+    if tauE == 0:
+        def _eval_t(t):
+            return solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0,
+                                     fT, fsig, f1, B0, t, fHe, fimp, Zimp,
+                                     Rw, g, icase, delta_h=delta_h, iota=iota,
+                                     f_ren=f_ren, etabar=etabar,
+                                     imp_name=imp_name, f_aux_e=f_aux_e,
+                                     H_fac=H_fac)
+
+        def _resid_t(t, res):
+            return H_fac - res.H_ISS04
+
+        t, res, r, conv = solve_channel_balance(_eval_t, _resid_t, 1e-3, 50.0)
+        return _dc_replace(res, taue_mode=1.0 if conv else 0.5, tauE_used=t)
 
     # fT = 0: solve Te self-consistently from the electron-channel balance
     # (docs/30 batch 2; same closure as the tokamak — shared loss structure)
@@ -261,7 +284,8 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                                      ft, fsig, f1, B0, tauE, fHe, fimp, Zimp,
                                      Rw, g, icase, delta_h=delta_h, iota=iota,
                                      f_ren=f_ren, etabar=etabar,
-                                     imp_name=imp_name, f_aux_e=f_aux_e)
+                                     imp_name=imp_name, f_aux_e=f_aux_e,
+                                     H_fac=H_fac)
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
@@ -403,5 +427,5 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         kappa_s=kappa_s, N_fp=N_fp, etabar=etabar,
         P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
         P_ei=P_ei, Te0=Te0, fT_used=fT, te_mode=0.0, te_resid=0.0,
-        strcase=rx["name"],
+        tauE_used=tauE, taue_mode=0.0, strcase=rx["name"],
     )

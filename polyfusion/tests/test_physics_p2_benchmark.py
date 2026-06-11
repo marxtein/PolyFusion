@@ -98,6 +98,31 @@ def main():
     ok(0.0 <= i["Sn_sugg"] < 1.2,
        f"ITER Sn_sugg = {i['Sn_sugg']:.3f} (Angioni band; compare input Sn=0.5)")
 
+    # ---- 3b. predictive tauE (tauE=0 sentinel, batch 2b) ----
+    t = run_case({"tauE": 0}, preset="ITER", config="tokamak")["outputs"]
+    ok(t["taue_mode"] == 1.0 and abs(t["H98"] - 1.0) < 1e-6,
+       f"ITER tauE=0: solved tauE={t['tauE_used']:.3f}s with H98={t['H98']:.6f}=H_fac")
+    t12 = run_case({"tauE": 0, "H_fac": 1.2}, preset="ITER", config="tokamak")["outputs"]
+    ok(abs(t12["H98"] - 1.2) < 1e-6 and t12["tauE_used"] > t["tauE_used"],
+       f"H_fac=1.2 -> tauE {t['tauE_used']:.3f}->{t12['tauE_used']:.3f}s, H98=1.2")
+    tr = run_case({"tauE": t["tauE_used"]}, preset="ITER", config="tokamak")["outputs"]
+    ok(abs(tr["Qfus"] - t["Qfus"]) <= 1e-9 * t["Qfus"],
+       "tauE refeed identity: fixed tauE at tauE_used reproduces Q exactly")
+    # honesty exposure: the legacy ITER preset runs at H98 ~ 1.5, so the
+    # database-average prediction gives a much lower Q — that is the point
+    leg = run_case({}, preset="ITER", config="tokamak")["outputs"]
+    ok(leg["H98"] > 1.3 and t["Qfus"] < leg["Qfus"],
+       f"preset assumption exposed: legacy H98={leg['H98']:.2f} Q={leg['Qfus']:.2f} "
+       f"vs H=1 predictive Q={t['Qfus']:.2f}")
+    st = run_case({"tauE": 0}, preset="HELIAS", config="stellarator")["outputs"]
+    ok(st["taue_mode"] == 1.0 and abs(st["H_ISS04"] - 1.0) < 1e-6,
+       f"HELIAS tauE=0: tauE={st['tauE_used']:.3f}s, H_ISS04=1 (Q={st['Qfus']:.2f})")
+    both = run_case({"tauE": 0, "fT": 0}, preset="ITER", config="tokamak")["outputs"]
+    ok(both["taue_mode"] == 1.0 and both["te_mode"] == 1.0
+       and abs(both["H98"] - 1.0) < 1e-4,
+       f"combined fT=0 + tauE=0 nests cleanly (fT={both['fT_used']:.3f}, "
+       f"tauE={both['tauE_used']:.3f})")
+
     # ---- 4. consistency sweep of the input interface ----
     bad = run_case({"fT": -0.5}, preset="ITER", config="tokamak")
     ok("errors" in bad, "fT < 0 rejected")

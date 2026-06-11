@@ -186,7 +186,8 @@ const META={
   B_e:['外加轴向场','external field','T','field','B<sub>e</sub>'],B_ring:['环表面场','coil field','T','field','B<sub>ring</sub>'],
   Ip:['等离子体电流','plasma current','MA','field','I<sub>p</sub>'],iota:['旋转变换','rotational transform','','field','ι'],
   f1:['燃料配比','fuel mix','','fuel','f<sub>1</sub>'],fHe:['氦灰份额','helium ash','','fuel','f<sub>He</sub>'],fimp:['杂质份额','impurity','','fuel','f<sub>imp</sub>'],Zimp:['杂质电荷','impurity charge','','fuel','Z<sub>imp</sub>'],
-  tauE:['能量约束时间','confinement time','s','conf','τ<sub>E</sub>'],fsig:['反应率因子','reactivity factor','','conf','f<sub>σ</sub>'],Rw:['壁反射率','wall reflectivity','','conf','R<sub>w</sub>'],
+  tauE:['能量约束时间 (托卡马克/仿星器:0=按定标律解)','confinement time (tok/stell: 0=solve from scaling)','s','conf','τ<sub>E</sub>'],
+  H_fac:['τE 自洽模式的目标 H 因子','target H factor for tauE=0 mode','','conf','H<sub>fac</sub>'],fsig:['反应率因子','reactivity factor','','conf','f<sub>σ</sub>'],Rw:['壁反射率','wall reflectivity','','conf','R<sub>w</sub>'],
   f_ren:['ISS04 位形因子','ISS04 factor','','conf','f<sub>ren</sub>'],f_belt:['约束带占比','belt fraction','','conf','f<sub>belt</sub>'],
   f_throat:['喉部长度占比','throat fraction','','geo','f<sub>th</sub>'],
   f_shape:['分离面形状因子','separatrix shape (2/3=椭圆,1=跑道)','','geo','f<sub>V</sub>'],
@@ -213,13 +214,14 @@ const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub
   phi_i:'φ<sub>i</sub>',phi_e:'φ<sub>e</sub>',fTavg:'f<sub>T,avg</sub>',fnavg:'f<sub>n,avg</sub>',Sp:'S<sub>p</sub>',Sw:'S<sub>w</sub>',iota:'ι',
   Qfus_raw:'Q<sub>raw</sub>',ignited:'ignited',valid:'valid',kappa_eff:'κ<sub>eff</sub>',elong_max:'e<sub>max</sub>',helicity:'N<sub>hel</sub>',etabar:'η̄',coll_ratio:'λ<sub>ii</sub>/RL',
   P_line:'P<sub>line</sub>',Ecrit:'E<sub>crit</sub>',f_fast_ion:'f<sub>fast→i</sub>',tau_eq_ie:'τ<sub>ie</sub>',P_ei:'P<sub>ei</sub>',tau_eta:'τ<sub>η</sub>',tauN_o_taueta:'τ<sub>N</sub>/τ<sub>η</sub>',ring_model:'ring',
-  Te0:'T<sub>e0</sub>',fT_used:'f<sub>T,used</sub>',te_mode:'T<sub>e</sub>mode',te_resid:'R<sub>e,ch</sub>',Te0_used:'T<sub>e0</sub><sup>slv</sup>',f_alpha_used:'f<sub>α,used</sub>',nu_eff_ang:'ν<sub>eff</sub>',Sn_sugg:'S<sub>n</sub><sup>Ang</sup>'};
+  Te0:'T<sub>e0</sub>',fT_used:'f<sub>T,used</sub>',te_mode:'T<sub>e</sub>mode',te_resid:'R<sub>e,ch</sub>',Te0_used:'T<sub>e0</sub><sup>slv</sup>',f_alpha_used:'f<sub>α,used</sub>',nu_eff_ang:'ν<sub>eff</sub>',Sn_sugg:'S<sub>n</sub><sup>Ang</sup>',
+  tauE_used:'τ<sub>E,used</sub>',taue_mode:'τ<sub>E</sub>mode'};
 const pk=k=>PR[k]?`<span class="sym">${PR[k]}</span>`:k;
 const chipLab=s=>{const u=(s.label.match(/\[[^\]]+\]/)||[''])[0];return (PR[s.f]?`<span class="sym">${PR[s.f]}</span>`:s.f)+(u?' '+u:'');};
 const GROUPS=[['rx','反应','Reaction'],['geo','几何','Geometry'],['prof','剖面','Profile'],['plasma','等离子体','Plasma'],['field','场·电流','Field·Current'],['fuel','燃料·杂质','Fuel·Impurity'],['conf','约束·修正','Confinement·Factors']];
-const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',P_ei:'MW',tau_eq_ie:'s',tau_eta:'s',Ecrit:'keV',Te0:'keV',Te0_used:'keV',te_resid:'MW'};
+const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',P_ei:'MW',tau_eq_ie:'s',tau_eta:'s',Ecrit:'keV',Te0:'keV',Te0_used:'keV',te_resid:'MW',tauE_used:'s'};
 const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','P_ei','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth']],
-  ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tau_eq_ie','tau_eta','tauN_o_taueta','ntau']],
+  ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tauE_used','taue_mode','tau_eq_ie','tau_eta','tauN_o_taueta','ntau']],
   ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_ring','beta_o_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain']],
   ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','fTavg','fnavg','Sp','Sw','L_ax','L_in','A_throat','flux_p','lambda_ii','coll_ratio','nbar','kappa_s','kappa_eff','elong_max','helicity','N_fp','Ecrit','f_fast_ion','Te0','fT_used','Te0_used','te_mode','te_resid','f_alpha_used','nu_eff_ang','Sn_sugg','valid']]];
 const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_c','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','beta_o_limit']);

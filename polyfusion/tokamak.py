@@ -116,6 +116,8 @@ class Result:
     fT_used: float  # Te0/Ti0 actually used (input, or solved when fT=0)
     te_mode: float  # 0 = fT input (legacy), 1 = Te solved self-consistently
     te_resid: float # electron-channel residual at the solution [MW]
+    tauE_used: float  # confinement time actually used [s]
+    taue_mode: float  # 0 = tauE input (legacy), 1 = solved from scaling (tauE=0)
     nu_eff_ang: float  # Angioni effective collisionality 0.1 Zeff n19 R/<Te>^2
     Sn_sugg: float  # density-peaking exponent suggested by Angioni scaling
     strcase: str    # reaction label
@@ -126,28 +128,50 @@ class Result:
 
 def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
           BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
-          imp_name=None, f_aux_e=0.5) -> Result:
+          imp_name=None, f_aux_e=0.5, H_fac=1.0) -> Result:
     """Evaluate the 0-D power balance for one operating point.
 
     See parameter table in ``docs/01_托卡马克代码说明文档.md`` (§3) for units.
 
-    ``fT = 0`` activates the SELF-CONSISTENT electron temperature mode
-    (docs/30 batch 2): Te0 is solved from the 0-D electron-channel balance
-        (1-f_i) P_charged + P_ei + f_aux_e * max(P_heat, 0)
-            = P_brem + P_cycl + P_line + E_th,e / tauE
-    with ``f_aux_e`` = electron fraction of the external heating (0.5
-    default; NBI ~0.5, ECH ~1).  fT then becomes an OUTPUT (``fT_used``);
-    ``te_mode``/``te_resid`` report mode and convergence.
+    SENTINEL MODES (docs/30; every upgrade degrades back to the legacy
+    calculation by NOT using the sentinel):
+
+    * ``fT = 0`` — solve the electron temperature self-consistently from the
+      0-D electron-channel balance
+          (1-f_i) P_charged + P_ei + f_aux_e * max(P_heat, 0)
+              = P_brem + P_cycl + P_line + E_th,e / tauE
+      (``f_aux_e`` = electron fraction of external heating; NBI ~0.5, ECH ~1).
+      Outputs ``fT_used``/``Te0``/``te_mode``/``te_resid``.
+    * ``tauE = 0`` — solve the confinement time PREDICTIVELY from the IPB98
+      scaling: find tauE such that H98 = ``H_fac`` (default 1 = database
+      average; an implicit equation because tau98 depends on the loss power,
+      which depends on tauE).  Outputs ``tauE_used``/``taue_mode``; H98 then
+      equals H_fac by construction.  tauE > 0 keeps the legacy input mode.
     """
     rx = _REACTIONS[icase]
 
     if not 0.0 <= f_aux_e <= 1.0:
         raise ValueError(f"f_aux_e must be in [0, 1] (got {f_aux_e})")
+    if H_fac <= 0:
+        raise ValueError(f"H_fac must be > 0 (got {H_fac})")
+    if tauE == 0:
+        def _eval_t(t):
+            return funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
+                         BT0, Ip, t, fHe, fimp, Zimp, Rw, g, icase,
+                         imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac)
+
+        def _resid_t(t, res):
+            # H98(t) is monotone increasing in t; root at H98 = H_fac
+            return H_fac - res.H98
+
+        t, res, r, conv = solve_channel_balance(_eval_t, _resid_t, 1e-3, 50.0)
+        return _dc_replace(res, taue_mode=1.0 if conv else 0.5,
+                           tauE_used=t)
     if fT == 0:
         def _eval(ft):
             return funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, ft, fsig, f1,
                          BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
-                         imp_name=imp_name, f_aux_e=f_aux_e)
+                         imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac)
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
@@ -296,5 +320,6 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         fTavg=fTavg, fnavg=fnavg, Sw=Sw, Pth=Pth, Zeff=Zeff,
         P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
         P_ei=P_ei, Te0=Te0, fT_used=fT, te_mode=0.0, te_resid=0.0,
+        tauE_used=tauE, taue_mode=0.0,
         nu_eff_ang=nu_eff, Sn_sugg=Sn_sugg, strcase=rx["name"],
     )

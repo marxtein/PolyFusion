@@ -36,7 +36,8 @@ _DIPOLE_PARAMS = ["r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
                   "ring_model", "imp_name"]
 _STELL_PARAMS = ["R0", "A", "kappa_s", "N_fp", "delta_h", "etabar", "Sn", "ST",
                  "ni0", "Ti0", "fT", "fsig", "f1", "B0", "iota", "tauE", "fHe",
-                 "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name", "f_aux_e"]
+                 "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name", "f_aux_e",
+                 "H_fac"]
 
 # Mirror machine presets (open-field, Realta/Budker class).  v2: radial
 # peaking Sn/ST, wall gap g, throat fraction f_throat (docs/24).
@@ -374,12 +375,14 @@ def _stell_cross(p: dict) -> list[str]:
 
 TOKAMAK = ConfigSpec(
     name="tokamak", label="托卡马克 Tokamak",
-    params=TOKAMAK_PARAMS + ["imp_name", "f_aux_e"], required=TOKAMAK_PARAMS,
-    # fT moved from positive to bounds: fT = 0 now means "solve Te
-    # self-consistently" (docs/30 batch 2), so zero is a legal input.
-    positive=["R0", "A", "kappa", "ni0", "Ti0", "BT0", "Ip", "tauE", "Zimp"],
+    params=TOKAMAK_PARAMS + ["imp_name", "f_aux_e", "H_fac"], required=TOKAMAK_PARAMS,
+    # fT and tauE moved from positive to bounds: 0 is a legal sentinel —
+    # fT=0 solves Te self-consistently, tauE=0 solves tauE from IPB98 with
+    # target H98 = H_fac (docs/30 batch 2/2b).
+    positive=["R0", "A", "kappa", "ni0", "Ti0", "BT0", "Ip", "Zimp"],
     bounds={**_COMMON_BOUNDS, "delta": (-0.999, 0.999),
-            "fT": (0.0, None), "f_aux_e": (0.0, 1.0)},
+            "fT": (0.0, None), "tauE": (0.0, None),
+            "f_aux_e": (0.0, 1.0), "H_fac": (0.0, None)},
     presets=TOKAMAK_PRESETS,
     contour_fields=["Pfus", "Qfus", "Pheat", "betaN", "nbar_o_nGw", "H98"],
     scan_defaults=dict(xkey="Ti0", ykey="ni0", xmin=20, xmax=200, ymin=0.5e20, ymax=4e20),
@@ -453,11 +456,12 @@ STELLARATOR = ConfigSpec(
     params=_STELL_PARAMS,
     required=[p for p in _STELL_PARAMS
               if p not in ("f_ren", "iota", "delta_h", "etabar", "imp_name",
-                           "f_aux_e")],
-    positive=["R0", "A", "kappa_s", "N_fp", "ni0", "Ti0", "B0", "tauE",
+                           "f_aux_e", "H_fac")],
+    positive=["R0", "A", "kappa_s", "N_fp", "ni0", "Ti0", "B0",
               "Zimp", "f_ren"],
     bounds={**_COMMON_BOUNDS, "delta_h": (0.0, None), "N_fp": (1.0, None),
-            "fT": (0.0, None), "f_aux_e": (0.0, 1.0)},
+            "fT": (0.0, None), "tauE": (0.0, None),
+            "f_aux_e": (0.0, 1.0), "H_fac": (0.0, None)},
     cross=_stell_cross,
     presets=STELL_PRESETS,
     contour_fields=["Pfus", "Qfus", "Pheat", "betaT", "nbar_o_Sudo", "H_ISS04"],
@@ -471,6 +475,19 @@ STELLARATOR = ConfigSpec(
     _solve=solve_stellarator,
     shape_fn=lambda params: section_outlines(**params),
 )
+
+# Sync presets with the batch-2 optional inputs so the UI shows their real
+# defaults instead of blank fields (牵一发: new solver kwargs -> presets too).
+for _p in TOKAMAK_PRESETS.values():
+    _p.setdefault("f_aux_e", 0.5)
+    _p.setdefault("H_fac", 1.0)
+for _p in STELL_PRESETS.values():
+    _p.setdefault("f_aux_e", 0.5)
+    _p.setdefault("H_fac", 1.0)
+for _p in MIRROR_PRESETS.values():
+    _p.setdefault("f_aux_e", 0.5)
+for _p in DIPOLE_PRESETS.values():
+    _p.setdefault("ring_model", 0)
 
 REGISTRY = {c.name: c for c in (TOKAMAK, MIRROR, FRC, DIPOLE, STELLARATOR)}
 
