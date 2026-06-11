@@ -64,6 +64,9 @@ class MirrorResult:
     phi_e: float      # electron confining potential [keV]
     lambda_ii: float  # ion mean free path [m]
     coll_ratio: float # lambda_ii/(R_mc*L_c): <1 gas-dynamic, >>1 Pastukhov (audit P1)
+    a_over_rhoi: float  # a_c/rho_i: DCLC micro-stability proxy — small values
+                        # (~<20) historically drove drift-cyclotron loss-cone
+                        # modes; large is favourable (docs/30 batch 3a)
     ntau: float       # ni0 * tau_c
     # stability / fields
     beta: float       # peak beta
@@ -275,7 +278,8 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
         tau_Past = tau_ii * max(math.log10(R_mc), 0.5) * math.exp(r)
     tau_gd = math.sqrt(math.pi) * R_mc * (L_c / v_th) * math.exp(r)
     rho_i = v_th / (Z1 * QE * B0 / mi)
-    tau_rho = (a_c / rho_i) ** 2 * tau_ii
+    a_over_rhoi = a_c / rho_i
+    tau_rho = a_over_rhoi ** 2 * tau_ii
     tau_c = 1.0 / (1.0 / (tau_Past + tau_gd) + 1.0 / tau_rho)
 
     # ---------- fusion power: radial profile integral (tokamak form) ----------
@@ -338,7 +342,7 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
         Eth=Eth,
         tau_c=tau_c, tau_Past=tau_Past, tau_gd=tau_gd, tau_rho=tau_rho,
         phi_i=phi_i, phi_e=phi_e, lambda_ii=lambda_ii, coll_ratio=coll_ratio,
-        ntau=ni0 * tau_c,
+        a_over_rhoi=a_over_rhoi, ntau=ni0 * tau_c,
         beta=beta, beta_avg=beta_avg, B0=B0, R_mc=R_mc,
         Vp=Vp, Sp=Sp, Sw=Sw, A_throat=A_throat,
         ne0=ne0, nbar=nbar, Zeff=Zeff, M=M, fTavg=fTavg, fnavg=fnavg,

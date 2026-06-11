@@ -118,6 +118,10 @@ class Result:
     te_resid: float # electron-channel residual at the solution [MW]
     tauE_used: float  # confinement time actually used [s]
     taue_mode: float  # 0 = tauE input (legacy), 1 = solved from scaling (tauE=0)
+    P_LH: float       # Martin 2008 L->H threshold power [MW] (mass-corrected)
+    LH_ratio: float   # P_sep/P_LH = Pth/P_LH; >~1 required for H-mode access
+    tau_ITPA20: float # ITPA20-IL H-mode scaling prediction [s] (Verdoolaege 2021)
+    H_ITPA20: float   # tauE / tau_ITPA20 (second opinion next to H98)
     nu_eff_ang: float  # Angioni effective collisionality 0.1 Zeff n19 R/<Te>^2
     Sn_sugg: float  # density-peaking exponent suggested by Angioni scaling
     strcase: str    # reaction label
@@ -293,8 +297,23 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
                   * R0**2.66 * kappa**0.78) / PL**0.58
         H98 = tauE / tauE98
         HST = tauE / tauEST
+        # ITPA20-IL (Verdoolaege NF 61 (2021) 076006; coefficients cross-read
+        # from cfspopcon energy_confinement_scalings.yaml): a second, newer
+        # database regression next to IPB98 — their spread is a free
+        # uncertainty estimate on the confinement assumption.
+        tau_ITPA20 = (0.067 * M**0.3 * BT0**-0.13 * Ip**1.29 * R0**1.19
+                      * (1 + delta)**0.56 * kappa**0.67
+                      * (nbar / 1e19)**0.15 / PL**0.644)
+        H_ITPA20 = tauE / tau_ITPA20
     else:
         H98 = HST = 0.0
+        tau_ITPA20 = float("nan")
+        H_ITPA20 = 0.0
+
+    # L->H transition threshold (Martin NF 2008, with 2/M mass correction —
+    # the IPB98/ITPA20 H-mode scalings only apply when Pth exceeds this):
+    P_LH = 0.0488 * (nbar / 1e20)**0.717 * BT0**0.803 * Sp**0.941 * (2.0 / M)
+    LH_ratio = Pth / P_LH if P_LH > 0 else 0.0
 
     q = 5 * BT0 * a**2 * kappa / (R0 * Ip)
     Pwall = (Pfus + Pheat) / Sw
@@ -321,5 +340,6 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
         P_ei=P_ei, Te0=Te0, fT_used=fT, te_mode=0.0, te_resid=0.0,
         tauE_used=tauE, taue_mode=0.0,
+        P_LH=P_LH, LH_ratio=LH_ratio, tau_ITPA20=tau_ITPA20, H_ITPA20=H_ITPA20,
         nu_eff_ang=nu_eff, Sn_sugg=Sn_sugg, strcase=rx["name"],
     )

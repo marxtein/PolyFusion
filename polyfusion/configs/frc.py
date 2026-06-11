@@ -67,6 +67,8 @@ class FRCResult:
     # flux & channel physics (docs/30 P1)
     tau_eta: float    # classical (Spitzer) flux-diffusion time mu0 r_s^2/eta [s]
     tauN_o_taueta: float  # energy account vs flux account: which dies first
+    tau_classical: float  # resistive classical cross-field bound [s] (optimistic)
+    tau_Bohm: float       # Bohm-diffusion bound [s] (pessimistic)
     P_line: float     # impurity line radiation [MW] (0 unless imp_name given)
     Ecrit: float; f_fast_ion: float; tau_eq_ie: float; P_ei: float
     strcase: str
@@ -210,6 +212,16 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
     eta_sp = 5.2e-5 * Zeff * 17.0 / (Te * 1e3) ** 1.5
     tau_eta = MU0 * r_s**2 / eta_sp
 
+    # transport BRACKET (docs/30 batch 3a): FRC confinement predictions span
+    # orders of magnitude, so report the two physical bounds next to the LSX
+    # regression instead of pretending one number is right.
+    #   classical: D_perp ~ 2 eta_par p / B^2;  Bohm: D_B = T_e[eV]/(16 B);
+    #   tau = r_s^2 / (4 D).  LSX tau_E should land inside the bracket.
+    D_cl = 2.0 * eta_sp * (ni_m * Ti + ne_m * Te) * _KEV_J / B_e**2
+    tau_classical = r_s**2 / (4.0 * D_cl)
+    D_Bohm = Te * 1e3 / (16.0 * B_e)
+    tau_Bohm = r_s**2 / (4.0 * D_Bohm)
+
     # two-temperature channel diagnostics (docs/30 P1-1; uniform T)
     Ecrit, f_fast, tau_eq, pei = twotemp_diagnostics(
         rx, ni_m, Te, Ti, n10, n20, nHe0, nimp0, Zimp, M)
@@ -224,7 +236,8 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
         s_param=s_param, flux_p=flux_p,
         B_int=B_int, ni0=ni_m, ne0=ne_m, nbar=nbar,
         Vp=Vp, Sp=Sp, Sw=Sw, Zeff=Zeff, M=M,
-        tau_eta=tau_eta, tauN_o_taueta=tau_E / tau_eta, P_line=P_line,
+        tau_eta=tau_eta, tauN_o_taueta=tau_E / tau_eta,
+        tau_classical=tau_classical, tau_Bohm=tau_Bohm, P_line=P_line,
         Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq, P_ei=P_ei,
         strcase=rx["name"],
     )
