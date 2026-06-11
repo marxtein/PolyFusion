@@ -27,14 +27,16 @@ from .stellarator import solve_stellarator, section_outlines
 # Inputs each solver accepts (positional/keyword names).
 _MIRROR_PARAMS = ["a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0",
                   "Sn", "ST", "g", "fsig", "f_throat", "f_alpha", "B_expand", "Rw",
-                  "icase", "f1", "fHe", "fimp", "Zimp", "phi_i_over_Te", "lnLambda"]
+                  "icase", "f1", "fHe", "fimp", "Zimp", "phi_i_over_Te", "lnLambda",
+                  "imp_name"]
 _FRC_PARAMS = ["r_s", "l_s", "r_w", "B_e", "Ti", "Te", "f_shape", "fsig", "Rw",
-               "icase", "f1", "fHe", "fimp", "Zimp"]
+               "icase", "f1", "fHe", "fimp", "Zimp", "imp_name"]
 _DIPOLE_PARAMS = ["r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
-                  "L_in_fac", "fsig", "icase", "f1", "fHe", "fimp", "Zimp", "Rw"]
+                  "L_in_fac", "fsig", "icase", "f1", "fHe", "fimp", "Zimp", "Rw",
+                  "ring_model", "imp_name"]
 _STELL_PARAMS = ["R0", "A", "kappa_s", "N_fp", "delta_h", "etabar", "Sn", "ST",
                  "ni0", "Ti0", "fT", "fsig", "f1", "B0", "iota", "tauE", "fHe",
-                 "fimp", "Zimp", "Rw", "g", "icase", "f_ren"]
+                 "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name"]
 
 # Mirror machine presets (open-field, Realta/Budker class).  v2: radial
 # peaking Sn/ST, wall gap g, throat fraction f_throat (docs/24).
@@ -372,7 +374,7 @@ def _stell_cross(p: dict) -> list[str]:
 
 TOKAMAK = ConfigSpec(
     name="tokamak", label="托卡马克 Tokamak",
-    params=TOKAMAK_PARAMS, required=TOKAMAK_PARAMS,
+    params=TOKAMAK_PARAMS + ["imp_name"], required=TOKAMAK_PARAMS,
     positive=["R0", "A", "kappa", "ni0", "Ti0", "BT0", "Ip", "tauE", "fT", "Zimp"],
     bounds={**_COMMON_BOUNDS, "delta": (-0.999, 0.999)},
     presets=TOKAMAK_PRESETS,
@@ -430,7 +432,7 @@ DIPOLE = ConfigSpec(
     params=_DIPOLE_PARAMS,
     required=["r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE", "icase"],
     positive=["r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE", "Zimp"],
-    bounds={**_COMMON_BOUNDS, "L_in_fac": (1.0, None)},
+    bounds={**_COMMON_BOUNDS, "L_in_fac": (1.0, None), "ring_model": (0, 1)},
     cross=_dipole_cross,
     presets=DIPOLE_PRESETS,
     contour_fields=["Pfus", "Qfus", "Ptrans", "beta_ring", "Eth", "ntau"],
@@ -445,7 +447,7 @@ STELLARATOR = ConfigSpec(
     name="stellarator", label="仿星器 Stellarator",
     params=_STELL_PARAMS,
     required=[p for p in _STELL_PARAMS
-              if p not in ("f_ren", "iota", "delta_h", "etabar")],
+              if p not in ("f_ren", "iota", "delta_h", "etabar", "imp_name")],
     positive=["R0", "A", "kappa_s", "N_fp", "ni0", "Ti0", "B0", "tauE",
               "fT", "Zimp", "f_ren"],
     bounds={**_COMMON_BOUNDS, "delta_h": (0.0, None), "N_fp": (1.0, None)},

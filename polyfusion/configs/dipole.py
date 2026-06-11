@@ -32,7 +32,10 @@ import numpy as np
 
 from ..constants import QE, MP, MU0, MEC2
 from ..reactivity import reactivity
-from ..tokamak import _REACTIONS
+from ..tokamak import _REACTIONS, twotemp_diagnostics
+from ..twotemp import p_ei_exchange
+from ..impurity import lz_line_net, SPECIES as _IMP_SPECIES
+from .. import ringfield
 
 _KEV_J = 1e3 * QE
 _SHELL = 64.0 * math.pi / 35.0      # dV/dL = _SHELL * L^2  (exact, point dipole)
@@ -62,6 +65,9 @@ class DipoleResult:
     # geometry
     Vp: float; Sw: float; L_in: float
     Zeff: float; M: float
+    ring_model: float  # 0 = point dipole (legacy), 1 = exact finite loop
+    P_line: float      # impurity line radiation [MW] (0 unless imp_name given)
+    Ecrit: float; f_fast_ion: float; tau_eq_ie: float; P_ei: float
     strcase: str
 
     def as_dict(self) -> dict:
@@ -71,7 +77,7 @@ class DipoleResult:
 def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
                  L_in_fac=1.5, fsig=1.0,
                  icase=2, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
-                 Rw=0.9, N=160) -> DipoleResult:
+                 Rw=0.9, N=160, ring_model=0, imp_name=None) -> DipoleResult:
     """Evaluate the 0-D dipole power balance.
 
     Parameters (SI / keV)
@@ -114,17 +120,33 @@ def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
     f12 = 1.0 - fHe - fimp
     M = (x1 * rx["A1"] + x2 * rx["A2"]) / (1 + d12)
 
-    # ---------- dipole flux-shell geometry (exact point-dipole) ----------
+    # ---------- flux-shell geometry: point dipole (legacy) or exact loop ----------
     L_in = L_in_fac * r_ring
     L = np.geomspace(L_in, R_p, N)
-    w = _SHELL * L**2                       # dV/dL
-    Vp = _SHELL / 3.0 * (R_p**3 - L_in**3)  # = 64*pi*(R_p^3-L_in^3)/105
     Sw = 4 * math.pi * R_p**2               # outer boundary (vessel) area
-
-    # ---------- marginal-stability profiles on the flux label ----------
-    nfac = (L_in / L) ** 4                  # n ~ U^-1 ~ L^-4
-    Tfac = (L_in / L) ** (8.0 / 3.0)        # T ~ L^-8/3  (p ~ L^-20/3)
-    p_slope = -20.0 / 3.0
+    if ring_model:
+        # exact finite current loop (docs/30 P1-3): universal dimensionless
+        # tables in lambda = L/r_ring; U = dV/dpsi exactly; the marginal-
+        # stability logic delta(p U^gamma) = 0 is unchanged, only U(L) is real.
+        lam = L / r_ring
+        U = ringfield.u_spec(lam)
+        w = ringfield.dv_dlam(lam) * r_ring**2          # dV/dL
+        Vp = float((ringfield.v_enc(lam[-1]) - ringfield.v_enc(lam[0])) * r_ring**3)
+        Ufac = U / U[0]
+        nfac = 1.0 / Ufac                                # n ~ U^-1
+        Tfac = Ufac ** (-2.0 / 3.0)                      # T ~ U^-2/3
+        # realised local pressure slope at the geometric mid-shell (no longer
+        # exactly -20/3: that value is the POINT-dipole U ~ L^4 special case)
+        lnp = np.log(nfac * Tfac * (nfac * Tfac > 0))
+        mid = N // 2
+        p_slope = float((lnp[mid + 1] - lnp[mid - 1])
+                        / (np.log(L[mid + 1]) - np.log(L[mid - 1])))
+    else:
+        w = _SHELL * L**2                       # dV/dL
+        Vp = _SHELL / 3.0 * (R_p**3 - L_in**3)  # = 64*pi*(R_p^3-L_in^3)/105
+        nfac = (L_in / L) ** 4                  # n ~ U^-1 ~ L^-4
+        Tfac = (L_in / L) ** (8.0 / 3.0)        # T ~ L^-8/3  (p ~ L^-20/3)
+        p_slope = -20.0 / 3.0
     ni = n0 * nfac
     Ti = Ti0 * Tfac
     Te = Te0 * Tfac
@@ -135,8 +157,13 @@ def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
     Zeff = float(((n10[0] * Z1**2 + n20[0] * Z2**2) / (1 + d12)
                   + (fHe * n0) * ZHe**2 + (fimp * n0) * Zimp**2) / ne0)
 
-    # equatorial field and local beta along the shell
-    B_L = B_ring * (r_ring / L) ** 3
+    # equatorial field and local beta along the shell.  Loop mode keeps the
+    # legacy calibration "B_ring = dipole-equivalent field scale at L=r_ring"
+    # (mu0 I = 4 r_ring B_ring), so it is a pure geometry correction.
+    if ring_model:
+        B_L = 4.0 * B_ring * ringfield.b_eq(L / r_ring)
+    else:
+        B_L = B_ring * (r_ring / L) ** 3
     B_in, B_out = float(B_L[0]), float(B_L[-1])
     p_keV = (ni * Ti + ne * Te)             # [keV*m^-3]
     beta_loc = 2 * MU0 * p_keV * _KEV_J / B_L**2
@@ -159,16 +186,35 @@ def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
                                          * (1 - Rw) ** 0.5 * L_in**-0.5
                                          * (1 + 2.5 * Te / 511) * w, L))
 
+    # impurity line radiation (Mavrin; shell-integrated, docs/30 P1-2)
+    if imp_name is not None and fimp > 0:
+        if imp_name not in _IMP_SPECIES:
+            raise ValueError(f"unknown impurity species {imp_name!r}; have {_IMP_SPECIES}")
+        nimp_L = fimp * ni
+        P_line = float(np.trapezoid(ne * nimp_L * lz_line_net(imp_name, Te) * w, L)) * 1e-6
+    else:
+        P_line = 0.0
+
     # ---------- stored energy, transport, balance ----------
     Eth = 1.5 * float(np.trapezoid((ni * Ti + ne * Te) * _KEV_J * w, L)) * 1e-6   # MJ
     Ptrans = Eth / tauE
-    Pheat = Pbrem + Pcycl + Ptrans - rx["fion"] * Pfus
+    Pheat = Pbrem + Pcycl + P_line + Ptrans - rx["fion"] * Pfus
     ignited = 1.0 if Pheat <= 0 else 0.0
     Qfus_raw = Pfus / Pheat if Pheat != 0 else math.inf
     Qfus = Pfus / Pheat if Pheat > 0 else 1000.0
     if Qfus <= 0 or Qfus > 1000:
         Qfus = 1000.0
     Pwall = (Pfus + Pheat) / Sw
+
+    # two-temperature channel diagnostics (docs/30 P1-1)
+    Ecrit, f_fast, tau_eq, _ = twotemp_diagnostics(
+        rx, n0, Te0, Ti0, float(n10[0]), float(n20[0]),
+        fHe * n0, fimp * n0, Zimp, M)
+    # shell-resolved exchange integral (profiles are steep: do it properly)
+    pei_L = np.array([p_ei_exchange(float(nv), float(tiv), float(tev), 1.0, M)
+                      if tev > 1e-3 else 0.0
+                      for nv, tiv, tev in zip(ni, Ti, Te)])
+    P_ei = float(np.trapezoid(pei_L * w, L)) * 1e-6
 
     return DipoleResult(
         Pfus=Pfus, Pheat=Pheat, Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
@@ -177,5 +223,8 @@ def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
         tau_E=tauE, ntau=n0 * tauE,
         beta_in=beta_in, beta_out=beta_out, U_ratio=U_ratio, p_slope=p_slope,
         B_in=B_in, B_out=B_out, ne0=ne0, nbar=nbar,
-        Vp=Vp, Sw=Sw, L_in=L_in, Zeff=Zeff, M=M, strcase=rx["name"],
+        Vp=Vp, Sw=Sw, L_in=L_in, Zeff=Zeff, M=M,
+        ring_model=float(ring_model), P_line=P_line,
+        Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq, P_ei=P_ei,
+        strcase=rx["name"],
     )

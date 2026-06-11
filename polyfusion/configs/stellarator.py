@@ -46,7 +46,7 @@ import numpy as np
 
 from ..constants import QE, MU0, MEC2
 from ..reactivity import reactivity
-from ..tokamak import _REACTIONS
+from ..tokamak import _REACTIONS, twotemp_diagnostics, line_radiation_profile
 from ..nearaxis import solve_near_axis
 
 _KEV_J = 1e3 * QE
@@ -178,6 +178,11 @@ class StellaratorResult:
     kappa_s: float    # section elongation input (echo)
     N_fp: float       # field periods (echo)
     etabar: float     # near-axis shaping parameter (echo; 0 = legacy mode)
+    P_line: float     # impurity line radiation [MW] (0 unless imp_name given)
+    Ecrit: float      # Stix critical energy of the fast product [keV]
+    f_fast_ion: float # fraction of fast-product energy deposited on ions
+    tau_eq_ie: float  # ion-electron equilibration time [s]
+    P_ei: float       # ion->electron exchange power [MW] (diagnostic)
     strcase: str
 
     def as_dict(self) -> dict:
@@ -219,7 +224,7 @@ def _check_inputs(R0, A, kappa_s, N_fp, delta_h, Sn, ST, fT, B0, tauE,
 def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                       B0, tauE, fHe, fimp, Zimp, Rw, g, icase,
                       delta_h=0.0, iota=None, f_ren=1.0,
-                      etabar=0.0) -> StellaratorResult:
+                      etabar=0.0, imp_name=None) -> StellaratorResult:
     """Evaluate the 0-D stellarator power balance at one operating point.
 
     Geometry inputs replace the tokamak's (kappa, delta, Ip):
@@ -320,10 +325,13 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     Pcycl = (4.14e-7 * neff**0.5 * Teff**2.5 * B0**2.5 * (1 - Rw)**0.5
              * a**-0.5 * (1 + 2.5 * Teff / 511) * Vp)
 
+    # --- impurity line radiation (Mavrin; opt-in, docs/30 P1-2) ---
+    P_line = line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx)
+
     # --- stored energy, heating, gain (identical structure) ---
     Eth = 1.5 * (ni0 * Ti0 + ne0 * Te0) * 1e3 * QE / (1 + Sn + ST) * Vp * 1e-6
     Pth = Eth / tauE
-    Pheat = Pcycl + Pbrem + Pth - rx["fion"] * Pfus
+    Pheat = Pcycl + Pbrem + P_line + Pth - rx["fion"] * Pfus
     ignited = 1.0 if Pheat <= 0 else 0.0
     Qfus_raw = Pfus / Pheat if Pheat != 0 else math.inf
     Qfus = Pfus / Pheat if Pheat > 0 else 1000.0
@@ -349,6 +357,11 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         H_ISS04 = float("nan")
         nbar_o_Sudo = float("nan")
 
+    # --- two-temperature channel diagnostics (docs/30 P1-1) ---
+    Ecrit, f_fast, tau_eq, pei = twotemp_diagnostics(
+        rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M)
+    P_ei = pei * Vp / (1 + 2 * Sn + ST) * 1e-6
+
     return StellaratorResult(
         Eth=Eth, H_ISS04=H_ISS04, Pheat=Pheat, Pn=Pn, Pfus=Pfus, Pwall=Pwall,
         Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
@@ -357,5 +370,7 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         iota=iota_used, iota_geom=iota_geom, helicity=helicity, L_ax=L_ax,
         kappa_eff=kappa_eff, elong_max=elong_max, tau_ISS04=tau_ISS04,
         Sp=Sp, Sw=Sw, ne0=ne0, nbar=nbar, M=M, Zeff=Zeff,
-        kappa_s=kappa_s, N_fp=N_fp, etabar=etabar, strcase=rx["name"],
+        kappa_s=kappa_s, N_fp=N_fp, etabar=etabar,
+        P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
+        P_ei=P_ei, strcase=rx["name"],
     )

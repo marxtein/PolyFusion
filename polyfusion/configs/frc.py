@@ -33,7 +33,8 @@ import numpy as np
 
 from ..constants import QE, MP, MU0, MEC2
 from ..reactivity import reactivity
-from ..tokamak import _REACTIONS
+from ..tokamak import _REACTIONS, twotemp_diagnostics
+from ..impurity import lz_line_net, SPECIES as _IMP_SPECIES
 
 _KEV_J = 1e3 * QE
 
@@ -63,6 +64,11 @@ class FRCResult:
     # geometry
     Vp: float; Sp: float; Sw: float
     Zeff: float; M: float
+    # flux & channel physics (docs/30 P1)
+    tau_eta: float    # classical (Spitzer) flux-diffusion time mu0 r_s^2/eta [s]
+    tauN_o_taueta: float  # energy account vs flux account: which dies first
+    P_line: float     # impurity line radiation [MW] (0 unless imp_name given)
+    Ecrit: float; f_fast_ion: float; tau_eq_ie: float; P_ei: float
     strcase: str
 
     def as_dict(self) -> dict:
@@ -85,7 +91,8 @@ def _solve_K(beta_avg: float) -> float:
 
 
 def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
-              Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10) -> FRCResult:
+              Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
+              imp_name=None) -> FRCResult:
     """Evaluate the 0-D FRC power balance at one operating point.
 
     Parameters (SI / keV); see docs/25 §3.  ``f_shape`` interpolates the
@@ -173,7 +180,15 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
     # ---------- stored energy & balance ----------
     Eth = 1.5 * (ni_m * Ti + ne_m * Te) * _KEV_J * G1 * Vp * 1e-6   # MJ
     Ptrans = Eth / tau_E
-    Pheat = Pbrem + Pcycl + Ptrans - rx["fion"] * Pfus
+    # impurity line radiation (Mavrin; uniform T, <n^2> weighting like Pbrem)
+    if imp_name is not None and nimp0 > 0:
+        if imp_name not in _IMP_SPECIES:
+            raise ValueError(f"unknown impurity species {imp_name!r}; have {_IMP_SPECIES}")
+        P_line = float(ne_m * nimp0 * lz_line_net(imp_name, Te) * G2 * Vp * 1e-6)
+    else:
+        P_line = 0.0
+
+    Pheat = Pbrem + Pcycl + P_line + Ptrans - rx["fion"] * Pfus
     ignited = 1.0 if Pheat <= 0 else 0.0
     Qfus_raw = Pfus / Pheat if Pheat != 0 else math.inf
     Qfus = Pfus / Pheat if Pheat > 0 else 1000.0
@@ -187,6 +202,19 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
     rho_ie = mi * v_th / (Z1 * QE * B_e)
     s_param = r_s / rho_ie
 
+    # ---------- flux account (docs/30 P1-4): classical resistive bound ----------
+    # Spitzer eta ~ 5.2e-5 Zeff lnL / Te[eV]^1.5 [Ohm m]; tau_eta = mu0 r_s^2/eta
+    # is the CLASSICAL magnetic-diffusion scale — an optimistic upper bound
+    # (experimental FRC flux decay is anomalous, i.e. faster).  tauN/tau_eta
+    # tells which account goes bankrupt first: energy (>1) or flux (<1)... see docs.
+    eta_sp = 5.2e-5 * Zeff * 17.0 / (Te * 1e3) ** 1.5
+    tau_eta = MU0 * r_s**2 / eta_sp
+
+    # two-temperature channel diagnostics (docs/30 P1-1; uniform T)
+    Ecrit, f_fast, tau_eq, pei = twotemp_diagnostics(
+        rx, ni_m, Te, Ti, n10, n20, nHe0, nimp0, Zimp, M)
+    P_ei = pei * G2 * Vp * 1e-6          # <n^2>-weighted estimate [MW]
+
     return FRCResult(
         Pfus=Pfus, Pheat=Pheat, Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
         Pbrem=Pbrem, Pcycl=Pcycl,
@@ -195,5 +223,8 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
         K_rr=K, beta=beta_avg, beta_null=1.0, x_s=x_s, elongation=elongation,
         s_param=s_param, flux_p=flux_p,
         B_int=B_int, ni0=ni_m, ne0=ne_m, nbar=nbar,
-        Vp=Vp, Sp=Sp, Sw=Sw, Zeff=Zeff, M=M, strcase=rx["name"],
+        Vp=Vp, Sp=Sp, Sw=Sw, Zeff=Zeff, M=M,
+        tau_eta=tau_eta, tauN_o_taueta=tau_E / tau_eta, P_line=P_line,
+        Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq, P_ei=P_ei,
+        strcase=rx["name"],
     )

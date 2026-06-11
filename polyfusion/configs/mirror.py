@@ -31,7 +31,7 @@ import numpy as np
 
 from ..constants import QE, MP, ME, MU0, MEC2
 from ..reactivity import reactivity
-from ..tokamak import _REACTIONS
+from ..tokamak import _REACTIONS, twotemp_diagnostics, line_radiation_profile
 
 _KEV_J = 1e3 * QE
 _LN_LAMBDA = 17.0
@@ -72,6 +72,11 @@ class MirrorResult:
     # plasma
     ne0: float; nbar: float; Zeff: float; M: float
     fTavg: float; fnavg: float
+    P_line: float     # impurity line radiation [MW] (0 unless imp_name given)
+    Ecrit: float      # Stix critical energy [keV]
+    f_fast_ion: float # fast-product energy fraction to ions
+    tau_eq_ie: float  # ion-electron equilibration time [s]
+    P_ei: float       # ion->electron exchange power [MW] (diagnostic)
     strcase: str
 
     def as_dict(self) -> dict:
@@ -99,7 +104,8 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
                  Sn=0.0, ST=0.0, g=0.0, fsig=1.0, f_throat=0.1,
                  f_alpha=1.0, B_expand=100.0,
                  Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
-                 phi_i_over_Te=None, lnLambda=_LN_LAMBDA) -> MirrorResult:
+                 phi_i_over_Te=None, lnLambda=_LN_LAMBDA,
+                 imp_name=None) -> MirrorResult:
     """Evaluate the 0-D mirror power balance at one operating point.
 
     Parameters (SI / keV / m^-3); see docs/24 §3 for the full table.
@@ -249,9 +255,12 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
     # alpha/charged-product deposition: in an open trap part of the charged
     # fusion power escapes through the loss cone before slowing down
     # (audit §4.3); f_alpha = deposited fraction (1 = closed-trap assumption).
+    # impurity line radiation (Mavrin; opt-in, docs/30 P1-2)
+    P_line = line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx)
+
     P_charged = rx["fion"] * Pfus
     P_alpha_loss = (1.0 - f_alpha) * P_charged
-    Pheat = Pbrem + Pcycl + Ptrans - f_alpha * P_charged
+    Pheat = Pbrem + Pcycl + P_line + Ptrans - f_alpha * P_charged
     ignited = 1.0 if Pheat <= 0 else 0.0
     Qfus_raw = Pfus / Pheat if Pheat != 0 else math.inf
     Qfus = Pfus / Pheat if Pheat > 0 else 1000.0
@@ -263,6 +272,11 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
     # collector where B has dropped by B_expand; flux dilutes by the same factor.
     P_coll_flux = ((Ptrans + P_alpha_loss) / (2 * A_throat * B_expand)
                    if A_throat > 0 and B_expand > 0 else 0.0)
+
+    # two-temperature channel diagnostics (docs/30 P1-1)
+    Ecrit, f_fast, tau_eq, pei = twotemp_diagnostics(
+        rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M)
+    P_ei = pei * Vp / (1 + 2 * Sn + ST) * 1e-6
 
     return MirrorResult(
         Pfus=Pfus, Pheat=Pheat, Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
@@ -276,5 +290,6 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
         beta=beta, beta_avg=beta_avg, B0=B0, R_mc=R_mc,
         Vp=Vp, Sp=Sp, Sw=Sw, A_throat=A_throat,
         ne0=ne0, nbar=nbar, Zeff=Zeff, M=M, fTavg=fTavg, fnavg=fnavg,
-        strcase=rx["name"],
+        P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
+        P_ei=P_ei, strcase=rx["name"],
     )

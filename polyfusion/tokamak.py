@@ -15,19 +15,64 @@ import numpy as np
 
 from .constants import QE, MU0, MEC2
 from .reactivity import reactivity
+from .twotemp import critical_energy, ion_deposition_fraction, equilibration_time, p_ei_exchange
+from .impurity import lz_line_net, SPECIES as _IMP_SPECIES
 
 # Per-reaction parameters: charges, mass numbers, charged-fraction fion,
 # energy release Y [J], like-particle flag delta12, and a label.
+# Efast/Afast: representative fast charged product (energy [keV], mass number)
+# for the Stix slowing-down diagnostics (docs/30 P1-1).
 _REACTIONS = {
-    1: dict(Z1=1, Z2=1, A1=2, A2=3, fion=0.2, Y=17.59e6 * QE, d12=0, like=False, name="D-T"),
+    1: dict(Z1=1, Z2=1, A1=2, A2=3, fion=0.2, Y=17.59e6 * QE, d12=0, like=False,
+            name="D-T", Efast=3520.0, Afast=4.0),
     2: dict(Z1=1, Z2=1, A1=2, A2=2, fion=(3.27 / 4 + 4.04) / (3.27 + 4.04),
-            Y=0.5 * (3.27 + 4.04) * 1e6 * QE, d12=1, like=True, name="D-D"),
-    3: dict(Z1=1, Z2=2, A1=2, A2=3, fion=1.0, Y=18.35e6 * QE, d12=0, like=False, name="D-He3"),
-    4: dict(Z1=1, Z2=5, A1=1, A2=11, fion=1.0, Y=8.68e6 * QE, d12=0, like=False, name="pB-Nevins"),
-    5: dict(Z1=1, Z2=5, A1=1, A2=11, fion=1.0, Y=8.68e6 * QE, d12=0, like=False, name="pB-Sikora"),
+            Y=0.5 * (3.27 + 4.04) * 1e6 * QE, d12=1, like=True,
+            name="D-D", Efast=2430.0, Afast=2.0),
+    3: dict(Z1=1, Z2=2, A1=2, A2=3, fion=1.0, Y=18.35e6 * QE, d12=0, like=False,
+            name="D-He3", Efast=14680.0, Afast=1.0),
+    4: dict(Z1=1, Z2=5, A1=1, A2=11, fion=1.0, Y=8.68e6 * QE, d12=0, like=False,
+            name="pB-Nevins", Efast=2900.0, Afast=4.0),
+    5: dict(Z1=1, Z2=5, A1=1, A2=11, fion=1.0, Y=8.68e6 * QE, d12=0, like=False,
+            name="pB-Sikora", Efast=2900.0, Afast=4.0),
     6: dict(Z1=1, Z2=1, A1=2, A2=2, fion=26.73 / 43.25, Y=0.5 * 43.25e6 * QE,
-            d12=1, like=True, name="D-D(cat)"),
+            d12=1, like=True, name="D-D(cat)", Efast=3520.0, Afast=4.0),
 }
+
+
+def twotemp_diagnostics(rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M):
+    """Shared two-temperature diagnostic block (docs/30 P1-1).
+
+    Returns (Ecrit [keV], f_fast_ion, tau_eq_ie [s], p_ei [W/m^3] at peak):
+    the Stix critical energy and ion-deposition fraction of the reaction's
+    representative fast charged product, and the bulk-ion/electron
+    collisional equilibration channel at peak parameters.  Diagnostics only
+    in this batch — they do not enter the power balance.
+    """
+    species = [(n10, rx["Z1"], rx["A1"]), (n20, rx["Z2"], rx["A2"]),
+               (nHe0, 2, 4), (nimp0, Zimp, max(2 * Zimp, 1))]
+    species = [(n, Z, A) for (n, Z, A) in species if n > 0]
+    Ecrit = critical_energy(Te0, rx["Afast"], species)
+    f_fast = ion_deposition_fraction(rx["Efast"], Ecrit)
+    tau_eq = equilibration_time(ni0, Te0, 1.0, M)
+    pei = p_ei_exchange(ni0, Ti0, Te0, 1.0, M)
+    return Ecrit, f_fast, tau_eq, pei
+
+
+def line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx):
+    """Impurity line-radiation power [MW] for the (1-x^2)^S profile family.
+
+    P_line = Int n_e(x) n_imp(x) Lz_net(Te(x)) 2x dx * Vp; Lz_net is the
+    Mavrin coronal cooling rate minus the bremsstrahlung share already
+    counted in P_brem through Z_eff (no double counting; docs/30 P1-2).
+    """
+    if imp_name is None or nimp0 <= 0:
+        return 0.0
+    if imp_name not in _IMP_SPECIES:
+        raise ValueError(f"unknown impurity species {imp_name!r}; have {_IMP_SPECIES}")
+    Tex = Te0 * (1 - x ** 2) ** ST
+    lz = lz_line_net(imp_name, Tex)
+    integ = 2.0 * float(np.sum((1 - x ** 2) ** (2 * Sn) * lz * x * dx))
+    return ne0 * nimp0 * integ * Vp * 1e-6
 
 
 @dataclass
@@ -59,6 +104,11 @@ class Result:
     Sw: float       # first-wall area [m^2]
     Pth: float      # transport loss power [MW]
     Zeff: float     # effective charge
+    P_line: float   # impurity line radiation [MW] (0 unless imp_name given)
+    Ecrit: float    # Stix critical energy of the fast product [keV]
+    f_fast_ion: float  # fraction of fast-product energy deposited on ions
+    tau_eq_ie: float   # ion-electron equilibration time [s] (peak params)
+    P_ei: float     # ion->electron collisional exchange power [MW] (diagnostic)
     strcase: str    # reaction label
 
     def as_dict(self) -> dict:
@@ -66,7 +116,8 @@ class Result:
 
 
 def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
-          BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase) -> Result:
+          BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
+          imp_name=None) -> Result:
     """Evaluate the 0-D power balance for one operating point.
 
     See parameter table in ``docs/01_托卡马克代码说明文档.md`` (§3) for units.
@@ -152,10 +203,13 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     Pcycl = (4.14e-7 * neff**0.5 * Teff**2.5 * BT0**2.5 * (1 - Rw)**0.5
              * aeff**-0.5 * (1 + 2.5 * Teff / 511) * Vp)
 
+    # --- impurity line radiation (Mavrin; opt-in, docs/30 P1-2) ---
+    P_line = line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx)
+
     # --- stored energy, transport loss, heating, gain ---
     Eth = 1.5 * (ni0 * Ti0 + ne0 * Te0) * 1e3 * QE / (1 + Sn + ST) * Vp * 1e-6
     Pth = Eth / tauE
-    Pheat = Pcycl + Pbrem + Pth - rx["fion"] * Pfus
+    Pheat = Pcycl + Pbrem + P_line + Pth - rx["fion"] * Pfus
     ignited = 1.0 if Pheat <= 0 else 0.0
     Qfus_raw = Pfus / Pheat if Pheat != 0 else math.inf
     Qfus = Pfus / Pheat if Pheat > 0 else 1000.0
@@ -185,10 +239,17 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     q = 5 * BT0 * a**2 * kappa / (R0 * Ip)
     Pwall = (Pfus + Pheat) / Sw
 
+    # --- two-temperature channel diagnostics (docs/30 P1-1) ---
+    Ecrit, f_fast, tau_eq, pei = twotemp_diagnostics(
+        rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M)
+    P_ei = pei * Vp / (1 + 2 * Sn + ST) * 1e-6   # peak-weighted estimate [MW]
+
     return Result(
         Eth=Eth, H98=H98, HST=HST, Pheat=Pheat, Pn=Pn, Pfus=Pfus, Pwall=Pwall,
         Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
         betaN=betaN, betaT=betaT, nbar_o_nGw=nbar_o_nGw, q=q,
         Pbrem=Pbrem, Pcycl=Pcycl, Vp=Vp, betap=betap, Sp=Sp, ne0=ne0, M=M,
-        fTavg=fTavg, fnavg=fnavg, Sw=Sw, Pth=Pth, Zeff=Zeff, strcase=rx["name"],
+        fTavg=fTavg, fnavg=fnavg, Sw=Sw, Pth=Pth, Zeff=Zeff,
+        P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
+        P_ei=P_ei, strcase=rx["name"],
     )
