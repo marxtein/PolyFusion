@@ -62,11 +62,22 @@ def _do_scan(req: dict) -> dict:
     else:
         mask = best_region_mask(g, **spec.best_window)
     fields = [c["f"] for c in spec.contour_spec if c["f"] in g]
+
+    def _jsonsafe(arr):
+        """NaN/inf -> null: invalid points render as holes, and strict JSON
+        parsers (the browser) do not choke on bare NaN tokens."""
+        a = np.real(np.asarray(arr, dtype=float))
+        return np.where(np.isfinite(a), a.astype(object), None).tolist()
+
+    n_invalid = int(np.sum(np.asarray(g["valid"]) < 0.5)) if "valid" in g else 0
     return {
         "config": config, "xkey": xk, "ykey": yk, "x": xv.tolist(), "y": yv.tolist(),
         # transpose (nx,ny)->(ny,nx) so Plotly reads z[y][x]
-        "fields": {k: np.real(g[k]).T.tolist() for k in fields},
+        "fields": {k: _jsonsafe(g[k].T) for k in fields},
         "best": mask.T.astype(int).tolist(),
+        "valid": _jsonsafe(g["valid"].T) if "valid" in g else None,
+        "n_invalid": n_invalid,
+        "scan_errors": g.get("scan_errors", {}),
     }
 
 

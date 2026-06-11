@@ -42,19 +42,25 @@ class MirrorResult:
     # power balance
     Pfus: float       # fusion power [MW]
     Pheat: float      # external heating power required [MW]
-    Qfus: float       # fusion gain
+    Qfus: float       # fusion gain (capped at 1000)
+    Qfus_raw: float   # uncapped Pfus/Pheat (negative => ignited/over-driven)
+    ignited: float    # 1 if Pheat <= 0
     Pbrem: float      # bremsstrahlung [MW]
     Pcycl: float      # cyclotron [MW]
     Ptrans: float     # end-loss transport power [MW]
     Pn: float         # neutron power [MW]
     Pwall: float      # first-wall load [MW/m^2]
     P_end_flux: float # end-loss power flux through both throats [MW/m^2]
+    P_coll_flux: float # flux at the expander collector (diluted by B_expand) [MW/m^2]
+    P_alpha_loss: float # charged fusion power escaping before deposit [MW]
+    Past_domain: float  # 1 = Pastukhov formula in validity domain, 0 = fallback used
     Eth: float        # stored thermal energy [MJ]
     # confinement
     tau_c: float; tau_Past: float; tau_gd: float; tau_rho: float
     phi_i: float      # ion confining potential [keV]
     phi_e: float      # electron confining potential [keV]
     lambda_ii: float  # ion mean free path [m]
+    coll_ratio: float # lambda_ii/(R_mc*L_c): <1 gas-dynamic, >>1 Pastukhov (audit P1)
     ntau: float       # ni0 * tau_c
     # stability / fields
     beta: float       # peak beta
@@ -91,6 +97,7 @@ def _solve_phi_e_over_Te(K: float) -> float:
 
 def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
                  Sn=0.0, ST=0.0, g=0.0, fsig=1.0, f_throat=0.1,
+                 f_alpha=1.0, B_expand=100.0,
                  Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
                  phi_i_over_Te=None, lnLambda=_LN_LAMBDA) -> MirrorResult:
     """Evaluate the 0-D mirror power balance at one operating point.
@@ -100,6 +107,36 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
     ``g`` the plasma-wall gap, ``f_throat`` the throat length fraction of L_c.
     """
     rx = _REACTIONS[icase]
+
+    # --- input-domain guards (audit P0) ---
+    if a_c <= 0 or L_c <= 0 or B_vac <= 0:
+        raise ValueError(f"a_c, L_c, B_vac must be > 0 (got {a_c}, {L_c}, {B_vac})")
+    if R_mirror <= 1.0:
+        raise ValueError(f"mirror ratio R_mirror must be > 1 (got {R_mirror})")
+    if ni0 <= 0 or Ti0 <= 0 or Te0 <= 0:
+        raise ValueError(f"ni0, Ti0, Te0 must be > 0 (got {ni0}, {Ti0}, {Te0})")
+    if Sn < 0 or ST < 0:
+        raise ValueError(f"profile exponents must be >= 0 (got Sn={Sn}, ST={ST})")
+    if not 0.0 <= f1 <= 1.0:
+        raise ValueError(f"f1 must be in [0, 1] (got {f1})")
+    if fHe < 0 or fimp < 0 or fHe + fimp >= 1.0:
+        raise ValueError(f"need fHe,fimp >= 0 and fHe+fimp < 1 (got {fHe}, {fimp})")
+    if Zimp <= 0:
+        raise ValueError(f"Zimp must be > 0 (got {Zimp})")
+    if not 0.0 <= Rw <= 1.0:
+        raise ValueError(f"wall reflectivity Rw must be in [0, 1] (got {Rw})")
+    if not 0.0 <= f_throat <= 0.5:
+        raise ValueError(f"f_throat must be in [0, 0.5] (got {f_throat})")
+    if not 0.0 <= f_alpha <= 1.0:
+        raise ValueError(f"f_alpha must be in [0, 1] (got {f_alpha})")
+    if B_expand < 1.0:
+        raise ValueError(f"expander ratio B_expand must be >= 1 (got {B_expand})")
+    if g < 0 or fsig < 0:
+        raise ValueError(f"g and fsig must be >= 0 (got g={g}, fsig={fsig})")
+    if lnLambda <= 1:
+        raise ValueError(f"lnLambda must be > 1 (got {lnLambda})")
+    if phi_i_over_Te is not None and phi_i_over_Te < 0:
+        raise ValueError(f"phi_i_over_Te must be >= 0 (got {phi_i_over_Te})")
 
     # ---------- composition (identical algebra to the tokamak core) ----------
     d12 = rx["d12"]
@@ -158,13 +195,26 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
     tau_ii = (Ti0 * 1e3) ** 1.5 * math.sqrt(M) / (4.80e-8 * (ni0 * 1e-6) * lnLambda)
     v_th = math.sqrt(Ti0 * _KEV_J / (2 * mi))
     lambda_ii = v_th * tau_ii
+    # collisionality regime label (audit P1): lambda_ii < R*L -> gas-dynamic
+    coll_ratio = lambda_ii / (R_mc * L_c)
 
     # ---------- confinement channels (peak values; physics per docs/20) ----------
     s = math.sqrt(1 + 1 / R_mc)
     G = s * math.log((s + 1) / (s - 1))
     r = phi_i / Ti0
-    den = 1 + Ti0 / (2 * phi_i) - (Ti0 / (2 * phi_i)) ** 2
-    tau_Past = math.sqrt(math.pi) / 2 * tau_ii * r * math.exp(r) * G / den
+    # Pastukhov validity: the formula assumes a strong potential barrier
+    # (phi_i >> Ti).  Its correction denominator 1 + 1/(2r) - 1/(2r)^2 turns
+    # negative for r < (sqrt(5)-1)/2/2 ~ 0.31, giving unphysical tau < 0
+    # (audit doc, GAMMA-10 case).  Below r=0.5 we fall back to the classic
+    # unplugged-mirror scattering estimate tau ~ tau_ii*log10(R) (Post) and
+    # flag the point so scans can mask it.
+    Past_domain = 1.0
+    if r >= 0.5:
+        den = 1 + Ti0 / (2 * phi_i) - (Ti0 / (2 * phi_i)) ** 2
+        tau_Past = math.sqrt(math.pi) / 2 * tau_ii * r * math.exp(r) * G / den
+    else:
+        Past_domain = 0.0
+        tau_Past = tau_ii * max(math.log10(R_mc), 0.5) * math.exp(r)
     tau_gd = math.sqrt(math.pi) * R_mc * (L_c / v_th) * math.exp(r)
     rho_i = v_th / (Z1 * QE * B0 / mi)
     tau_rho = (a_c / rho_i) ** 2 * tau_ii
@@ -179,9 +229,9 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
 
     # ---------- radiation: tokamak profile-weighted forms ----------
     Pbrem = (5.34e-37 * ne0**2 * math.sqrt(Te0)
-             * (Zeff * (1 / (1 + 2 * Sn + 0.5 * ST)
-                        + 0.7936 / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
-                        + 1.874 / (1 + 2 * Sn + 2.5 * ST) * (Te0 / MEC2) ** 2)
+             * (Zeff * (1 / (1 + 2 * Sn + 0.5 * ST))
+                + 0.7936 / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
+                + 1.874 / (1 + 2 * Sn + 2.5 * ST) * (Te0 / MEC2) ** 2
                 + 3 / math.sqrt(2) / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2))
              * 1e-6 * Vp)
     neff = ne0 / 1e20 / (1 + Sn)
@@ -196,18 +246,33 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
     Ptrans = ((ni0 * phi_i + ne0 * phi_e) / (1 + Sn)
               + (ni0 * Ti0 + ne0 * Te0) / (1 + Sn + ST)) * _KEV_J * Vp / tau_c * 1e-6
 
-    Pheat = Pbrem + Pcycl + Ptrans - rx["fion"] * Pfus
+    # alpha/charged-product deposition: in an open trap part of the charged
+    # fusion power escapes through the loss cone before slowing down
+    # (audit §4.3); f_alpha = deposited fraction (1 = closed-trap assumption).
+    P_charged = rx["fion"] * Pfus
+    P_alpha_loss = (1.0 - f_alpha) * P_charged
+    Pheat = Pbrem + Pcycl + Ptrans - f_alpha * P_charged
+    ignited = 1.0 if Pheat <= 0 else 0.0
+    Qfus_raw = Pfus / Pheat if Pheat != 0 else math.inf
     Qfus = Pfus / Pheat if Pheat > 0 else 1000.0
     if Qfus <= 0 or Qfus > 1000:
         Qfus = 1000.0
     Pwall = (Pfus + Pheat) / Sw
     P_end_flux = Ptrans / (2 * A_throat) if A_throat > 0 else 0.0
+    # end-expander engineering (audit §4.6): the throat flux is spread onto a
+    # collector where B has dropped by B_expand; flux dilutes by the same factor.
+    P_coll_flux = ((Ptrans + P_alpha_loss) / (2 * A_throat * B_expand)
+                   if A_throat > 0 and B_expand > 0 else 0.0)
 
     return MirrorResult(
-        Pfus=Pfus, Pheat=Pheat, Qfus=Qfus, Pbrem=Pbrem, Pcycl=Pcycl,
-        Ptrans=Ptrans, Pn=Pn, Pwall=Pwall, P_end_flux=P_end_flux, Eth=Eth,
+        Pfus=Pfus, Pheat=Pheat, Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
+        Pbrem=Pbrem, Pcycl=Pcycl,
+        Ptrans=Ptrans, Pn=Pn, Pwall=Pwall, P_end_flux=P_end_flux,
+        P_coll_flux=P_coll_flux, P_alpha_loss=P_alpha_loss, Past_domain=Past_domain,
+        Eth=Eth,
         tau_c=tau_c, tau_Past=tau_Past, tau_gd=tau_gd, tau_rho=tau_rho,
-        phi_i=phi_i, phi_e=phi_e, lambda_ii=lambda_ii, ntau=ni0 * tau_c,
+        phi_i=phi_i, phi_e=phi_e, lambda_ii=lambda_ii, coll_ratio=coll_ratio,
+        ntau=ni0 * tau_c,
         beta=beta, beta_avg=beta_avg, B0=B0, R_mc=R_mc,
         Vp=Vp, Sp=Sp, Sw=Sw, A_throat=A_throat,
         ne0=ne0, nbar=nbar, Zeff=Zeff, M=M, fTavg=fTavg, fnavg=fnavg,

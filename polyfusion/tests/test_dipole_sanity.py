@@ -22,15 +22,15 @@ def _ok(cond, msg):
 def main():
     allok = True
     r = solve_dipole(**BASE)
-    print(f"base: Pfus={r.Pfus:.3f}MW Q={r.Qfus:.3f} beta_ring={r.beta_ring:.3f} "
+    print(f"base: Pfus={r.Pfus:.3f}MW Q={r.Qfus:.3f} beta_in={r.beta_in:.3f} "
           f"Vp={r.Vp:.1f} ne0={r.ne0:.2e} Eth={r.Eth:.2f} ntau={r.ntau:.2e}")
 
     allok &= _ok(all(math.isfinite(v) and v > 0 for v in
-                     [r.Pfus, r.Vp, r.ne0, r.Eth, r.beta_ring]),
+                     [r.Pfus, r.Vp, r.ne0, r.Eth, r.beta_in]),
                  "outputs finite & positive")
-    # 1. beta_ring = 2mu0 p0 / B^2 ; raising B lowers it
+    # 1. beta_in = 2mu0 p0 / B^2 ; raising B lowers it
     hb = solve_dipole(**{**BASE, "B_ring": 20.0})
-    allok &= _ok(hb.beta_ring < r.beta_ring, f"B_ring up -> beta down ({r.beta_ring:.3f}->{hb.beta_ring:.3f})")
+    allok &= _ok(hb.beta_in < r.beta_in, f"B_ring up -> beta down ({r.beta_in:.3f}->{hb.beta_in:.3f})")
     # 2. peak density up -> more fusion power
     dn = solve_dipole(**{**BASE, "n0": 2e21})
     allok &= _ok(dn.Pfus > r.Pfus, f"n0 up -> Pfus up ({r.Pfus:.1f}->{dn.Pfus:.1f})")

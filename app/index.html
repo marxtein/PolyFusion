@@ -72,8 +72,10 @@
   .axis .hd{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--teal);letter-spacing:.06em;margin-bottom:5px}
   .axis .hd .tag{font-size:9px;color:var(--ink);background:var(--teal);border-radius:3px;padding:1px 5px;font-weight:700}
   .row3{display:grid;grid-template-columns:1fr 1fr .65fr;gap:5px}.row3 .fld label{font-size:10.5px}
-  .thr{display:grid;grid-template-columns:auto auto 1fr;gap:5px 7px;align-items:center;margin-bottom:5px}
+  .thr{display:grid;grid-template-columns:auto auto auto 1fr;gap:5px 7px;align-items:center;margin-bottom:5px}
   .thr .k{font-family:"JetBrains Mono";font-size:12px;color:var(--mut)}.thr .op{color:var(--amber);font-weight:700;text-align:center}
+  .thr input[type=checkbox]{accent-color:var(--amber);cursor:pointer;margin:0}
+  .thr .off{opacity:.42}
   .opts{display:flex;flex-wrap:wrap;gap:5px}
   .opt{font-size:11.5px;letter-spacing:.03em;color:var(--mut);border:1px solid var(--line2);border-radius:20px;padding:3px 9px;cursor:pointer;user-select:none;transition:.15s}
   .opt.on{color:var(--ink);font-weight:700}
@@ -187,6 +189,13 @@ const META={
   f_ren:['ISS04 位形因子','ISS04 factor','','conf','f<sub>ren</sub>'],f_belt:['约束带占比','belt fraction','','conf','f<sub>belt</sub>'],
   f_throat:['喉部长度占比','throat fraction','','geo','f<sub>th</sub>'],
   f_shape:['分离面形状因子','separatrix shape (2/3=椭圆,1=跑道)','','geo','f<sub>V</sub>'],
+  L_in_fac:['内边界/环半径','inner boundary in ring radii','','geo','L<sub>in</sub>/r<sub>c</sub>'],
+  N_fp:['场周期数','field periods','','geo','N<sub>fp</sub>'],
+  kappa_s:['截面拉长比','section elongation','','geo','κ<sub>s</sub>'],
+  delta_h:['轴螺旋偏移','helical axis excursion','m','geo','δ<sub>h</sub>'],
+  etabar:['近轴形参 η̄ (0=旋转椭圆模式)','near-axis etabar (0 = rotating-ellipse mode)','1/m','geo','η̄'],
+  f_alpha:['α沉积份额','alpha deposit fraction','','conf','f<sub>α</sub>'],
+  B_expand:['端部扩张比','expander ratio','','conf','B<sub>exp</sub>'],
   phi_i_over_Te:['电势比','potential ratio','','conf','φ<sub>i</sub>/T<sub>e</sub>'],lnLambda:['库仑对数','Coulomb log','','conf','ln Λ']};
 // config display names per language
 const CFGN={tokamak:['托卡马克','Tokamak'],mirror:['磁镜','Mirror'],frc:['场反位形','FRC'],dipole:['偶极场','Dipole'],stellarator:['仿星器','Stellarator']};
@@ -196,18 +205,19 @@ const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub
   Ptrans:'P<sub>trans</sub>',Pwall:'P<sub>wall</sub>',Eth:'E<sub>th</sub>',Qfus:'Q<sub>fus</sub>',H98:'H<sub>98</sub>',HST:'H<sub>ST</sub>',
   H_ISS04:'H<sub>ISS04</sub>',tau_c:'τ<sub>c</sub>',tau_E:'τ<sub>E</sub>',tau_ISS04:'τ<sub>ISS04</sub>',tau_Past:'τ<sub>Past</sub>',
   tau_gd:'τ<sub>gd</sub>',tau_rho:'τ<sub>ρ</sub>',ntau:'nτ',betaT:'β<sub>T</sub>',betaN:'β<sub>N</sub>',beta:'β',
-  beta_ring:'β<sub>ring</sub>',beta_o_limit:'β/β<sub>lim</sub>',betap:'β<sub>p</sub>',q:'q',nbar_o_nGw:'n̄/n<sub>Gw</sub>',
+  beta_in:'β<sub>in</sub>',beta_out:'β<sub>out</sub>',U_ratio:'U<sub>out</sub>/U<sub>in</sub>',p_slope:'dlnp/dlnL',B_in:'B<sub>in</sub>',B_out:'B<sub>out</sub>',L_in:'L<sub>in</sub>',P_coll_flux:'q<sub>coll</sub>',P_alpha_loss:'P<sub>α,loss</sub>',Past_domain:'Past⊂dom',flux_p:'Φ<sub>p</sub>',K_rr:'K',A_throat:'A<sub>th</sub>',P_end_flux:'q<sub>end</sub>',iota_geom:'ι<sub>geom</sub>',L_ax:'L<sub>ax</sub>',kappa_s:'κ<sub>s</sub>',N_fp:'N<sub>fp</sub>',tau_ISS04:'τ<sub>ISS04</sub>',lambda_ii:'λ<sub>ii</sub>',beta_avg:'⟨β⟩',beta_null:'β<sub>null</sub>',beta_o_limit:'β/β<sub>lim</sub>',betap:'β<sub>p</sub>',q:'q',nbar_o_nGw:'n̄/n<sub>Gw</sub>',
   nbar_o_Sudo:'n̄/n<sub>Sudo</sub>',x_s:'x<sub>s</sub>',s_param:'s',elongation:'ε',R_mc:'R<sub>mc</sub>',ne0:'n<sub>e0</sub>',
   ni0:'n<sub>i0</sub>',Vp:'V<sub>p</sub>',Zeff:'Z<sub>eff</sub>',M:'M',B0:'B<sub>0</sub>',B_int:'B<sub>int</sub>',
-  phi_i:'φ<sub>i</sub>',phi_e:'φ<sub>e</sub>',fTavg:'f<sub>T,avg</sub>',fnavg:'f<sub>n,avg</sub>',Sp:'S<sub>p</sub>',Sw:'S<sub>w</sub>',iota:'ι'};
+  phi_i:'φ<sub>i</sub>',phi_e:'φ<sub>e</sub>',fTavg:'f<sub>T,avg</sub>',fnavg:'f<sub>n,avg</sub>',Sp:'S<sub>p</sub>',Sw:'S<sub>w</sub>',iota:'ι',
+  Qfus_raw:'Q<sub>raw</sub>',ignited:'ignited',valid:'valid',kappa_eff:'κ<sub>eff</sub>',elong_max:'e<sub>max</sub>',helicity:'N<sub>hel</sub>',etabar:'η̄',coll_ratio:'λ<sub>ii</sub>/RL'};
 const pk=k=>PR[k]?`<span class="sym">${PR[k]}</span>`:k;
 const chipLab=s=>{const u=(s.label.match(/\[[^\]]+\]/)||[''])[0];return (PR[s.f]?`<span class="sym">${PR[s.f]}</span>`:s.f)+(u?' '+u:'');};
 const GROUPS=[['rx','反应','Reaction'],['geo','几何','Geometry'],['prof','剖面','Profile'],['plasma','等离子体','Plasma'],['field','场·电流','Field·Current'],['fuel','燃料·杂质','Fuel·Impurity'],['conf','约束·修正','Confinement·Factors']];
 const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³'};
-const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','Ptrans','Pwall','Eth']],
-  ['增益约束 Gain·Confinement',['Qfus','H98','HST','H_ISS04','tau_c','tau_E','tau_ISS04','ntau']],
-  ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_ring','beta_o_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','x_s','s_param','elongation','R_mc']],
-  ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','phi_i','phi_e','fTavg','fnavg','Sp','Sw']]];
+const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth']],
+  ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','ntau']],
+  ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_ring','beta_o_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain']],
+  ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','fTavg','fnavg','Sp','Sw','L_ax','L_in','A_throat','flux_p','lambda_ii','coll_ratio','nbar','kappa_s','kappa_eff','elong_max','helicity','N_fp','valid']]];
 const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_c','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','beta_o_limit']);
 const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 28 40 28 32 28 24 30 14 40 8Z"/>',
   mirror:'<path d="M10 20Q32 30 54 20M10 44Q32 34 54 44"/><circle cx="12" cy="32" r="8"/><circle cx="52" cy="32" r="8"/>',
@@ -329,16 +339,34 @@ function buildParams(){
 }
 function updateA0(){const h=[...document.querySelectorAll('.grp-h .a0')][0];if(h&&'R0'in VALS&&'A'in VALS)h.innerHTML=`<i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m`;}
 function buildThresh(){
-  const w=CONFIGS[CUR].best_window||{ge:{},le:{}};let html='';
-  const row=(k,op,v)=>`<div class="k">${pk(k)}</div><div class="op">${op}</div><input type="number" step="any" data-thr="${k}" data-op="${op==='≥'?'ge':'le'}" value="${v}">`;
-  html+='<div class="thr">';
-  for(const k in (w.ge||{}))html+=row(k,'≥',w.ge[k]);
-  for(const k in (w.le||{}))html+=row(k,'≤',w.le[k]);
+  const w=CONFIGS[CUR].best_window||{ge:{},le:{}};
+  const ow=CONFIGS[CUR].optional_window||{ge:{},le:{}};
+  // each criterion gets an enable checkbox: best_window rows ON by default,
+  // optional_window rows (audit red lines) OFF by default
+  const row=(k,op,v,on)=>`<input type="checkbox" data-thr-en="${k}" ${on?'checked':''} title="${L('启用该判据','enable criterion')}">`+
+    `<div class="k ${on?'':'off'}">${pk(k)}</div><div class="op ${on?'':'off'}">${op}</div>`+
+    `<input type="number" step="any" class="${on?'':'off'}" data-thr="${k}" data-op="${op==='≥'?'ge':'le'}" value="${v}">`;
+  let html='<div class="thr">';
+  for(const k in (w.ge||{}))html+=row(k,'≥',w.ge[k],true);
+  for(const k in (w.le||{}))html+=row(k,'≤',w.le[k],true);
+  for(const k in (ow.ge||{}))html+=row(k,'≥',ow.ge[k],false);
+  for(const k in (ow.le||{}))html+=row(k,'≤',ow.le[k],false);
   html+='</div>';
-  if(!Object.keys(w.ge||{}).length&&!Object.keys(w.le||{}).length)html='<div style="color:#4b566c;font-size:11px">'+L('该位形无默认判据','no default window')+'</div>';
+  const n=['ge','le'].reduce((s,o)=>s+Object.keys(w[o]||{}).length+Object.keys(ow[o]||{}).length,0);
+  if(!n)html='<div style="color:#4b566c;font-size:11px">'+L('该位形无默认判据','no default window')+'</div>';
   document.getElementById('thresh').innerHTML=html;
+  document.querySelectorAll('[data-thr-en]').forEach(cb=>cb.onchange=()=>{
+    const k=cb.dataset.thrEn;
+    document.querySelectorAll(`[data-thr="${k}"]`).forEach(inp=>inp.classList.toggle('off',!cb.checked));
+    // dim the matching label/op cells (siblings just before the input)
+    const inp=document.querySelector(`[data-thr="${k}"]`);
+    let el=inp&&inp.previousElementSibling;for(let i=0;i<2&&el;i++){el.classList.toggle('off',!cb.checked);el=el.previousElementSibling;}
+  });
 }
-function getWindow(){const ge={},le={};document.querySelectorAll('[data-thr]').forEach(el=>{const v=parseFloat(el.value);if(isFinite(v))(el.dataset.op==='ge'?ge:le)[el.dataset.thr]=v;});return{ge,le};}
+function getWindow(){const ge={},le={};document.querySelectorAll('[data-thr]').forEach(el=>{
+  const cb=document.querySelector(`[data-thr-en="${el.dataset.thr}"]`);
+  if(cb&&!cb.checked)return;                      // criterion opted out
+  const v=parseFloat(el.value);if(isFinite(v))(el.dataset.op==='ge'?ge:le)[el.dataset.thr]=v;});return{ge,le};}
 function buildPlotOpts(){
   const box=document.getElementById('plotOpts');
   box.innerHTML=CONFIGS[CUR].contour_spec.map(s=>{const on=PLOTSEL.has(s.f);
@@ -357,6 +385,8 @@ function applyRun(r){
     const cls=HOT.has(k)?'hot':COOL.has(k)?'cool':WARN.has(k)?'warn':'';
     const isd=k==='ne0'||k==='ni0'||k==='n0';const val=isd?o[k]*1e-20:o[k];const uu=isd?'10²⁰ m⁻³':(UNIT[k]||'');
     const u=uu?` <span class="u">${uu}</span>`:'';
+    // audit P1: Q=1000 cap must read as ignition/self-sustain, not a number
+    if(k==='Qfus'&&o.ignited===1)return `<div class="kv hot"><span class="k">${pk(k)}</span><span class="v">∞ ⚡${L('点火','ignited')}</span></div>`;
     return `<div class="kv ${cls}"><span class="k">${pk(k)}</span><span class="v">${fmt(val)}${u}</span></div>`;}).join('');
     if(rows)html+=`<div class="grp"><div class="grp-t">${g}</div>${rows}</div>`;}
   box.innerHTML=html;
@@ -376,8 +406,10 @@ function drawPopcon(){
   CONFIGS[CUR].contour_spec.forEach(q=>{
     if(!PLOTSEL.has(q.f)||!(q.f in s.fields))return;
     const z=q.scale?s.fields[q.f].map(r=>r.map(v=>v*q.scale)):s.fields[q.f];
+    // size must scale with |level|: Plotly's level iterator dies of float
+    // round-off when size << |start| (e.g. n*tau levels ~1e18 with size 1)
     q.lv.forEach(level=>tr.push({type:'contour',x:xs,y:ys,z,name:pl(q),autocontour:false,showscale:false,showlegend:false,hoverinfo:'name+z',
-      contours:{coloring:'lines',showlabels:true,labelfont:{size:9,color:q.c,family:'JetBrains Mono'},start:level,end:level,size:1},
+      contours:{coloring:'lines',showlabels:true,labelfont:{size:9,color:q.c,family:'JetBrains Mono'},start:level,end:level,size:Math.max(1,Math.abs(level))},
       line:{width:q.w||1.6,color:q.c,dash:q.dash||'solid'},colorscale:[[0,q.c],[1,q.c]]}));
     tr.push({x:[null],y:[null],mode:'lines',line:{color:q.c,width:4,dash:q.dash||'solid'},name:pl(q),showlegend:true,hoverinfo:'skip'});
   });
@@ -392,7 +424,7 @@ function drawShape(){
   document.getElementById('plotTitle').innerHTML=`${L('等离子体截面','Cross-section')} · <b>${cfgL(CUR)}</b>`;document.getElementById('plotMeta').innerHTML='';
   const v=VALS;let tr=[],lay=LAYOUT('R [m]','Z [m]');lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;
   const line=(x,y,c,n,f)=>({type:'scatter',mode:'lines',x,y,name:n,line:{color:c,width:2.4},fill:f?'toself':undefined,fillcolor:'rgba(255,176,46,.07)',hoverinfo:'skip'});
-  if(CUR==='tokamak'||CUR==='stellarator'){
+  if(CUR==='tokamak'){
     const R0=v.R0,a=v.R0/v.A,k=v.kappa,d=v.delta,g=v.g||0;
     const rr=[0.2*a,0.4*a,0.6*a,0.8*a,1.0*a,a+Math.max(g,0.01)];
     const dshape=r=>{const R=[],Z=[];
@@ -407,6 +439,35 @@ function drawShape(){
     tr.push({type:'scatter',mode:'lines+markers+text',x:[0,R0],y:[0,0],line:{color:'#ff6b6b',width:1.5,dash:'dot'},marker:{color:'#ff6b6b',size:3},text:['',`R<sub>0</sub>=${R0} m`],textposition:'top center',textfont:{color:'#ff6b6b',size:10},name:'R₀',hoverinfo:'skip'});
     tr.push({type:'scatter',mode:'lines+markers+text',x:[R0,R0+a],y:[0,0],line:{color:'#ff9e3d',width:1.5,dash:'dot'},marker:{color:'#ff9e3d',size:3},text:['',`a=${a.toFixed(2)} m`],textposition:'bottom center',textfont:{color:'#ff9e3d',size:10},name:'a',hoverinfo:'skip'});
     tr.push({type:'scatter',mode:'lines+markers+text',x:[R0,R0],y:[0,a*k],line:{color:'#7ddc6b',width:1.5,dash:'dot'},marker:{color:'#7ddc6b',size:3},text:['',`κa=${(a*k).toFixed(2)} m`],textposition:'middle right',textfont:{color:'#7ddc6b',size:10},name:'κa',hoverinfo:'skip'});
+  }else if(CUR==='stellarator'){
+    // server-computed cross-sections (LASTRUN.shape): near-axis mode gives the
+    // true first-order surfaces (elongation + sigma tilt vary along the field
+    // period); legacy mode gives the rotating ellipse.  Fallback: old client
+    // ellipse if shape data missing (e.g. stale point).
+    const sh=LASTRUN&&LASTRUN.shape;
+    if(sh&&sh.sections){
+      const cols=['#ffb02e','#36e2c4','#c792ff'];const dash=['solid','dash','dot'];
+      tr=sh.sections.map((s,i)=>({type:'scatter',mode:'lines',x:s.R,y:s.Z,
+        name:`${L('截面','section')} ${s.label} (e=${(+s.elong).toFixed(2)})`,
+        line:{color:cols[i%3],width:2.2,dash:dash[i%3]},hoverinfo:'skip'}));
+      tr.push({type:'scatter',mode:sh.axis.R.length>3?'lines':'markers',
+        x:sh.axis.R,y:sh.axis.Z,name:L('磁轴(螺旋)','axis'),
+        line:{color:'#ff5d8f',width:1.4,dash:'dot'},marker:{color:'#ff5d8f',size:6},hoverinfo:'skip'});
+      document.getElementById('plotMeta').innerHTML=
+        `<span>${sh.mode==='near-axis'?L('近轴 Garren–Boozer 几何','near-axis Garren–Boozer'):L('旋转椭圆几何','rotating ellipse')}</span>`;
+    }else{
+      const a=v.R0/v.A,ks=v.kappa_s||2,dh=v.delta_h||0;
+      const am=a*Math.sqrt(ks),an=a/Math.sqrt(ks);
+      const sect=(rot,Roff,color,name,ds)=>{const X=[],Y=[];
+        for(let i=0;i<=140;i++){const t=2*Math.PI*i/140;
+          const ex=am*Math.cos(t),ey=an*Math.sin(t);
+          X.push(v.R0+Roff+ex*Math.cos(rot)-ey*Math.sin(rot));
+          Y.push(ex*Math.sin(rot)+ey*Math.cos(rot));}
+        return {type:'scatter',mode:'lines',x:X,y:Y,name,line:{color,width:2.2,dash:ds||'solid'},hoverinfo:'skip'};};
+      tr=[sect(0,dh,'#ffb02e',L('截面 φ=0','section φ=0')),
+          sect(Math.PI/2,-dh,'#36e2c4',L('截面 φ=π/N','section φ=π/N'),'dash')];
+    }
+    lay=LAYOUT('R [m]','Z [m]');lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;
   }else if(CUR==='mirror'){
     // flux-mapped outline: a(z)=a_c/sqrt(B(z)/Bc), B/Bc=1+(R-1)sin^2(pi z~/2) in throats
     const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
@@ -440,8 +501,19 @@ function drawShape(){
         line([-v.l_s/2*1.15,v.l_s/2*1.15],[-v.r_w,-v.r_w],'#ff5d8f','',false)];
     tr[1].line.dash='dot';tr[2].line.dash='dot';tr[2].showlegend=false;tr[4].showlegend=false;
     lay=LAYOUT('z [m]','r [m]');lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;
-  }else if(CUR==='dipole'){const rg=[],pl=[];for(let i=0;i<=120;i++){const th=2*Math.PI*i/120;rg.push([v.r_ring*Math.cos(th),v.r_ring*Math.sin(th)]);pl.push([v.R_p*Math.cos(th),v.R_p*Math.sin(th)]);}
-    tr=[line(pl.map(p=>p[0]),pl.map(p=>p[1]),'#ffb02e',L('等离子体外边界','plasma edge')),line(rg.map(p=>p[0]),rg.map(p=>p[1]),'#36e2c4',L('悬浮环','ring'))];lay=LAYOUT('x [m]','y [m]');lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;}
+  }else if(CUR==='dipole'){
+    // dipole field lines r = L cos^2(lambda) in the poloidal (R,Z) plane
+    const Lin=(v.L_in_fac!=null?v.L_in_fac:1.5)*v.r_ring;
+    tr=[];const NL=6;
+    for(let j=0;j<NL;j++){const Lj=Lin*Math.pow(v.R_p/Lin,j/(NL-1));const X=[],Y=[];
+      for(let i=0;i<=160;i++){const lam=-Math.PI/2+Math.PI*i/160;const rr=Lj*Math.pow(Math.cos(lam),2);
+        X.push(rr*Math.cos(lam));Y.push(rr*Math.sin(lam));}
+      tr.push({type:'scatter',mode:'lines',x:X,y:Y,name:j===0?L('磁力线 r=Lcos²λ','field lines'):'',
+        line:{color:j===0||j===NL-1?'#ffb02e':'#4fd1c5',width:j===0||j===NL-1?2.4:1.2,dash:j===0||j===NL-1?'solid':'dash'},
+        showlegend:j===0,hoverinfo:'skip'});}
+    tr.push({type:'scatter',mode:'markers',x:[v.r_ring,-v.r_ring],y:[0,0],name:L('悬浮环','ring'),
+      marker:{color:'#ff5d8f',size:10,symbol:'square'},hoverinfo:'skip'});
+    lay=LAYOUT('R [m]','Z [m]');lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;}
   Plotly.react('plot',tr,lay,{responsive:true,displayModeBar:false});
 }
 function drawProfiles(){
@@ -449,7 +521,7 @@ function drawProfiles(){
   const v=VALS,X=[],N=[],TT=[];
   for(let i=0;i<=100;i++){const x=i/100;X.push(x);
     if('Sn'in v){N.push(Math.pow(1-x*x,v.Sn));TT.push(Math.pow(1-x*x,v.ST));}
-    else if(CUR==='dipole'){const r=1+x*(v.R_p/v.r_ring-1);N.push(Math.pow(1/r,4));TT.push(Math.pow(1/r,8/3));}
+    else if(CUR==='dipole'){const Li=(v.L_in_fac!=null?v.L_in_fac:1.5);const r=1+x*(v.R_p/(Li*v.r_ring)-1);N.push(Math.pow(1/r,4));TT.push(Math.pow(1/r,8/3));}
     else{N.push(1);TT.push(1);}}
   const xl=CUR==='dipole'?L('归一化半径 (环→外)','normalized radius'):L('归一化小半径 x=r/a','normalized x=r/a');
   Plotly.react('plot',[{type:'scatter',mode:'lines',x:X,y:N,name:'n/n<sub>0</sub>',line:{color:'#ffb02e',width:2.6}},
@@ -462,6 +534,8 @@ async function runScan(){
       xmin:+xmin.value/dsc(xk),xmax:+xmax.value/dsc(xk),nx:+nx.value,ymin:+ymin.value/dsc(yk),ymax:+ymax.value/dsc(yk),ny:+ny.value};
     const s=await jpost('/api/scan',body);if(s.error){err.textContent=s.error;return;}
     LASTSCAN=s;setView('popcon');
+    if(s.n_invalid>0){const m=Object.entries(s.scan_errors||{})[0];
+      err.textContent=L(`⚠ ${s.n_invalid} 个扫描点物理无效（空洞显示）`,`⚠ ${s.n_invalid} scan points physically invalid (shown as holes)`)+(m?` — ${m[0]}`:'');}
   }catch(e){err.textContent=String(e);}finally{run.disabled=false;run.textContent=t;}
 }
 function onLoadFile(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();

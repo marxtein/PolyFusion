@@ -42,6 +42,8 @@ _KEV_J = 1e3 * QE
 class FRCResult:
     # power balance
     Pfus: float; Pheat: float; Qfus: float
+    Qfus_raw: float   # uncapped Pfus/Pheat (negative => ignited/over-driven)
+    ignited: float    # 1 if Pheat <= 0
     Pbrem: float; Pcycl: float; Ptrans: float; Pn: float; Pwall: float
     Eth: float
     # confinement
@@ -91,6 +93,27 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
     """
     rx = _REACTIONS[icase]
 
+    # --- input-domain guards (audit P0: x_s >= 1 gives negative <beta>) ---
+    if r_s <= 0 or l_s <= 0 or r_w <= 0:
+        raise ValueError(f"r_s, l_s, r_w must be > 0 (got {r_s}, {l_s}, {r_w})")
+    if r_s >= r_w:
+        raise ValueError(f"need r_s < r_w: separatrix inside the wall "
+                         f"(got r_s={r_s}, r_w={r_w})")
+    if B_e <= 0 or Ti <= 0 or Te <= 0:
+        raise ValueError(f"B_e, Ti, Te must be > 0 (got {B_e}, {Ti}, {Te})")
+    if not 2.0 / 3.0 - 1e-9 <= f_shape <= 1.0:
+        raise ValueError(f"f_shape must be in [2/3, 1] (ellipse..racetrack), got {f_shape}")
+    if not 0.0 <= f1 <= 1.0:
+        raise ValueError(f"f1 must be in [0, 1] (got {f1})")
+    if fHe < 0 or fimp < 0 or fHe + fimp >= 1.0:
+        raise ValueError(f"need fHe,fimp >= 0 and fHe+fimp < 1 (got {fHe}, {fimp})")
+    if Zimp <= 0:
+        raise ValueError(f"Zimp must be > 0 (got {Zimp})")
+    if not 0.0 <= Rw <= 1.0:
+        raise ValueError(f"wall reflectivity Rw must be in [0, 1] (got {Rw})")
+    if fsig < 0:
+        raise ValueError(f"fsig must be >= 0 (got {fsig})")
+
     # ---------- geometry ----------
     x_s = r_s / r_w
     elongation = l_s / (2 * r_s)
@@ -138,7 +161,7 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
     # ---------- radiation ----------
     t = Te / MEC2
     Pbrem = (5.34e-37 * ne_m**2 * G2 * math.sqrt(Te)
-             * (Zeff * (1 + 0.7936 * t + 1.874 * t**2) + 3 / math.sqrt(2) * t)
+             * (Zeff + 0.7936 * t + 1.874 * t**2 + 3 / math.sqrt(2) * t)
              * 1e-6 * Vp)
     B_int = B_e * GB
     Pcycl = (4.14e-7 * (ne_m * G1 / 1e20)**0.5 * Te**2.5 * B_int**2.5
@@ -151,6 +174,8 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
     Eth = 1.5 * (ni_m * Ti + ne_m * Te) * _KEV_J * G1 * Vp * 1e-6   # MJ
     Ptrans = Eth / tau_E
     Pheat = Pbrem + Pcycl + Ptrans - rx["fion"] * Pfus
+    ignited = 1.0 if Pheat <= 0 else 0.0
+    Qfus_raw = Pfus / Pheat if Pheat != 0 else math.inf
     Qfus = Pfus / Pheat if Pheat > 0 else 1000.0
     if Qfus <= 0 or Qfus > 1000:
         Qfus = 1000.0
@@ -163,7 +188,8 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
     s_param = r_s / rho_ie
 
     return FRCResult(
-        Pfus=Pfus, Pheat=Pheat, Qfus=Qfus, Pbrem=Pbrem, Pcycl=Pcycl,
+        Pfus=Pfus, Pheat=Pheat, Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
+        Pbrem=Pbrem, Pcycl=Pcycl,
         Ptrans=Ptrans, Pn=Pn, Pwall=Pwall, Eth=Eth,
         tau_E=tau_E, ntau=ni_m * G1 * tau_E,
         K_rr=K, beta=beta_avg, beta_null=1.0, x_s=x_s, elongation=elongation,

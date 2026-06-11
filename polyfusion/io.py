@@ -38,7 +38,18 @@ def run_case(params: dict, *, preset: str | None = None,
     errors = spec.validate(base)
     if errors:
         return {"config": config, "errors": errors, "inputs": base}
-    return {"config": config, "inputs": base, "outputs": spec.solve(base)}
+    try:
+        outputs = spec.solve(base)
+    except Exception as e:  # solver-level domain guard (audit P0)
+        return {"config": config, "errors": [f"{type(e).__name__}: {e}"],
+                "inputs": base}
+    result = {"config": config, "inputs": base, "outputs": outputs}
+    if spec.shape_fn is not None:
+        try:
+            result["shape"] = spec.shape_fn(base)
+        except Exception:
+            pass  # shape view is cosmetic — never fail the physics result
+    return result
 
 
 def run_preset(name: str, config: str = "tokamak") -> dict[str, Any]:
@@ -53,7 +64,8 @@ def list_configs() -> dict[str, dict]:
             "label": c.label, "params": c.params, "presets": list(c.presets),
             "preset_groups": c.preset_groups,
             "contour_fields": c.contour_fields, "scan_defaults": c.scan_defaults,
-            "best_window": c.best_window, "contour_spec": c.contour_spec,
+            "best_window": c.best_window, "optional_window": c.optional_window,
+            "contour_spec": c.contour_spec,
         }
         for c in REGISTRY.values()
     }

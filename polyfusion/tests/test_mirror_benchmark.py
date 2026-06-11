@@ -92,6 +92,13 @@ def main():
     ok(lam < g["R_mirror"] * g["L_c"],
        f"GDT mean free path {lam:.1f} m < R*L = {g['R_mirror']*g['L_c']:.0f} m (gas-dynamic criterion)")
 
+    # ---- 3b. Pastukhov domain protection (audit fix): GAMMA-10 has
+    #      phi_i/Ti ~ 0.04 << 1 -> formula invalid; must fall back, never go <0 ----
+    gam = solve_mirror(**MIRROR_PRESETS["GAMMA-10"])
+    ok(gam.tau_Past > 0, f"GAMMA-10 tau_Past positive after domain guard ({gam.tau_Past:.3e}s)")
+    ok(gam.Past_domain == 0.0, "GAMMA-10 flagged out-of-domain (fallback model used)")
+    ok(res.Past_domain == 1.0, "BEAM inside Pastukhov domain (no fallback)")
+
     # ---- 4. order-of-magnitude anchor: WHAM/BEAM class tau ~ 0.1-1 s ----
     ok(0.03 < res.tau_c < 3.0,
        f"BEAM-class tau_c = {res.tau_c:.3f}s, order of WHAM target tau_p~1s")

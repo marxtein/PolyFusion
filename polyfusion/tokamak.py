@@ -40,7 +40,9 @@ class Result:
     Pn: float       # neutron power [MW]
     Pfus: float     # fusion power [MW]
     Pwall: float    # first-wall load [MW/m^2]
-    Qfus: float     # fusion gain Pfus/Pheat
+    Qfus: float     # fusion gain Pfus/Pheat (capped at 1000)
+    Qfus_raw: float # uncapped Pfus/Pheat (negative => ignited/over-driven)
+    ignited: float  # 1 if Pheat <= 0 (alpha heating alone exceeds losses)
     betaN: float    # normalized beta
     betaT: float    # toroidal beta
     nbar_o_nGw: float  # line-avg density / Greenwald limit
@@ -70,6 +72,28 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     See parameter table in ``docs/01_托卡马克代码说明文档.md`` (§3) for units.
     """
     rx = _REACTIONS[icase]
+
+    # --- input-domain guards (audit P0: no complex/inf results may escape) ---
+    if R0 <= 0 or A <= 0 or kappa <= 0:
+        raise ValueError(f"R0, A, kappa must be > 0 (got {R0}, {A}, {kappa})")
+    if not -1.0 < delta < 1.0:
+        raise ValueError(f"triangularity delta must be in (-1, 1) (got {delta})")
+    if Sn < 0 or ST < 0:
+        raise ValueError(f"profile exponents must be >= 0 (got Sn={Sn}, ST={ST})")
+    if fT <= 0:
+        raise ValueError(f"fT must be > 0 (got {fT})")
+    if not 0.0 <= f1 <= 1.0:
+        raise ValueError(f"f1 must be in [0, 1] (got {f1})")
+    if fHe < 0 or fimp < 0 or fHe + fimp >= 1.0:
+        raise ValueError(f"need fHe,fimp >= 0 and fHe+fimp < 1 (got {fHe}, {fimp})")
+    if Zimp <= 0:
+        raise ValueError(f"Zimp must be > 0 (got {Zimp})")
+    if not 0.0 <= Rw <= 1.0:
+        raise ValueError(f"wall reflectivity Rw must be in [0, 1] (got {Rw})")
+    if g < 0 or fsig < 0:
+        raise ValueError(f"g and fsig must be >= 0 (got g={g}, fsig={fsig})")
+    if BT0 <= 0 or Ip <= 0 or tauE <= 0:
+        raise ValueError(f"BT0, Ip, tauE must be > 0 (got {BT0}, {Ip}, {tauE})")
 
     # --- geometry ---
     a = R0 / A
@@ -132,6 +156,8 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     Eth = 1.5 * (ni0 * Ti0 + ne0 * Te0) * 1e3 * QE / (1 + Sn + ST) * Vp * 1e-6
     Pth = Eth / tauE
     Pheat = Pcycl + Pbrem + Pth - rx["fion"] * Pfus
+    ignited = 1.0 if Pheat <= 0 else 0.0
+    Qfus_raw = Pfus / Pheat if Pheat != 0 else math.inf
     Qfus = Pfus / Pheat if Pheat > 0 else 1000.0
     if Qfus <= 0 or Qfus > 1000:
         Qfus = 1000.0
@@ -161,7 +187,8 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
 
     return Result(
         Eth=Eth, H98=H98, HST=HST, Pheat=Pheat, Pn=Pn, Pfus=Pfus, Pwall=Pwall,
-        Qfus=Qfus, betaN=betaN, betaT=betaT, nbar_o_nGw=nbar_o_nGw, q=q,
+        Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
+        betaN=betaN, betaT=betaT, nbar_o_nGw=nbar_o_nGw, q=q,
         Pbrem=Pbrem, Pcycl=Pcycl, Vp=Vp, betap=betap, Sp=Sp, ne0=ne0, M=M,
         fTavg=fTavg, fnavg=fnavg, Sw=Sw, Pth=Pth, Zeff=Zeff, strcase=rx["name"],
     )

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "polyfusion",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["app/server.py"],
+      "port": 8765
+    }
+  ]
+}
