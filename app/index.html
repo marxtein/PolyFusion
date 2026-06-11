@@ -186,6 +186,7 @@ const META={
   B_e:['外加轴向场','external field','T','field','B<sub>e</sub>'],B_ring:['环表面场','coil field','T','field','B<sub>ring</sub>'],
   Ip:['等离子体电流','plasma current','MA','field','I<sub>p</sub>'],iota:['旋转变换','rotational transform','','field','ι'],
   f1:['燃料配比','fuel mix','','fuel','f<sub>1</sub>'],fHe:['氦灰份额','helium ash','','fuel','f<sub>He</sub>'],fimp:['杂质份额','impurity','','fuel','f<sub>imp</sub>'],Zimp:['杂质电荷','impurity charge','','fuel','Z<sub>imp</sub>'],
+  imp_name:['线辐射元素 (Mavrin; 关闭=只算轫致)','line-radiation species (off = brems only)','','fuel','imp'],
   tauE:['能量约束时间 (托卡马克/仿星器:0=按定标律解)','confinement time (tok/stell: 0=solve from scaling)','s','conf','τ<sub>E</sub>'],
   H_fac:['τE 自洽模式的目标 H 因子','target H factor for tauE=0 mode','','conf','H<sub>fac</sub>'],fsig:['反应率因子','reactivity factor','','conf','f<sub>σ</sub>'],Rw:['壁反射率','wall reflectivity','','conf','R<sub>w</sub>'],
   f_ren:['ISS04 位形因子','ISS04 factor','','conf','f<sub>ren</sub>'],f_belt:['约束带占比','belt fraction','','conf','f<sub>belt</sub>'],
@@ -327,7 +328,7 @@ function fitAxis(key,minEl,maxEl){
 }
 function fitScanRanges(){fitAxis(xkey.value,xmin,xmax);fitAxis(ykey.value,ymin,ymax);}
 function buildParams(){
-  const groups={};for(const p of CONFIGS[CUR].params){if(p==='imp_name')continue; // string param: API/CLI only for now
+  const groups={};for(const p of CONFIGS[CUR].params){
     const m=META[p]||[p,p,'','conf'];(groups[m[3]]=groups[m[3]]||[]).push(p);}
   let html='';
   for(const[gk,gz,ge]of GROUPS){if(!groups[gk])continue;
@@ -335,13 +336,16 @@ function buildParams(){
     html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div><div class="pgrid">`;
     for(const p of groups[gk]){const m=META[p];const desc=L(m[0],m[1]);
       if(p==='icase'){html+=`<div class="fld full"><label title="${desc}">${desc}</label><select data-p="icase">${Object.entries(RX).map(([k,v])=>`<option value="${k}" ${+VALS.icase===+k?'selected':''}>${k} · ${v}</option>`).join('')}</select></div>`;}
+      else if(p==='imp_name'){const SP=['','He','Li','Be','C','N','O','Ne','Ar','Kr','Xe','W'];
+        html+=`<div class="fld"><label title="${desc}"><span class="sym">imp</span><span class="nm">${desc}</span></label><select data-p="imp_name">${SP.map(s=>`<option value="${s}" ${(VALS.imp_name||'')===s?'selected':''}>${s||L('关闭(默认)','off (default)')}</option>`).join('')}</select></div>`;}
       else{const dn=DENS.has(p);const un=dn?'10²⁰ m⁻³':m[2];const u=un?`<span class="u">[${un}]</span>`:'';
         const tip=(m[1]+' · '+m[0]).replace(/<[^>]+>/g,'');
         html+=`<div class="fld"><label title="${tip}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span>${u}</label><input type="number" step="any" data-p="${p}" ${dn?'data-sc="1e20"':''} value="${fmtIn(dn?VALS[p]*1e-20:VALS[p])}"></div>`;}
     }html+='</div>';}
   const box=document.getElementById('params');box.innerHTML=html;
   box.querySelectorAll('[data-p]').forEach(el=>el.oninput=()=>{
-    VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
+    if(el.dataset.p==='imp_name'){if(el.value)VALS.imp_name=el.value;else delete VALS.imp_name;}
+    else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
     clearTimeout(timer);timer=setTimeout(()=>{updateA0();fitScanRanges();recompute();},280);});
 }
 function updateA0(){const h=[...document.querySelectorAll('.grp-h .a0')][0];if(h&&'R0'in VALS&&'A'in VALS)h.innerHTML=`<i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m`;}
@@ -382,7 +386,7 @@ function buildPlotOpts(){
   box.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{const f=o.dataset.f;PLOTSEL.has(f)?PLOTSEL.delete(f):PLOTSEL.add(f);buildPlotOpts();if(VIEW==='popcon')drawPopcon();});
 }
 function fmtIn(v){if(typeof v!=='number'||!isFinite(v))return '';const a=Math.abs(v);if(a!==0&&(a<1e-3||a>=1e5))return v.toExponential(3);return +v.toFixed(6);}
-function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(typeof v==='number'&&isFinite(v))o[k]=v;}return o;}
+function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return o;}
 async function recompute(){const r=await jpost('/api/run',{config:CUR,overrides:clean()});applyRun(r);if(VIEW!=='popcon')setView(VIEW);}
 function applyRun(r){
   LASTRUN=r;const box=document.getElementById('results');
