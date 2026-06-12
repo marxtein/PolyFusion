@@ -22,7 +22,8 @@ from polyfusion.configs.base import get             # noqa: E402
 from polyfusion.scan import scan2d, best_region_mask  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-HOST, PORT = "127.0.0.1", 8765
+HOST = "0.0.0.0"
+PORT = int(os.environ.get("PORT", 8765))
 
 
 def _floatify(d: dict) -> dict:
