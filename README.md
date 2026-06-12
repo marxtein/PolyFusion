@@ -33,7 +33,7 @@ cd PolyFusion
 pip install -r requirements.txt
 ```
 
-### 运行
+### 运行（本地）
 
 ```bash
 # CLI 单点计算
@@ -43,6 +43,21 @@ python -m polyfusion
 python app/server.py
 # 然后打开浏览器访问 http://127.0.0.1:8765
 ```
+
+---
+
+## 部署到 Render（免费公网访问）
+
+1. 打开 [render.com](https://render.com)，用 GitHub 登录
+2. **New + Web Service** → 选择 `marxtein/PolyFusion` 仓库
+3. 配置：
+   - **Runtime**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `python app/server.py`
+4. 点 **Create Web Service**
+5. 部署完成后获得公网网址（如 `https://polyfusion.onrender.com`）
+
+> `app/server.py` 已适配 Render 环境（自动读取 `$PORT` 环境变量，监听 `0.0.0.0`）。
 
 ---
 
