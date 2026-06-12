@@ -164,6 +164,7 @@ class StellaratorResult:
     nbar_o_Sudo: float    # line-avg density / Sudo limit
     Pbrem: float
     Pcycl: float
+    Ptrans: float
     Vp: float
     iota: float       # rotational transform actually used in the closure
     iota_geom: float  # transform from the analytic geometry
@@ -235,7 +236,7 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                       B0, tauE, fHe, fimp, Zimp, Rw, g, icase,
                       delta_h=0.0, iota=None, f_ren=1.0,
                       etabar=0.0, imp_name=None, f_aux_e=0.5,
-                      H_fac=1.0) -> StellaratorResult:
+                      H_fac=1.0, use_tauE=1.0) -> StellaratorResult:
     """Evaluate the 0-D stellarator power balance at one operating point.
 
     Geometry inputs replace the tokamak's (kappa, delta, Ip):
@@ -258,6 +259,11 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         raise ValueError(f"f_aux_e must be in [0, 1] (got {f_aux_e})")
     if H_fac <= 0:
         raise ValueError(f"H_fac must be > 0 (got {H_fac})")
+    manual_tauE = bool(use_tauE)
+    if manual_tauE and tauE <= 0:
+        raise ValueError(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
+    if not manual_tauE:
+        tauE = 0.0
 
     # tauE = 0: solve the confinement time PREDICTIVELY from ISS04 — find
     # tauE such that H_ISS04 = H_fac (implicit: tau_ISS04 depends on P_L)
@@ -268,7 +274,7 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                                      Rw, g, icase, delta_h=delta_h, iota=iota,
                                      f_ren=f_ren, etabar=etabar,
                                      imp_name=imp_name, f_aux_e=f_aux_e,
-                                     H_fac=H_fac)
+                                     H_fac=H_fac, use_tauE=1.0)
 
         def _resid_t(t, res):
             return H_fac - res.H_ISS04
@@ -285,7 +291,7 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                                      Rw, g, icase, delta_h=delta_h, iota=iota,
                                      f_ren=f_ren, etabar=etabar,
                                      imp_name=imp_name, f_aux_e=f_aux_e,
-                                     H_fac=H_fac)
+                                     H_fac=H_fac, use_tauE=1.0)
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
@@ -420,7 +426,7 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         Eth=Eth, H_ISS04=H_ISS04, Pheat=Pheat, Pn=Pn, Pfus=Pfus, Pwall=Pwall,
         Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
         betaT=betaT, beta_o_limit=betaT / _BETA_SOFT_LIMIT,
-        nbar_o_Sudo=nbar_o_Sudo, Pbrem=Pbrem, Pcycl=Pcycl, Vp=Vp,
+        nbar_o_Sudo=nbar_o_Sudo, Pbrem=Pbrem, Pcycl=Pcycl, Ptrans=Pth, Vp=Vp,
         iota=iota_used, iota_geom=iota_geom, helicity=helicity, L_ax=L_ax,
         kappa_eff=kappa_eff, elong_max=elong_max, tau_ISS04=tau_ISS04,
         Sp=Sp, Sw=Sw, ne0=ne0, nbar=nbar, M=M, Zeff=Zeff,

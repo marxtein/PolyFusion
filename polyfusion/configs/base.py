@@ -25,18 +25,18 @@ from .dipole import solve_dipole
 from .stellarator import solve_stellarator, section_outlines
 
 # Inputs each solver accepts (positional/keyword names).
-_MIRROR_PARAMS = ["a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0",
+_MIRROR_PARAMS = ["use_tauE", "a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0", "tauE",
                   "Sn", "ST", "g", "fsig", "f_throat", "f_alpha", "B_expand", "Rw",
                   "icase", "f1", "fHe", "fimp", "Zimp", "phi_i_over_Te", "lnLambda",
-                  "imp_name", "f_aux_e"]
-_FRC_PARAMS = ["r_s", "l_s", "r_w", "B_e", "Ti", "Te", "f_shape", "fsig", "Rw",
+                  "imp_name"]
+_FRC_PARAMS = ["use_tauE", "r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "f_shape", "fsig", "Rw",
                "icase", "f1", "fHe", "fimp", "Zimp", "imp_name"]
-_DIPOLE_PARAMS = ["r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
+_DIPOLE_PARAMS = ["use_tauE", "r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
                   "L_in_fac", "fsig", "icase", "f1", "fHe", "fimp", "Zimp", "Rw",
                   "ring_model", "imp_name"]
-_STELL_PARAMS = ["R0", "A", "kappa_s", "N_fp", "delta_h", "etabar", "Sn", "ST",
+_STELL_PARAMS = ["use_tauE", "R0", "A", "kappa_s", "N_fp", "delta_h", "etabar", "Sn", "ST",
                  "ni0", "Ti0", "fT", "fsig", "f1", "B0", "iota", "tauE", "fHe",
-                 "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name", "f_aux_e",
+                 "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name",
                  "H_fac"]
 
 # Mirror machine presets (open-field, Realta/Budker class).  v2: radial
@@ -44,20 +44,24 @@ _STELL_PARAMS = ["R0", "A", "kappa_s", "N_fp", "delta_h", "etabar", "Sn", "ST",
 MIRROR_PRESETS = {
     "BEAM": dict(  # Realta-class HTS break-even mirror, D-T
         a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, ni0=3e20, Ti0=15.0, Te0=10.0,
+        tauE=1.0,
         Sn=0.5, ST=1.0, g=0.05, fsig=1.0, f_throat=0.1,
         Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10),
     "GDT": dict(  # Budker gas-dynamic trap: warm collisional bulk plasma
         # (bulk T ~ 0.25 keV keeps lambda_ii < R*L -> genuinely gas-dynamic
         #  regime; the famous Te=0.9 keV record is an ECRH-heated state)
         a_c=0.15, L_c=7.0, B_vac=0.35, R_mirror=35.0, ni0=5e19, Ti0=0.25, Te0=0.25,
+        tauE=0.01,
         Sn=0.5, ST=1.0, g=0.03, fsig=1.0, f_throat=0.15,
         Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10),
     "pB-mirror": dict(  # aneutronic high-field mirror concept
         a_c=0.5, L_c=15.0, B_vac=10.0, R_mirror=15.0, ni0=3e20, Ti0=150.0, Te0=100.0,
+        tauE=1.0,
         Sn=0.5, ST=1.0, g=0.05, fsig=1.0, f_throat=0.1,
         Rw=0.9, icase=5, f1=0.9, fHe=0.0, fimp=0.0, Zimp=10),
     "GAMMA-10": dict(  # Tsukuba tandem mirror (experiment)
         a_c=0.18, L_c=6.0, B_vac=0.5, R_mirror=6.4, ni0=0.2e20, Ti0=5.0, Te0=0.1,
+        tauE=0.01,
         Sn=0.5, ST=1.0, g=0.03, fsig=1.0, f_throat=0.15,
         Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10),
 }
@@ -69,13 +73,13 @@ MIRROR_GROUPS = {
 # FRC machine presets (TAE / Helion class).
 FRC_PRESETS = {
     "FRC-DT": dict(  # D-T compact FRC reactor point (illustrative, uncalibrated)
-        r_s=0.5, l_s=5.0, r_w=0.7, B_e=3.5, Ti=15.0, Te=12.0,
+        r_s=0.5, l_s=5.0, r_w=0.7, B_e=3.5, Ti=15.0, Te=12.0, tauE=0.013,
         f_shape=0.85, fsig=1.0, Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10),
     "Helion-DHe3": dict(  # Helion-class D-3He pulsed high-field FRC
-        r_s=0.3, l_s=2.0, r_w=0.4, B_e=8.0, Ti=70.0, Te=50.0,
+        r_s=0.3, l_s=2.0, r_w=0.4, B_e=8.0, Ti=70.0, Te=50.0, tauE=0.0011,
         f_shape=0.75, fsig=1.0, Rw=0.9, icase=3, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10),
     "C-2W": dict(  # TAE Norman-class beam-driven FRC (experiment-scale)
-        r_s=0.4, l_s=3.0, r_w=0.6, B_e=1.0, Ti=2.0, Te=1.0,
+        r_s=0.4, l_s=3.0, r_w=0.6, B_e=1.0, Ti=2.0, Te=1.0, tauE=0.0015,
         f_shape=0.85, fsig=1.0, Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10),
 }
 
@@ -156,6 +160,7 @@ TOKAMAK_CONTOURS = [
     {"f": "betaN", "c": "#ffd166", "lv": [1, 3, 10], "label": "βN", "on": True},
     {"f": "H98", "c": "#c792ff", "lv": [0.5, 1, 2, 5, 10], "label": "H98", "on": True},
     {"f": "HST", "c": "#c792ff", "lv": [0.5, 1, 2, 5, 10], "dash": "dash", "label": "HST", "on": False},
+    {"f": "q", "c": "#5ad1ff", "lv": [2, 3, 5, 8], "dash": "dot", "label": "q", "on": False},
     {"f": "betaT", "c": "#36e2c4", "lv": [0.01, 0.1, 0.5, 1], "label": "βt", "on": False},
     {"f": "Pbrem", "c": "#ff9e3d", "lv": [0.1, 0.5, 1, 5, 10], "label": "Pbrem [MW]", "on": False},
     {"f": "Eth", "c": "#b388ff", "lv": [10, 50, 100, 500, 1000], "label": "Eth [MJ]", "on": False},
@@ -163,20 +168,16 @@ TOKAMAK_CONTOURS = [
     {"f": "Vp", "c": "#7ddc6b", "lv": [50, 100, 500, 1000, 5000], "label": "Vp [m³]", "on": False},
 ]
 MIRROR_CONTOURS = [
-    # power account (always-on trio)
     {"f": "Pfus", "c": "#4ea1ff", "lv": [1, 10, 50, 100, 500], "label": "Pfus [MW]", "on": True},
     {"f": "Qfus", "c": "#3ddc84", "lv": [0.01, 0.1, 1, 10], "w": 2.4, "label": "Qfus", "on": True},
     {"f": "Pheat", "c": "#ff6b6b", "lv": [1, 10, 50, 100], "label": "Pheat [MW]", "on": True},
-    # mirror-defining constraints
     {"f": "beta", "c": "#36e2c4", "lv": [0.1, 0.3, 0.6], "label": "beta", "on": True},
-    {"f": "tau_c", "c": "#c792ff", "lv": [0.01, 0.1, 1], "label": "tau_c [s]", "on": True},
-    {"f": "P_end_flux", "c": "#ff9e3d", "lv": [10, 100, 500, 1000], "label": "q_end [MW/m2]", "on": True},
-    {"f": "Past_domain", "c": "#ff5d8f", "lv": [0.5], "dash": "dash", "w": 2.4, "label": "Pastukhov domain", "on": True},
-    # secondary physics / engineering (selectable)
+    {"f": "tau_E", "c": "#c792ff", "lv": [0.01, 0.1, 1], "label": "tauE [s]", "on": True},
+    {"f": "Ptrans", "c": "#5ad1ff", "lv": [1, 10, 100], "label": "Ptrans [MW]", "on": True},
     {"f": "ntau", "c": "#e9eef7", "lv": [1e18, 1e19, 1e20], "label": "n*tau", "on": False},
-    {"f": "P_coll_flux", "c": "#ffd166", "lv": [0.5, 1, 5, 10], "label": "q_coll [MW/m2]", "on": False},
-    {"f": "Ptrans", "c": "#5ad1ff", "lv": [1, 10, 100], "label": "Ptrans [MW]", "on": False},
     {"f": "Pbrem", "c": "#b388ff", "lv": [0.1, 1, 10], "label": "Pbrem [MW]", "on": False},
+    {"f": "Pcycl", "c": "#ff9e3d", "lv": [0.1, 1, 10], "label": "Pcycl [MW]", "on": False},
+    {"f": "P_line", "c": "#ffd166", "lv": [0.1, 1, 10], "label": "Pline [MW]", "on": False},
     {"f": "Eth", "c": "#9be564", "lv": [1, 10, 100], "label": "Eth [MJ]", "on": False},
     {"f": "Pwall", "c": "#d4a373", "lv": [0.1, 0.5, 1, 5], "label": "Pwall [MW/m2]", "on": False},
 ]
@@ -328,6 +329,10 @@ def _num(params: dict, key: str):
     return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
 
 
+def _uses_tauE(p: dict) -> bool:
+    return bool(p.get("use_tauE", 1.0))
+
+
 # inclusive bounds shared by every configuration that takes these inputs
 _COMMON_BOUNDS = {
     "Rw": (0.0, 1.0), "f1": (0.0, 1.0), "fHe": (0.0, 1.0), "fimp": (0.0, 1.0),
@@ -335,11 +340,31 @@ _COMMON_BOUNDS = {
 }
 
 
+def _tokamak_cross(p: dict) -> list[str]:
+    errors = []
+    if _uses_tauE(p):
+        tauE = _num(p, "tauE")
+        if tauE is not None and tauE <= 0:
+            errors.append(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
+    else:
+        H = _num(p, "H_fac")
+        if H is not None and H <= 0:
+            errors.append(f"H_fac must be > 0 when use_tauE is disabled (got {H})")
+    return errors
+
+
 def _mirror_cross(p: dict) -> list[str]:
     errors = []
     R = _num(p, "R_mirror")
     if R is not None and R <= 1.0:
         errors.append(f"R_mirror must be > 1 (got {R}): no magnetic well otherwise")
+    if _uses_tauE(p):
+        tauE = _num(p, "tauE")
+        Te0 = _num(p, "Te0")
+        if tauE is not None and tauE <= 0:
+            errors.append(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
+        if Te0 is not None and Te0 <= 0:
+            errors.append(f"Te0 must be > 0 when use_tauE is enabled (got {Te0})")
     return errors
 
 
@@ -349,11 +374,17 @@ def _frc_cross(p: dict) -> list[str]:
     if r_s is not None and r_w is not None and r_s >= r_w:
         errors.append(f"need r_s < r_w (got r_s={r_s}, r_w={r_w}): "
                       "separatrix must sit inside the wall (x_s < 1)")
+    if _uses_tauE(p):
+        tauE = _num(p, "tauE")
+        if tauE is not None and tauE <= 0:
+            errors.append(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
     return errors
 
 
 def _dipole_cross(p: dict) -> list[str]:
     errors = []
+    if not _uses_tauE(p):
+        errors.append("dipole has no implemented self-consistent loss closure; keep use_tauE enabled")
     fac, r_ring, R_p = _num(p, "L_in_fac"), _num(p, "r_ring"), _num(p, "R_p")
     if fac is not None and r_ring is not None and R_p is not None \
             and fac * r_ring >= R_p:
@@ -370,19 +401,26 @@ def _stell_cross(p: dict) -> list[str]:
     dh, R0 = _num(p, "delta_h"), _num(p, "R0")
     if dh is not None and R0 is not None and dh >= R0:
         errors.append(f"helical excursion delta_h must be < R0 (got {dh} >= {R0})")
+    if _uses_tauE(p):
+        tauE = _num(p, "tauE")
+        if tauE is not None and tauE <= 0:
+            errors.append(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
+    else:
+        H = _num(p, "H_fac")
+        if H is not None and H <= 0:
+            errors.append(f"H_fac must be > 0 when use_tauE is disabled (got {H})")
     return errors
 
 
 TOKAMAK = ConfigSpec(
     name="tokamak", label="托卡马克 Tokamak",
-    params=TOKAMAK_PARAMS + ["imp_name", "f_aux_e", "H_fac"], required=TOKAMAK_PARAMS,
-    # fT and tauE moved from positive to bounds: 0 is a legal sentinel —
-    # fT=0 solves Te self-consistently, tauE=0 solves tauE from IPB98 with
-    # target H98 = H_fac (docs/30 batch 2/2b).
+    params=["use_tauE"] + TOKAMAK_PARAMS + ["imp_name", "H_fac"],
+    required=TOKAMAK_PARAMS,
     positive=["R0", "A", "kappa", "ni0", "Ti0", "BT0", "Ip", "Zimp"],
     bounds={**_COMMON_BOUNDS, "delta": (-0.999, 0.999),
-            "fT": (0.0, None), "tauE": (0.0, None),
-            "f_aux_e": (0.0, 1.0), "H_fac": (0.0, None)},
+            "fT": (0.0, None), "tauE": (0.0, None), "use_tauE": (0.0, 1.0),
+            "H_fac": (0.0, None)},
+    cross=_tokamak_cross,
     presets=TOKAMAK_PRESETS,
     contour_fields=["Pfus", "Qfus", "Pheat", "betaN", "nbar_o_nGw", "H98"],
     scan_defaults=dict(xkey="Ti0", ykey="ni0", xmin=20, xmax=200, ymin=0.5e20, ymax=4e20),
@@ -399,18 +437,18 @@ TOKAMAK = ConfigSpec(
 MIRROR = ConfigSpec(
     name="mirror", label="磁镜 Magnetic Mirror",
     params=_MIRROR_PARAMS,
-    required=["a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0", "icase"],
-    # Te0 moved from positive to bounds: Te0 = 0 = solve electron channel.
+    required=["a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0", "tauE", "icase"],
     positive=["a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Zimp"],
-    bounds={**_COMMON_BOUNDS, "f_throat": (0.0, 0.5), "f_alpha": (0.0, 1.0),
+    bounds={**_COMMON_BOUNDS, "use_tauE": (0.0, 1.0),
+            "f_throat": (0.0, 0.5), "f_alpha": (0.0, 1.0),
             "B_expand": (1.0, None), "lnLambda": (1.0, None),
             "phi_i_over_Te": (0.0, None), "Te0": (0.0, None),
-            "f_aux_e": (0.0, 1.0)},
+            "tauE": (0.0, None)},
     cross=_mirror_cross,
     presets=MIRROR_PRESETS,
-    contour_fields=["Pfus", "Qfus", "Ptrans", "beta", "tau_c", "ntau"],
+    contour_fields=["Pfus", "Qfus", "Pheat", "beta", "Ptrans", "tau_E"],
     scan_defaults=dict(xkey="Ti0", ykey="ni0", xmin=5, xmax=200, ymin=0.5e20, ymax=6e20),
-    best_window={"ge": {"Pfus": 1, "Qfus": 1, "Past_domain": 0.5}, "le": {"beta": 0.6, "P_coll_flux": 10}},
+    best_window={"ge": {"Pfus": 1, "Qfus": 1}, "le": {"beta": 0.6}},
     contour_spec=MIRROR_CONTOURS,
     preset_groups=MIRROR_GROUPS,
     _solve=solve_mirror,
@@ -419,9 +457,10 @@ MIRROR = ConfigSpec(
 FRC = ConfigSpec(
     name="frc", label="场反位形 FRC",
     params=_FRC_PARAMS,
-    required=["r_s", "l_s", "r_w", "B_e", "Ti", "Te", "icase"],
+    required=["r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "icase"],
     positive=["r_s", "l_s", "r_w", "B_e", "Ti", "Te", "Zimp"],
-    bounds={**_COMMON_BOUNDS, "f_shape": (2.0 / 3.0 - 1e-9, 1.0)},
+    bounds={**_COMMON_BOUNDS, "use_tauE": (0.0, 1.0),
+            "tauE": (0.0, None), "f_shape": (2.0 / 3.0 - 1e-9, 1.0)},
     cross=_frc_cross,
     presets=FRC_PRESETS,
     contour_fields=["Pfus", "Qfus", "Ptrans", "beta", "tau_E", "ntau"],
@@ -440,7 +479,8 @@ DIPOLE = ConfigSpec(
     params=_DIPOLE_PARAMS,
     required=["r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE", "icase"],
     positive=["r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE", "Zimp"],
-    bounds={**_COMMON_BOUNDS, "L_in_fac": (1.0, None), "ring_model": (0, 1)},
+    bounds={**_COMMON_BOUNDS, "use_tauE": (0.0, 1.0),
+            "L_in_fac": (1.0, None), "ring_model": (0, 1)},
     cross=_dipole_cross,
     presets=DIPOLE_PRESETS,
     contour_fields=["Pfus", "Qfus", "Ptrans", "beta_ring", "Eth", "ntau"],
@@ -456,12 +496,12 @@ STELLARATOR = ConfigSpec(
     params=_STELL_PARAMS,
     required=[p for p in _STELL_PARAMS
               if p not in ("f_ren", "iota", "delta_h", "etabar", "imp_name",
-                           "f_aux_e", "H_fac")],
+                            "H_fac")],
     positive=["R0", "A", "kappa_s", "N_fp", "ni0", "Ti0", "B0",
               "Zimp", "f_ren"],
     bounds={**_COMMON_BOUNDS, "delta_h": (0.0, None), "N_fp": (1.0, None),
-            "fT": (0.0, None), "tauE": (0.0, None),
-            "f_aux_e": (0.0, 1.0), "H_fac": (0.0, None)},
+            "fT": (0.0, None), "tauE": (0.0, None), "use_tauE": (0.0, 1.0),
+            "H_fac": (0.0, None)},
     cross=_stell_cross,
     presets=STELL_PRESETS,
     contour_fields=["Pfus", "Qfus", "Pheat", "betaT", "nbar_o_Sudo", "H_ISS04"],
@@ -476,22 +516,25 @@ STELLARATOR = ConfigSpec(
     shape_fn=lambda params: section_outlines(**params),
 )
 
-# Sync presets with the batch-2 optional inputs so the UI shows their real
-# defaults instead of blank fields (牵一发: new solver kwargs -> presets too).
 for _p in TOKAMAK_PRESETS.values():
-    _p.setdefault("f_aux_e", 0.5)
-    _p.setdefault("H_fac", 1.0)
-for _p in STELL_PRESETS.values():
+    _p.setdefault("use_tauE", 1.0)
     _p.setdefault("f_aux_e", 0.5)
     _p.setdefault("H_fac", 1.0)
 for _p in MIRROR_PRESETS.values():
+    _p.setdefault("use_tauE", 1.0)
     _p.setdefault("f_aux_e", 0.5)
-    _p.setdefault("B_expand", 100.0)      # solver defaults made visible in UI
+    _p.setdefault("B_expand", 100.0)
     _p.setdefault("lnLambda", 17.0)
-    _p.setdefault("phi_i_over_Te", 0.0)   # 0 = auto Te*lnR (sentinel)
+    _p.setdefault("phi_i_over_Te", 0.0)
+for _p in FRC_PRESETS.values():
+    _p.setdefault("use_tauE", 1.0)
 for _p in STELL_PRESETS.values():
+    _p.setdefault("use_tauE", 1.0)
+    _p.setdefault("f_aux_e", 0.5)
+    _p.setdefault("H_fac", 1.0)
     _p.setdefault("iota", 0.0)            # 0 = use geometric transform
 for _p in DIPOLE_PRESETS.values():
+    _p.setdefault("use_tauE", 1.0)
     _p.setdefault("ring_model", 0)
 
 REGISTRY = {c.name: c for c in (TOKAMAK, MIRROR, FRC, DIPOLE, STELLARATOR)}

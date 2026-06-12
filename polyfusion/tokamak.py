@@ -106,6 +106,7 @@ class Result:
     fnavg: float    # density volume-average factor
     Sw: float       # first-wall area [m^2]
     Pth: float      # transport loss power [MW]
+    Ptrans: float   # alias of Pth for release UI consistency [MW]
     Zeff: float     # effective charge
     P_line: float   # impurity line radiation [MW] (0 unless imp_name given)
     Ecrit: float    # Stix critical energy of the fast product [keV]
@@ -132,7 +133,7 @@ class Result:
 
 def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
           BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
-          imp_name=None, f_aux_e=0.5, H_fac=1.0) -> Result:
+          imp_name=None, f_aux_e=0.5, H_fac=1.0, use_tauE=1.0) -> Result:
     """Evaluate the 0-D power balance for one operating point.
 
     See parameter table in ``docs/01_托卡马克代码说明文档.md`` (§3) for units.
@@ -158,11 +159,18 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         raise ValueError(f"f_aux_e must be in [0, 1] (got {f_aux_e})")
     if H_fac <= 0:
         raise ValueError(f"H_fac must be > 0 (got {H_fac})")
+    manual_tauE = bool(use_tauE)
+    if manual_tauE and tauE <= 0:
+        raise ValueError(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
+    if not manual_tauE:
+        tauE = 0.0
+
     if tauE == 0:
         def _eval_t(t):
             return funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
                          BT0, Ip, t, fHe, fimp, Zimp, Rw, g, icase,
-                         imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac)
+                         imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac,
+                         use_tauE=1.0)
 
         def _resid_t(t, res):
             # H98(t) is monotone increasing in t; root at H98 = H_fac
@@ -175,7 +183,8 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         def _eval(ft):
             return funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, ft, fsig, f1,
                          BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
-                         imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac)
+                         imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac,
+                         use_tauE=1.0)
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
@@ -336,7 +345,7 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
         betaN=betaN, betaT=betaT, nbar_o_nGw=nbar_o_nGw, q=q,
         Pbrem=Pbrem, Pcycl=Pcycl, Vp=Vp, betap=betap, Sp=Sp, ne0=ne0, M=M,
-        fTavg=fTavg, fnavg=fnavg, Sw=Sw, Pth=Pth, Zeff=Zeff,
+        fTavg=fTavg, fnavg=fnavg, Sw=Sw, Pth=Pth, Ptrans=Pth, Zeff=Zeff,
         P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
         P_ei=P_ei, Te0=Te0, fT_used=fT, te_mode=0.0, te_resid=0.0,
         tauE_used=tauE, taue_mode=0.0,

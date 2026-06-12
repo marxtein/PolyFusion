@@ -92,7 +92,8 @@ def _solve_K(beta_avg: float) -> float:
     return 0.5 * (lo + hi)
 
 
-def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
+def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
+              f_shape=0.85, fsig=1.0,
               Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
               imp_name=None) -> FRCResult:
     """Evaluate the 0-D FRC power balance at one operating point.
@@ -108,8 +109,11 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
     if r_s >= r_w:
         raise ValueError(f"need r_s < r_w: separatrix inside the wall "
                          f"(got r_s={r_s}, r_w={r_w})")
+    manual_tauE = bool(use_tauE)
     if B_e <= 0 or Ti <= 0 or Te <= 0:
         raise ValueError(f"B_e, Ti, Te must be > 0 (got {B_e}, {Ti}, {Te})")
+    if manual_tauE and tauE <= 0:
+        raise ValueError(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
     if not 2.0 / 3.0 - 1e-9 <= f_shape <= 1.0:
         raise ValueError(f"f_shape must be in [2/3, 1] (ellipse..racetrack), got {f_shape}")
     if not 0.0 <= f1 <= 1.0:
@@ -176,8 +180,12 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, f_shape=0.85, fsig=1.0,
     Pcycl = (4.14e-7 * (ne_m * G1 / 1e20)**0.5 * Te**2.5 * B_int**2.5
              * (1 - Rw)**0.5 * r_s**-0.5 * (1 + 2.5 * Te / 511) * Vp)
 
-    # ---------- confinement: LSX empirical scaling (SI; docs/25 §5) ----------
-    tau_E = 3.2e-15 * elongation**0.5 * x_s**2 * r_s**2.1 * ne_m**0.6
+    # ---------- confinement ----------
+    if manual_tauE:
+        tau_E = tauE
+    else:
+        # LSX empirical scaling (SI; docs/25 §5)
+        tau_E = 3.2e-15 * elongation**0.5 * x_s**2 * r_s**2.1 * ne_m**0.6
 
     # ---------- stored energy & balance ----------
     Eth = 1.5 * (ni_m * Ti + ne_m * Te) * _KEV_J * G1 * Vp * 1e-6   # MJ

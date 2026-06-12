@@ -77,7 +77,8 @@ class DipoleResult:
 def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
                  L_in_fac=1.5, fsig=1.0,
                  icase=2, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
-                 Rw=0.9, N=160, ring_model=0, imp_name=None) -> DipoleResult:
+                 Rw=0.9, N=160, ring_model=0, imp_name=None,
+                 use_tauE=1.0) -> DipoleResult:
     """Evaluate the 0-D dipole power balance.
 
     Parameters (SI / keV)
@@ -91,6 +92,8 @@ def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
     icase       : reaction (default 2 = D-D, the dipole signature fuel)
     """
     rx = _REACTIONS[icase]
+    if not bool(use_tauE):
+        raise ValueError("dipole has no implemented self-consistent loss closure; keep use_tauE enabled")
 
     # --- input-domain guards (audit P0: L_in >= R_p gives negative volume) ---
     if r_ring <= 0 or R_p <= 0 or B_ring <= 0:

@@ -59,7 +59,7 @@ class MirrorResult:
     Past_domain: float  # 1 = Pastukhov formula in validity domain, 0 = fallback used
     Eth: float        # stored thermal energy [MJ]
     # confinement
-    tau_c: float; tau_Past: float; tau_gd: float; tau_rho: float
+    tau_E: float; tau_c: float; tau_Past: float; tau_gd: float; tau_rho: float
     phi_i: float      # ion confining potential [keV]
     phi_e: float      # electron confining potential [keV]
     lambda_ii: float  # ion mean free path [m]
@@ -110,12 +110,12 @@ def _solve_phi_e_over_Te(K: float) -> float:
     return y
 
 
-def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
+def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
                  Sn=0.0, ST=0.0, g=0.0, fsig=1.0, f_throat=0.1,
                  f_alpha=None, B_expand=100.0,
                  Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
                  phi_i_over_Te=None, lnLambda=_LN_LAMBDA,
-                 imp_name=None, f_aux_e=0.5) -> MirrorResult:
+                 imp_name=None, f_aux_e=0.5, use_tauE=1.0) -> MirrorResult:
     """Evaluate the 0-D mirror power balance at one operating point.
 
     Parameters (SI / keV / m^-3); see docs/24 §3 for the full table.
@@ -136,15 +136,21 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
 
     if not 0.0 <= f_aux_e <= 1.0:
         raise ValueError(f"f_aux_e must be in [0, 1] (got {f_aux_e})")
+    manual_tauE = bool(use_tauE)
+    if manual_tauE and tauE <= 0:
+        raise ValueError(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
+    if manual_tauE and Te0 == 0:
+        raise ValueError("Te0=0 self-consistent solve is only available when use_tauE is disabled")
+
     if Te0 == 0:
         def _eval(te):
-            return solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, te,
+            return solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, te, tauE,
                                 Sn=Sn, ST=ST, g=g, fsig=fsig, f_throat=f_throat,
                                 f_alpha=f_alpha, B_expand=B_expand, Rw=Rw,
                                 icase=icase, f1=f1, fHe=fHe, fimp=fimp,
                                 Zimp=Zimp, phi_i_over_Te=phi_i_over_Te,
                                 lnLambda=lnLambda, imp_name=imp_name,
-                                f_aux_e=f_aux_e)
+                                f_aux_e=f_aux_e, use_tauE=use_tauE)
 
         def _resid(te, res):
             # electron share of the end loss (phi_e + Te per escaping electron)
@@ -217,7 +223,8 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
     # solid-angle fraction 1 - sqrt(1 - 1/R_mc); the deposited fraction is
     # the complement.  Ignores scattering INTO the cone during slow-down, so
     # it is an OPTIMISTIC bound — explicit f_alpha input overrides.
-    f_alpha_used = math.sqrt(1.0 - 1.0 / R_mc) if f_alpha is None else f_alpha
+    f_alpha_used = 1.0 if manual_tauE else (
+        math.sqrt(1.0 - 1.0 / R_mc) if f_alpha is None else f_alpha)
 
     # ---------- geometry: cylinder + flux-mapped throat regions ----------
     L_th = f_throat * L_c
@@ -301,12 +308,15 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
     Pcycl = (4.14e-7 * neff**0.5 * Teff**2.5 * B0**2.5 * (1 - Rw)**0.5
              * a_c**-0.5 * (1 + 2.5 * Teff / 511) * Vp)
 
-    # ---------- stored energy & end-loss power (profile-integrated) ----------
+    # ---------- stored energy & transport power ----------
     Eth = 1.5 * (ni0 * Ti0 + ne0 * Te0) * _KEV_J / (1 + Sn + ST) * Vp * 1e-6  # MJ
-    # loss power density n(phi+T)/tau integrated over profiles:
-    #   Int n dV = n0 V/(1+Sn);  Int nT dV = n0T0 V/(1+Sn+ST)
-    Ptrans = ((ni0 * phi_i + ne0 * phi_e) / (1 + Sn)
-              + (ni0 * Ti0 + ne0 * Te0) / (1 + Sn + ST)) * _KEV_J * Vp / tau_c * 1e-6
+    if manual_tauE:
+        Ptrans = Eth / tauE
+    else:
+        # loss power density n(phi+T)/tau integrated over profiles:
+        #   Int n dV = n0 V/(1+Sn);  Int nT dV = n0T0 V/(1+Sn+ST)
+        Ptrans = ((ni0 * phi_i + ne0 * phi_e) / (1 + Sn)
+                  + (ni0 * Ti0 + ne0 * Te0) / (1 + Sn + ST)) * _KEV_J * Vp / tau_c * 1e-6
 
     # alpha/charged-product deposition: in an open trap part of the charged
     # fusion power escapes through the loss cone before slowing down
@@ -315,7 +325,7 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
     P_line = line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx)
 
     P_charged = rx["fion"] * Pfus
-    P_alpha_loss = (1.0 - f_alpha_used) * P_charged
+    P_alpha_loss = 0.0 if manual_tauE else (1.0 - f_alpha_used) * P_charged
     Pheat = Pbrem + Pcycl + P_line + Ptrans - f_alpha_used * P_charged
     ignited = 1.0 if Pheat <= 0 else 0.0
     Qfus_raw = Pfus / Pheat if Pheat != 0 else math.inf
@@ -323,11 +333,15 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
     if Qfus <= 0 or Qfus > 1000:
         Qfus = 1000.0
     Pwall = (Pfus + Pheat) / Sw
-    P_end_flux = Ptrans / (2 * A_throat) if A_throat > 0 else 0.0
-    # end-expander engineering (audit §4.6): the throat flux is spread onto a
-    # collector where B has dropped by B_expand; flux dilutes by the same factor.
-    P_coll_flux = ((Ptrans + P_alpha_loss) / (2 * A_throat * B_expand)
-                   if A_throat > 0 and B_expand > 0 else 0.0)
+    if manual_tauE:
+        P_end_flux = 0.0
+        P_coll_flux = 0.0
+    else:
+        P_end_flux = Ptrans / (2 * A_throat) if A_throat > 0 else 0.0
+        # end-expander engineering (audit §4.6): the throat flux is spread
+        # onto a collector where B has dropped by B_expand.
+        P_coll_flux = ((Ptrans + P_alpha_loss) / (2 * A_throat * B_expand)
+                       if A_throat > 0 and B_expand > 0 else 0.0)
 
     # two-temperature channel diagnostics (docs/30 P1-1)
     Ecrit, f_fast, tau_eq, pei = twotemp_diagnostics(
@@ -340,9 +354,10 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0,
         Ptrans=Ptrans, Pn=Pn, Pwall=Pwall, P_end_flux=P_end_flux,
         P_coll_flux=P_coll_flux, P_alpha_loss=P_alpha_loss, Past_domain=Past_domain,
         Eth=Eth,
+        tau_E=tauE if manual_tauE else tau_c,
         tau_c=tau_c, tau_Past=tau_Past, tau_gd=tau_gd, tau_rho=tau_rho,
         phi_i=phi_i, phi_e=phi_e, lambda_ii=lambda_ii, coll_ratio=coll_ratio,
-        a_over_rhoi=a_over_rhoi, ntau=ni0 * tau_c,
+        a_over_rhoi=a_over_rhoi, ntau=ni0 * (tauE if manual_tauE else tau_c),
         beta=beta, beta_avg=beta_avg, B0=B0, R_mc=R_mc,
         Vp=Vp, Sp=Sp, Sw=Sw, A_throat=A_throat,
         ne0=ne0, nbar=nbar, Zeff=Zeff, M=M, fTavg=fTavg, fnavg=fnavg,

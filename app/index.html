@@ -170,6 +170,7 @@ const COLORS=['#ffb02e','#36e2c4','#ff5d73','#7aa2ff','#c792ff','#9be564','#ffd1
 const RX={1:'D-T',2:'D-D',3:'D-³He',4:'p-¹¹B(Nevins)',5:'p-¹¹B(Sikora)',6:'cat-D-D'};
 // name -> [zh desc, en desc, unit, group, symbol html(book notation)]
 const META={
+  use_tauE:['使用输入 τE (关闭=自洽损失)','use input tauE (off = self-consistent losses)','','conf','τ<sub>E</sub>'],
   icase:['反应类型','Reaction','','rx',''],
   R0:['大半径','major radius','m','geo','R<sub>0</sub>'],A:['环径比','aspect ratio','','geo','A'],kappa:['拉长比','elongation','','geo','κ'],
   delta:['三角形变','triangularity','','geo','δ'],g:['壁间隙','wall gap','m','geo','g'],
@@ -179,15 +180,14 @@ const META={
   Sn:['密度峰化','density peaking','','prof','S<sub>n</sub>'],ST:['温度峰化','temperature peaking','','prof','S<sub>T</sub>'],
   ni0:['中心离子密度','central ion density','m⁻³','plasma','n<sub>i0</sub>'],n0:['峰值密度','peak density','m⁻³','plasma','n<sub>0</sub>'],
   Ti0:['离子温度','ion temperature','keV','plasma','T<sub>i0</sub>'],Ti:['离子温度','ion temperature','keV','plasma','T<sub>i</sub>'],
-  Te:['电子温度','electron temperature','keV','plasma','T<sub>e</sub>'],Te0:['电子温度 (磁镜:0=自洽求解)','electron temperature (mirror: 0=solve)','keV','plasma','T<sub>e0</sub>'],
-  fT:['T<sub>e0</sub>/T<sub>i0</sub> 比 (0=自洽求解Te)','T<sub>e0</sub>/T<sub>i0</sub> ratio (0=solve Te)','','plasma','f<sub>T</sub>'],
-  f_aux_e:['外部加热电子份额','aux-heating electron fraction','','conf','f<sub>aux,e</sub>'],
+  Te:['电子温度','electron temperature','keV','plasma','T<sub>e</sub>'],Te0:['电子温度','electron temperature','keV','plasma','T<sub>e0</sub>'],
+  fT:['T<sub>e0</sub>/T<sub>i0</sub> 比','T<sub>e0</sub>/T<sub>i0</sub> ratio','','plasma','f<sub>T</sub>'],
   BT0:['环向场','toroidal field','T','field','B<sub>T0</sub>'],B0:['磁场','field','T','field','B<sub>0</sub>'],B_vac:['中心真空场','central vacuum field','T','field','B<sub>vac</sub>'],
   B_e:['外加轴向场','external field','T','field','B<sub>e</sub>'],B_ring:['环表面场','coil field','T','field','B<sub>ring</sub>'],
   Ip:['等离子体电流','plasma current','MA','field','I<sub>p</sub>'],iota:['旋转变换 (0=用几何值)','rotational transform (0 = geometric)','','field','ι'],
   f1:['燃料配比','fuel mix','','fuel','f<sub>1</sub>'],fHe:['氦灰份额','helium ash','','fuel','f<sub>He</sub>'],fimp:['杂质份额','impurity','','fuel','f<sub>imp</sub>'],Zimp:['杂质电荷','impurity charge','','fuel','Z<sub>imp</sub>'],
   imp_name:['线辐射元素 (Mavrin; 关闭=只算轫致)','line-radiation species (off = brems only)','','fuel','imp'],
-  tauE:['能量约束时间 (托卡马克/仿星器:0=按定标律解)','confinement time (tok/stell: 0=solve from scaling)','s','conf','τ<sub>E</sub>'],
+  tauE:['能量约束时间','energy confinement time','s','conf','τ<sub>E</sub>'],
   H_fac:['τE 自洽模式的目标 H 因子','target H factor for tauE=0 mode','','conf','H<sub>fac</sub>'],fsig:['反应率因子','reactivity factor','','conf','f<sub>σ</sub>'],Rw:['壁反射率','wall reflectivity','','conf','R<sub>w</sub>'],
   f_ren:['ISS04 位形因子','ISS04 factor','','conf','f<sub>ren</sub>'],f_belt:['约束带占比','belt fraction','','conf','f<sub>belt</sub>'],
   f_throat:['喉部长度占比','throat fraction','','geo','f<sub>th</sub>'],
@@ -214,19 +214,19 @@ const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub
   ni0:'n<sub>i0</sub>',Vp:'V<sub>p</sub>',Zeff:'Z<sub>eff</sub>',M:'M',B0:'B<sub>0</sub>',B_int:'B<sub>int</sub>',
   phi_i:'φ<sub>i</sub>',phi_e:'φ<sub>e</sub>',fTavg:'f<sub>T,avg</sub>',fnavg:'f<sub>n,avg</sub>',Sp:'S<sub>p</sub>',Sw:'S<sub>w</sub>',iota:'ι',
   Qfus_raw:'Q<sub>raw</sub>',ignited:'ignited',valid:'valid',kappa_eff:'κ<sub>eff</sub>',elong_max:'e<sub>max</sub>',helicity:'N<sub>hel</sub>',etabar:'η̄',coll_ratio:'λ<sub>ii</sub>/RL',
-  P_line:'P<sub>line</sub>',Ecrit:'E<sub>crit</sub>',f_fast_ion:'f<sub>fast→i</sub>',tau_eq_ie:'τ<sub>ie</sub>',P_ei:'P<sub>ei</sub>',tau_eta:'τ<sub>η</sub>',tauN_o_taueta:'τ<sub>N</sub>/τ<sub>η</sub>',ring_model:'ring',
-  Te0:'T<sub>e0</sub>',fT_used:'f<sub>T,used</sub>',te_mode:'T<sub>e</sub>mode',te_resid:'R<sub>e,ch</sub>',Te0_used:'T<sub>e0</sub><sup>slv</sup>',f_alpha_used:'f<sub>α,used</sub>',nu_eff_ang:'ν<sub>eff</sub>',Sn_sugg:'S<sub>n</sub><sup>Ang</sup>',
+  P_line:'P<sub>line</sub>',tau_eta:'τ<sub>η</sub>',tauN_o_taueta:'τ<sub>N</sub>/τ<sub>η</sub>',ring_model:'ring',
+  Te0:'T<sub>e0</sub>',f_alpha_used:'f<sub>α,used</sub>',nu_eff_ang:'ν<sub>eff</sub>',Sn_sugg:'S<sub>n</sub><sup>Ang</sup>',
   tauE_used:'τ<sub>E,used</sub>',taue_mode:'τ<sub>E</sub>mode',Pth:'P<sub>th</sub>',ring_model:'ring',
   P_LH:'P<sub>LH</sub>',LH_ratio:'P<sub>sep</sub>/P<sub>LH</sub>',tau_ITPA20:'τ<sub>ITPA20</sub>',H_ITPA20:'H<sub>ITPA20</sub>',
   tau_classical:'τ<sub>cl</sub>',tau_Bohm:'τ<sub>Bohm</sub>',a_over_rhoi:'a/ρ<sub>i</sub>'};
 const pk=k=>PR[k]?`<span class="sym">${PR[k]}</span>`:k;
 const chipLab=s=>{const u=(s.label.match(/\[[^\]]+\]/)||[''])[0];return (PR[s.f]?`<span class="sym">${PR[s.f]}</span>`:s.f)+(u?' '+u:'');};
 const GROUPS=[['rx','反应','Reaction'],['geo','几何','Geometry'],['prof','剖面','Profile'],['plasma','等离子体','Plasma'],['field','场·电流','Field·Current'],['fuel','燃料·杂质','Fuel·Impurity'],['conf','约束·修正','Confinement·Factors']];
-const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',P_ei:'MW',tau_eq_ie:'s',tau_eta:'s',Ecrit:'keV',Te0:'keV',Te0_used:'keV',te_resid:'MW',tauE_used:'s',P_LH:'MW',tau_ITPA20:'s',tau_classical:'s',tau_Bohm:'s'};
-const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','P_ei','Pth','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth']],
-  ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ITPA20','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tau_ITPA20','tauE_used','taue_mode','tau_eq_ie','tau_eta','tauN_o_taueta','tau_classical','tau_Bohm','ntau']],
-  ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_avg','beta_null','beta_ring','beta_o_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain','P_LH','LH_ratio','a_over_rhoi']],
-  ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','fTavg','fnavg','Sp','Sw','L_ax','L_in','A_throat','flux_p','lambda_ii','coll_ratio','nbar','kappa_s','kappa_eff','elong_max','helicity','N_fp','Ecrit','f_fast_ion','Te0','fT_used','Te0_used','te_mode','te_resid','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
+const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',tau_eta:'s',Te0:'keV',tauE_used:'s',P_LH:'MW',tau_ITPA20:'s',tau_classical:'s',tau_Bohm:'s'};
+const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','Pth','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth']],
+  ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ITPA20','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tau_ITPA20','tauE_used','taue_mode','tau_eta','tauN_o_taueta','tau_classical','tau_Bohm','ntau']],
+  ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_avg','beta_null','beta_o_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain','P_LH','LH_ratio','a_over_rhoi']],
+  ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','fTavg','fnavg','Sp','Sw','L_ax','L_in','A_throat','flux_p','lambda_ii','coll_ratio','nbar','kappa_s','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
 const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_c','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','beta_o_limit']);
 const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 28 40 28 32 28 24 30 14 40 8Z"/>',
   mirror:'<path d="M10 20Q32 30 54 20M10 44Q32 34 54 44"/><circle cx="12" cy="32" r="8"/><circle cx="52" cy="32" r="8"/>',
@@ -245,7 +245,24 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set();
 
-const DENS=new Set(['ni0','n0']);const dsc=k=>DENS.has(k)?1e-20:1;  // density display in 10^20 m^-3
+const DENS=new Set(['ni0','n0']);const BOOLS=new Set(['use_tauE']);const dsc=k=>DENS.has(k)?1e-20:1;  // density display in 10^20 m^-3
+const SELF_LOSS_PARAMS={
+  tokamak:['H_fac'],
+  mirror:['f_alpha','B_expand','phi_i_over_Te','lnLambda'],
+  frc:[],
+  dipole:[],
+  stellarator:['H_fac']
+};
+const FORCE_TAUE=new Set(['dipole']);
+const RANGES={
+  Ti0:[1,200],Ti:[1,200],Te0:[0.1,120],Te:[0.1,120],fT:[0.2,2.0],
+  ni0:[0.1e20,6e20],n0:[0.1e20,20e20],tauE:[1e-4,10],
+  B0:[0.5,12],BT0:[0.5,12],B_vac:[0.1,12],B_e:[0.5,12],B_ring:[0.5,15],
+  R0:[1,25],A:[2,15],kappa:[1,3.5],a_c:[0.05,1.5],L_c:[1,30],
+  r_s:[0.05,1.5],l_s:[0.5,10],r_w:[0.1,2],R_mirror:[2,50],
+  r_ring:[0.1,3],R_p:[1,20],kappa_s:[1,5],N_fp:[1,10],delta_h:[0,3],
+  Sn:[0,2],ST:[0,3],fsig:[0.1,2],fimp:[0,0.05],fHe:[0,0.2],Zimp:[1,74]
+};
 const jget=async u=>(await fetch(u)).json();
 const jpost=async(u,b)=>(await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})).json();
 const fillSel=(s,it,v)=>s.innerHTML=it.map(i=>`<option ${i===v?'selected':''}>${i}</option>`).join('');
@@ -301,7 +318,7 @@ function selectConfig(name){
   document.querySelectorAll('.cfg').forEach(b=>b.classList.toggle('on',b.dataset.c===name));
   const defP=(m.preset_groups&&Object.values(m.preset_groups).flat().find(n=>m.presets.includes(n)))||m.presets[0];
   fillPresets(preset,m.presets,m.preset_groups,defP);
-  const ps=m.params.filter(p=>p!=='icase');
+  const ps=m.params.filter(p=>p!=='icase'&&!BOOLS.has(p));
   fillSel(xkey,ps,m.scan_defaults.xkey);fillSel(ykey,ps,m.scan_defaults.ykey);
   const sd=m.scan_defaults;xmin.value=sd.xmin*dsc(sd.xkey);xmax.value=sd.xmax*dsc(sd.xkey);ymin.value=sd.ymin*dsc(sd.ykey);ymax.value=sd.ymax*dsc(sd.ykey);
   xkey.onchange=()=>{const r=RANGES[xkey.value]||[0,1];xmin.value=r[0]*dsc(xkey.value);xmax.value=r[1]*dsc(xkey.value);fitAxis(xkey.value,xmin,xmax);};
@@ -337,7 +354,8 @@ function buildParams(){
     let a0='';if(gk==='geo'&&'R0'in VALS&&'A'in VALS)a0=`<span class="a0"><i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m</span>`;
     html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div><div class="pgrid">`;
     for(const p of groups[gk]){const m=META[p];const desc=L(m[0],m[1]);
-      if(p==='icase'){html+=`<div class="fld full"><label title="${desc}">${desc}</label><select data-p="icase">${Object.entries(RX).map(([k,v])=>`<option value="${k}" ${+VALS.icase===+k?'selected':''}>${k} · ${v}</option>`).join('')}</select></div>`;}
+      if(BOOLS.has(p)){html+=`<div class="fld full"><label title="${desc}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span></label><select data-p="${p}" data-bool="1"><option value="1" ${VALS[p]!==0?'selected':''}>${L('开启：输入 τE','on: input tauE')}</option><option value="0" ${VALS[p]===0?'selected':''}>${L('关闭：自洽损失','off: self-consistent losses')}</option></select></div>`;}
+      else if(p==='icase'){html+=`<div class="fld full"><label title="${desc}">${desc}</label><select data-p="icase">${Object.entries(RX).map(([k,v])=>`<option value="${k}" ${+VALS.icase===+k?'selected':''}>${k} · ${v}</option>`).join('')}</select></div>`;}
       else if(p==='imp_name'){const SP=['','He','Li','Be','C','N','O','Ne','Ar','Kr','Xe','W'];
         html+=`<div class="fld"><label title="${desc}"><span class="sym">imp</span><span class="nm">${desc}</span></label><select data-p="imp_name">${SP.map(s=>`<option value="${s}" ${(VALS.imp_name||'')===s?'selected':''}>${s||L('关闭(默认)','off (default)')}</option>`).join('')}</select></div>`;}
       else{const dn=DENS.has(p);const un=dn?'10²⁰ m⁻³':m[2];const u=un?`<span class="u">[${un}]</span>`:'';
@@ -355,8 +373,18 @@ function buildParams(){
         if(IMPZ[el.value]){VALS.Zimp=IMPZ[el.value];
           const zEl=box.querySelector('[data-p="Zimp"]');if(zEl)zEl.value=IMPZ[el.value];}}
       else delete VALS.imp_name;}
+    else if(el.dataset.bool)VALS[el.dataset.p]=+el.value;
     else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
+    applyModeLocks();
     clearTimeout(timer);timer=setTimeout(()=>{updateA0();fitScanRanges();recompute();},280);});
+  applyModeLocks();
+}
+function applyModeLocks(){
+  const manual=VALS.use_tauE!==0;
+  const lock=(p,disabled)=>{document.querySelectorAll(`[data-p="${p}"]`).forEach(el=>{el.disabled=!!disabled;const f=el.closest('.fld');if(f)f.style.opacity=disabled?0.45:1;});};
+  if(FORCE_TAUE.has(CUR)){VALS.use_tauE=1;document.querySelectorAll('[data-p="use_tauE"]').forEach(el=>el.value='1');lock('use_tauE',true);lock('tauE',false);return;}
+  lock('tauE',!manual);
+  (SELF_LOSS_PARAMS[CUR]||[]).forEach(p=>lock(p,manual));
 }
 function updateA0(){const h=[...document.querySelectorAll('.grp-h .a0')][0];if(h&&'R0'in VALS&&'A'in VALS)h.innerHTML=`<i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m`;}
 function buildThresh(){
@@ -418,6 +446,29 @@ function setView(v){VIEW=v;document.querySelectorAll('.tab').forEach(t=>t.classL
 const LAYOUT=(xt,yt)=>({paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(9,13,21,0.5)',font:{color:'#8b98a9',family:'JetBrains Mono',size:11},
   margin:{l:64,r:16,t:10,b:50},xaxis:{title:{text:xt,font:{family:'Chakra Petch',size:13,color:'#e9eef7'}},gridcolor:'rgba(43,54,72,0.55)',zeroline:false,linecolor:'#2b3648'},
   yaxis:{title:{text:yt,font:{family:'Chakra Petch',size:13,color:'#e9eef7'}},gridcolor:'rgba(43,54,72,0.55)',zeroline:false,linecolor:'#2b3648'},showlegend:true,legend:{orientation:'h',y:-0.18,font:{size:10,color:'#aab6cc'}}});
+function bestMarkerCloud(s,xs,ys){
+  const x=[],y=[],seen=new Set(),rows=new Set(),cols=new Set();
+  const add=(xx,yy)=>{const key=`${xx}|${yy}`;if(!seen.has(key)){seen.add(key);x.push(xx);y.push(yy);}};
+  for(let j=0;j<s.y.length;j++)for(let i=0;i<s.x.length;i++)if(s.best[j][i]){
+    rows.add(j);cols.add(i);add(xs[i],ys[j]);
+  }
+  const base=x.length;
+  if(!base)return{x,y,size:4,opacity:0.85};
+  const thin=rows.size<=2||cols.size<=2||base<=Math.max(6,Math.ceil(Math.min(s.x.length,s.y.length)/3));
+  if(thin){
+    const fill=(a0,a1,b0,b1,n=3)=>{for(let k=1;k<n;k++){const t=k/n;add(a0+(a1-a0)*t,b0+(b1-b0)*t);}};
+    for(const j of rows){
+      const is=[];for(let i=0;i<s.x.length;i++)if(s.best[j][i])is.push(i);
+      for(let n=0;n<is.length-1;n++)if(is[n+1]-is[n]<=2)fill(xs[is[n]],xs[is[n+1]],ys[j],ys[j]);
+    }
+    for(const i of cols){
+      const js=[];for(let j=0;j<s.y.length;j++)if(s.best[j][i])js.push(j);
+      for(let n=0;n<js.length-1;n++)if(js[n+1]-js[n]<=2)fill(xs[i],xs[i],ys[js[n]],ys[js[n+1]]);
+    }
+  }
+  const density=x.length/(s.x.length*s.y.length);
+  return{x,y,size:thin?3:(density>0.25?3:4),opacity:thin?0.95:0.78};
+}
 function drawPopcon(){
   document.getElementById('plotTitle').innerHTML=`POPCON · <b>${cfgL(CUR)}</b>`;
   if(!LASTSCAN){Plotly.purge('plot');document.getElementById('plot').innerHTML=`<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#4b566c;font-size:13px">${L('▶ 运行 POPCON 扫描以生成等值线图','▶ Run POPCON scan to generate contours')}</div>`;return;}
@@ -434,8 +485,8 @@ function drawPopcon(){
       line:{width:q.w||1.6,color:q.c,dash:q.dash||'solid'},colorscale:[[0,q.c],[1,q.c]]}));
     tr.push({x:[null],y:[null],mode:'lines',line:{color:q.c,width:4,dash:q.dash||'solid'},name:pl(q),showlegend:true,hoverinfo:'skip'});
   });
-  const bx=[],by=[];for(let j=0;j<s.y.length;j++)for(let i=0;i<s.x.length;i++)if(s.best[j][i]){bx.push(xs[i]);by.push(ys[j]);}
-  if(bx.length)tr.push({type:'scatter',mode:'markers',x:bx,y:by,name:L('最佳区域','best region'),marker:{color:'#36e2c4',size:4,symbol:'x',opacity:0.85},showlegend:true,hoverinfo:'skip'});
+  const bm=bestMarkerCloud(s,xs,ys);
+  if(bm.x.length)tr.push({type:'scatter',mode:'markers',x:bm.x,y:bm.y,name:L('最佳区域','best region'),marker:{color:'#36e2c4',size:bm.size,symbol:'x',opacity:bm.opacity},showlegend:true,hoverinfo:'skip'});
   if(VALS[s.xkey]!=null&&VALS[s.ykey]!=null)tr.push({type:'scatter',mode:'markers',x:[VALS[s.xkey]*dsc(s.xkey)],y:[VALS[s.ykey]*dsc(s.ykey)],name:L('当前点','selected'),
     marker:{color:'#facc15',size:14,symbol:'star',line:{color:'#dc2626',width:2}},showlegend:true,hoverinfo:'skip'});
   const ax=k=>{const mm=META[k];const sy=(mm&&mm[4])||k;const un=DENS.has(k)?'10²⁰ m⁻³':(mm&&mm[2]);return sy+(un?' ['+un+']':'');};
