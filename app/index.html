@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PolyFusion &middot; 多位形零维系统设计台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<style>
+  :root{--ink:#080b12;--ink2:#0b0f18;--panel:#0e1320;--panel2:#11182a;--line:#1b2334;--line2:#26324a;
+    --fg:#e9eef7;--mut:#7c8aa6;--dim:#4b566c;--amber:#ffb02e;--amber-d:#cf8a16;--teal:#36e2c4;--red:#ff5d73;--r:8px;
+    --glow:0 0 0 1px rgba(255,176,46,.4),0 0 18px -4px rgba(255,176,46,.55)}
+  *{box-sizing:border-box}html,body{height:100%}
+  body{margin:0;color:var(--fg);background:var(--ink);font-family:"Chakra Petch","Microsoft YaHei","PingFang SC",sans-serif;
+    font-size:13.5px;-webkit-font-smoothing:antialiased;overflow:hidden;
+    background-image:radial-gradient(900px 520px at 74% -8%,rgba(255,176,46,.07),transparent 60%),
+      radial-gradient(760px 520px at 4% 108%,rgba(54,226,196,.06),transparent 60%),
+      linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:auto,auto,40px 40px,40px 40px}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:linear-gradient(rgba(255,255,255,.013) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.013) 1px,transparent 1px),
+      radial-gradient(120% 100% at 50% 0%,transparent 60%,rgba(0,0,0,.55));background-size:8px 8px,8px 8px,auto}
+  header{position:relative;z-index:2;height:52px;display:flex;align-items:center;gap:16px;padding:0 18px;
+    border-bottom:1px solid var(--line2);background:linear-gradient(180deg,rgba(17,24,42,.9),rgba(10,14,22,.7));backdrop-filter:blur(6px)}
+  .brand .logo{font-weight:700;letter-spacing:.14em;font-size:16px;text-shadow:0 0 16px rgba(255,176,46,.35)}
+  .brand .logo b{color:var(--amber)}
+  .brand .sub{font-size:10.5px;letter-spacing:.2em;color:var(--mut);text-transform:uppercase;margin-left:9px}
+  .status{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:11px;color:var(--mut);letter-spacing:.07em}
+  .status .val{color:var(--fg)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .hbtn{font-family:"Chakra Petch";font-size:11px;letter-spacing:.06em;color:var(--mut);background:var(--panel2);
+    border:1px solid var(--line2);border-radius:6px;padding:4px 9px;cursor:pointer;transition:.15s}
+  .hbtn:hover{color:var(--fg);border-color:var(--teal)}
+  .hbtn.on{color:var(--ink);background:var(--amber);border-color:var(--amber);font-weight:700}
+  .wrap{position:relative;z-index:1;display:grid;grid-template-columns:362px 1fr 300px;height:calc(100vh - 52px)}
+  .col{overflow-y:auto;overflow-x:hidden}
+  .col::-webkit-scrollbar{width:8px}.col::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
+  .left{border-right:1px solid var(--line);padding:14px}.right{border-left:1px solid var(--line);padding:14px}
+  .center{display:flex;flex-direction:column;min-width:0}
+  .sec{margin-bottom:14px}
+  .sec-t{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--mut);margin:0 0 9px}
+  .sec-t::before{content:"";width:13px;height:1px;background:var(--amber);box-shadow:0 0 8px var(--amber)}
+  .sec-t .n{margin-left:auto;color:var(--dim);font-size:10px;letter-spacing:.04em}
+  .configs{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .cfg{display:flex;align-items:center;gap:8px;padding:8px 9px;border:1px solid var(--line2);border-radius:var(--r);
+    background:var(--panel);color:var(--mut);cursor:pointer;transition:.16s;font-size:12px;font-weight:500}
+  .cfg:hover{color:var(--fg);background:var(--panel2)}
+  .cfg .ic{width:20px;height:20px;flex:0 0 20px;opacity:.7}
+  .cfg.on{color:var(--ink);background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:var(--amber);box-shadow:var(--glow);font-weight:700}
+  .cfg.on .ic *{stroke:var(--ink)!important}.cfg:nth-child(5){grid-column:1/-1}
+  select,input{width:100%;padding:7px 9px;background:var(--ink2);color:var(--fg);border:1px solid var(--line2);
+    border-radius:6px;font:13px/1.2 "JetBrains Mono",monospace;transition:.15s;outline:none}
+  select:focus,input:focus{border-color:var(--amber);box-shadow:0 0 0 1px rgba(255,176,46,.25)}select{cursor:pointer}
+  .grp-h{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin:12px 0 6px;
+    padding-bottom:3px;border-bottom:1px dashed var(--line2);opacity:.85;display:flex;justify-content:space-between}
+  .grp-h .a0{color:var(--amber);font-family:"JetBrains Mono";text-transform:none;font-size:11.5px}
+  .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px 9px}
+  .fld{display:flex;flex-direction:column}
+  .fld label{font-size:12px;color:var(--mut);margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help;display:flex;align-items:baseline;gap:6px}
+  .fld label .nm{font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+  .fld label .u{color:var(--dim);font-size:10.5px;flex:0 0 auto}.fld.full{grid-column:1/-1}
+  .sym{font-family:Georgia,'Times New Roman','STIX Two Math',serif;font-style:italic;font-size:14.5px;color:var(--fg);line-height:1}
+  .sym sub{font-size:68%;font-style:italic;line-height:0}
+  .kv .k .sym{font-size:13.5px;color:#b9c4d8}
+  .thr .k .sym{font-size:13.5px}
+  .opt .sym{font-size:12px;color:inherit;font-weight:inherit}
+  .scanbox{border:1px solid var(--line);border-radius:var(--r);padding:10px;background:rgba(8,11,18,.5)}
+  .axis{margin-bottom:8px}
+  .axis .hd{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--teal);letter-spacing:.06em;margin-bottom:5px}
+  .axis .hd .tag{font-size:9px;color:var(--ink);background:var(--teal);border-radius:3px;padding:1px 5px;font-weight:700}
+  .row3{display:grid;grid-template-columns:1fr 1fr .65fr;gap:5px}.row3 .fld label{font-size:10.5px}
+  .thr{display:grid;grid-template-columns:auto auto auto 1fr;gap:5px 7px;align-items:center;margin-bottom:5px}
+  .thr .k{font-family:"JetBrains Mono";font-size:12px;color:var(--mut)}.thr .op{color:var(--amber);font-weight:700;text-align:center}
+  .thr input[type=checkbox]{accent-color:var(--amber);cursor:pointer;margin:0}
+  .thr .off{opacity:.42}
+  .opts{display:flex;flex-wrap:wrap;gap:5px}
+  .opt{font-size:11.5px;letter-spacing:.03em;color:var(--mut);border:1px solid var(--line2);border-radius:20px;padding:3px 9px;cursor:pointer;user-select:none;transition:.15s}
+  .opt.on{color:var(--ink);font-weight:700}
+  button.run{width:100%;margin-top:10px;padding:11px;border:0;border-radius:var(--r);cursor:pointer;
+    font-family:"Chakra Petch";font-weight:700;letter-spacing:.15em;font-size:12.5px;text-transform:uppercase;
+    color:var(--ink);background:linear-gradient(180deg,var(--amber),var(--amber-d));box-shadow:var(--glow);transition:.15s}
+  button.run:hover{filter:brightness(1.08);transform:translateY(-1px)}button.run:disabled{filter:grayscale(.5) brightness(.7);cursor:wait;transform:none}
+  .err{color:var(--red);font-size:11px;white-space:pre-wrap;margin-top:9px;font-family:"JetBrains Mono"}
+  .tabs{display:flex;gap:2px;padding:9px 16px 0;border-bottom:1px solid var(--line)}
+  .tab{padding:8px 16px;font-size:12px;letter-spacing:.05em;color:var(--mut);cursor:pointer;border:1px solid transparent;border-bottom:0;border-radius:7px 7px 0 0;transition:.15s}
+  .tab:hover{color:var(--fg)}.tab.on{color:var(--amber);background:var(--panel);border-color:var(--line2)}
+  .plotbar{display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:12px;color:var(--mut)}.plotbar b{color:var(--amber)}
+  .chip{margin-left:auto;display:flex;gap:7px}
+  .chip span{font-size:10px;letter-spacing:.04em;color:var(--mut);border:1px solid var(--line2);border-radius:20px;padding:2px 9px;background:var(--panel)}
+  .chip b{color:var(--teal);font-family:"JetBrains Mono"}
+  #plot{flex:1;min-height:0;width:100%}
+  .badge{display:inline-flex;font-size:10px;letter-spacing:.08em;color:var(--teal);border:1px solid rgba(54,226,196,.35);border-radius:20px;padding:2px 8px;text-transform:uppercase}
+  .grp{margin-bottom:12px}
+  .grp-t{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 5px;padding-bottom:3px;border-bottom:1px dashed var(--line2)}
+  .kv{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid rgba(27,35,52,.5)}
+  .kv .k{font-size:12.5px;color:var(--mut)}.kv .v{font-family:"JetBrains Mono";font-size:13px;color:var(--fg);font-weight:500}
+  .kv .v .u{color:var(--dim);font-size:9.5px;margin-left:2px}
+  .kv.hot .v{color:var(--amber)}.kv.cool .v{color:var(--teal)}.kv.warn .v{color:var(--red)}
+  .exports{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+  .exports button{padding:7px;font-size:10.5px;letter-spacing:.04em;background:var(--panel2);color:var(--mut);
+    border:1px solid var(--line2);border-radius:6px;cursor:pointer;font-family:"Chakra Petch";transition:.15s}
+  .exports button:hover{color:var(--fg);border-color:var(--teal)}
+  .modal{position:fixed;inset:0;z-index:50;background:rgba(4,7,12,.72);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center}
+  .modal.on{display:flex}
+  .modal .box{width:min(640px,90vw);max-height:82vh;overflow:auto;background:var(--panel);border:1px solid var(--line2);border-radius:12px;padding:22px 26px;box-shadow:0 30px 80px -20px #000}
+  .modal h3{margin:0 0 4px;color:var(--amber);letter-spacing:.05em}
+  .modal p,.modal li{color:var(--mut);font-size:13px;line-height:1.7}.modal b{color:var(--fg)}
+  .modal .x{float:right;cursor:pointer;color:var(--mut);font-size:20px;line-height:1}.modal .x:hover{color:var(--fg)}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">Poly<b>Fusion</b></span><span class="sub" id="subTitle">Zero-D Reactor Design Console</span></div>
+  <div class="status">
+    <span id="stCfgL">位形</span> <span class="val" id="stCfg">—</span>
+    <span id="stRxL">反应</span> <span class="val" id="stRx">—</span>
+    <span><span class="dot"></span> <span class="val">CORE ONLINE</span></span>
+    <button class="hbtn" id="helpBtn">?</button>
+    <button class="hbtn on" data-lang="zh">中</button><button class="hbtn" data-lang="en">EN</button>
+  </div>
+</header>
+<div class="wrap">
+  <div class="col left">
+    <div class="sec"><p class="sec-t" data-t="config">位形 Configuration <span class="n" id="cfgN"></span></p><div id="configPick" class="configs"></div></div>
+    <div class="sec"><p class="sec-t" data-t="preset">机型预设 Preset</p><select id="preset"></select></div>
+    <div class="sec"><p class="sec-t" data-t="params">参数 Parameters <span class="n" data-t="liveN">编辑即重算</span></p><div id="params"></div></div>
+    <div class="sec"><p class="sec-t" data-t="window">最佳区判据 Operating Window</p><div id="thresh" class="scanbox"></div></div>
+    <div class="sec"><p class="sec-t" data-t="contours">显示等值线 Contours</p><div id="plotOpts" class="opts"></div></div>
+    <div class="sec"><p class="sec-t" data-t="scan">POPCON 扫描轴 Scan Axes</p>
+      <div class="scanbox">
+        <div class="axis"><div class="hd"><span class="tag">X</span><span data-t="xax">横轴</span></div><select id="xkey"></select>
+          <div class="row3"><div class="fld"><label>min</label><input id="xmin" type="number" step="any"></div>
+          <div class="fld"><label>max</label><input id="xmax" type="number" step="any"></div>
+          <div class="fld"><label>N</label><input id="nx" type="number" value="21" min="3"></div></div></div>
+        <div class="axis"><div class="hd"><span class="tag">Y</span><span data-t="yax">纵轴</span></div><select id="ykey"></select>
+          <div class="row3"><div class="fld"><label>min</label><input id="ymin" type="number" step="any"></div>
+          <div class="fld"><label>max</label><input id="ymax" type="number" step="any"></div>
+          <div class="fld"><label>N</label><input id="ny" type="number" value="21" min="3"></div></div></div>
+        <button class="run" id="run" data-t="runBtn">▶ 运行 POPCON 扫描</button>
+        <div id="err" class="err"></div>
+      </div>
+    </div>
+  </div>
+  <div class="center">
+    <div class="tabs">
+      <div class="tab on" data-v="popcon">POPCON</div>
+      <div class="tab" data-v="shape" data-t="tabShape">截面 Shape</div>
+      <div class="tab" data-v="profile" data-t="tabProf">剖面 Profiles</div>
+    </div>
+    <div class="plotbar"><span id="plotTitle">—</span><div class="chip" id="plotMeta"></div></div>
+    <div id="plot"></div>
+  </div>
+  <div class="col right">
+    <div class="sec"><p class="sec-t" data-t="opPoint">工作点 Operating Point <span class="badge" id="caseBadge"></span></p>
+      <div id="results"></div>
+      <div class="exports">
+        <button id="saveP" data-t="saveP">⬇ 保存参数</button><button id="loadP" data-t="loadP">⬆ 加载参数</button>
+        <button id="expJson" data-t="expJson">⬇ 结果 JSON</button><button id="expCsv" data-t="expCsv">⬇ 扫描 CSV</button>
+      </div>
+      <input id="fileIn" type="file" accept=".json" style="display:none">
+    </div>
+  </div>
+</div>
+<div class="modal" id="help"><div class="box"><span class="x" id="helpX">×</span><div id="helpBody"></div></div></div>
+<script>
+const COLORS=['#ffb02e','#36e2c4','#ff5d73','#7aa2ff','#c792ff','#9be564','#ffd166','#5ad1ff'];
+const RX={1:'D-T',2:'D-D',3:'D-³He',4:'p-¹¹B(Nevins)',5:'p-¹¹B(Sikora)',6:'cat-D-D'};
+// name -> [zh desc, en desc, unit, group, symbol html(book notation)]
+const META={
+  use_tauE:['使用输入 τE (关闭=自洽损失)','use input tauE (off = self-consistent losses)','','conf','τ<sub>E</sub>'],
+  icase:['反应类型','Reaction','','rx',''],
+  R0:['大半径','major radius','m','geo','R<sub>0</sub>'],A:['环径比','aspect ratio','','geo','A'],kappa:['拉长比','elongation','','geo','κ'],
+  delta:['三角形变','triangularity','','geo','δ'],g:['壁间隙','wall gap','m','geo','g'],
+  a_c:['等离子体半径','plasma radius','m','geo','a<sub>c</sub>'],L_c:['中心室长','cell length','m','geo','L<sub>c</sub>'],R_mirror:['镜比','mirror ratio','','geo','R<sub>m</sub>'],
+  r_s:['分离面半径','separatrix radius','m','geo','r<sub>s</sub>'],l_s:['分离面长','separatrix length','m','geo','l<sub>s</sub>'],r_w:['壁半径','wall radius','m','geo','r<sub>w</sub>'],
+  r_ring:['环半径','coil radius','m','geo','r<sub>ring</sub>'],R_p:['等离子体外径','plasma outer radius','m','geo','R<sub>p</sub>'],
+  Sn:['密度峰化','density peaking','','prof','S<sub>n</sub>'],ST:['温度峰化','temperature peaking','','prof','S<sub>T</sub>'],
+  ni0:['中心离子密度','central ion density','m⁻³','plasma','n<sub>i0</sub>'],n0:['峰值密度','peak density','m⁻³','plasma','n<sub>0</sub>'],
+  Ti0:['离子温度','ion temperature','keV','plasma','T<sub>i0</sub>'],Ti:['离子温度','ion temperature','keV','plasma','T<sub>i</sub>'],
+  Te:['电子温度','electron temperature','keV','plasma','T<sub>e</sub>'],Te0:['电子温度','electron temperature','keV','plasma','T<sub>e0</sub>'],
+  fT:['T<sub>e0</sub>/T<sub>i0</sub> 比','T<sub>e0</sub>/T<sub>i0</sub> ratio','','plasma','f<sub>T</sub>'],
+  BT0:['环向场','toroidal field','T','field','B<sub>T0</sub>'],B0:['磁场','field','T','field','B<sub>0</sub>'],B_vac:['中心真空场','central vacuum field','T','field','B<sub>vac</sub>'],
+  B_e:['外加轴向场','external field','T','field','B<sub>e</sub>'],B_ring:['环表面场','coil field','T','field','B<sub>ring</sub>'],
+  Ip:['等离子体电流','plasma current','MA','field','I<sub>p</sub>'],iota:['旋转变换 (0=用几何值)','rotational transform (0 = geometric)','','field','ι'],
+  f1:['燃料配比','fuel mix','','fuel','f<sub>1</sub>'],fHe:['氦灰份额','helium ash','','fuel','f<sub>He</sub>'],fimp:['杂质份额','impurity','','fuel','f<sub>imp</sub>'],Zimp:['杂质电荷','impurity charge','','fuel','Z<sub>imp</sub>'],
+  imp_name:['线辐射元素 (Mavrin; 关闭=只算轫致)','line-radiation species (off = brems only)','','fuel','imp'],
+  tauE:['能量约束时间','energy confinement time','s','conf','τ<sub>E</sub>'],
+  H_fac:['τE 自洽模式的目标 H 因子','target H factor for tauE=0 mode','','conf','H<sub>fac</sub>'],fsig:['反应率因子','reactivity factor','','conf','f<sub>σ</sub>'],Rw:['壁反射率','wall reflectivity','','conf','R<sub>w</sub>'],
+  f_ren:['ISS04 位形因子','ISS04 factor','','conf','f<sub>ren</sub>'],f_belt:['约束带占比','belt fraction','','conf','f<sub>belt</sub>'],
+  f_throat:['喉部长度占比','throat fraction','','geo','f<sub>th</sub>'],
+  f_shape:['分离面形状因子','separatrix shape (2/3=椭圆,1=跑道)','','geo','f<sub>V</sub>'],
+  L_in_fac:['内边界/环半径','inner boundary in ring radii','','geo','L<sub>in</sub>/r<sub>c</sub>'],
+  N_fp:['场周期数','field periods','','geo','N<sub>fp</sub>'],
+  kappa_s:['截面拉长比','section elongation','','geo','κ<sub>s</sub>'],
+  delta_h:['轴螺旋偏移','helical axis excursion','m','geo','δ<sub>h</sub>'],
+  etabar:['近轴形参 η̄ (0=旋转椭圆模式)','near-axis etabar (0 = rotating-ellipse mode)','1/m','geo','η̄'],
+  ring_model:['有限环几何 (0=点偶极,1=载流环)','finite-ring geometry (0=point,1=loop)','','geo','ring'],
+  f_alpha:['α沉积份额 (留空=损失锥自动)','alpha deposit fraction (blank = loss-cone auto)','','conf','f<sub>α</sub>'],
+  B_expand:['端部扩张比','expander ratio','','conf','B<sub>exp</sub>'],
+  phi_i_over_Te:['电势比 (0=自动 T<sub>e</sub>·lnR)','potential ratio (0 = auto Te lnR)','','conf','φ<sub>i</sub>/T<sub>e</sub>'],lnLambda:['库仑对数','Coulomb log','','conf','ln Λ']};
+// config display names per language
+const CFGN={tokamak:['托卡马克','Tokamak'],mirror:['磁镜','Mirror'],frc:['场反位形','FRC'],dipole:['偶极场','Dipole'],stellarator:['仿星器','Stellarator']};
+const cfgL=n=>{const c=CFGN[n]||[n,n];return LANG==='zh'?c[0]:c[1];};
+// output keys -> book-notation symbol html (no underscores)
+const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub>',Pcycl:'P<sub>cycl</sub>',Pn:'P<sub>n</sub>',
+  Ptrans:'P<sub>trans</sub>',Pwall:'P<sub>wall</sub>',Eth:'E<sub>th</sub>',Qfus:'Q<sub>fus</sub>',H98:'H<sub>98</sub>',HST:'H<sub>ST</sub>',
+  H_ISS04:'H<sub>ISS04</sub>',tau_c:'τ<sub>c</sub>',tau_E:'τ<sub>E</sub>',tau_ISS04:'τ<sub>ISS04</sub>',tau_Past:'τ<sub>Past</sub>',
+  tau_gd:'τ<sub>gd</sub>',tau_rho:'τ<sub>ρ</sub>',ntau:'nτ',betaT:'β<sub>T</sub>',betaN:'β<sub>N</sub>',beta:'β',
+  beta_in:'β<sub>in</sub>',beta_out:'β<sub>out</sub>',U_ratio:'U<sub>out</sub>/U<sub>in</sub>',p_slope:'dlnp/dlnL',B_in:'B<sub>in</sub>',B_out:'B<sub>out</sub>',L_in:'L<sub>in</sub>',P_coll_flux:'q<sub>coll</sub>',P_alpha_loss:'P<sub>α,loss</sub>',Past_domain:'Past⊂dom',flux_p:'Φ<sub>p</sub>',K_rr:'K',A_throat:'A<sub>th</sub>',P_end_flux:'q<sub>end</sub>',iota_geom:'ι<sub>geom</sub>',L_ax:'L<sub>ax</sub>',kappa_s:'κ<sub>s</sub>',N_fp:'N<sub>fp</sub>',tau_ISS04:'τ<sub>ISS04</sub>',lambda_ii:'λ<sub>ii</sub>',beta_avg:'⟨β⟩',beta_null:'β<sub>null</sub>',beta_o_limit:'β/β<sub>lim</sub>',betap:'β<sub>p</sub>',q:'q',nbar_o_nGw:'n̄/n<sub>Gw</sub>',
+  nbar_o_Sudo:'n̄/n<sub>Sudo</sub>',x_s:'x<sub>s</sub>',s_param:'s',elongation:'ε',R_mc:'R<sub>mc</sub>',ne0:'n<sub>e0</sub>',
+  ni0:'n<sub>i0</sub>',Vp:'V<sub>p</sub>',Zeff:'Z<sub>eff</sub>',M:'M',B0:'B<sub>0</sub>',B_int:'B<sub>int</sub>',
+  phi_i:'φ<sub>i</sub>',phi_e:'φ<sub>e</sub>',fTavg:'f<sub>T,avg</sub>',fnavg:'f<sub>n,avg</sub>',Sp:'S<sub>p</sub>',Sw:'S<sub>w</sub>',iota:'ι',
+  Qfus_raw:'Q<sub>raw</sub>',ignited:'ignited',valid:'valid',kappa_eff:'κ<sub>eff</sub>',elong_max:'e<sub>max</sub>',helicity:'N<sub>hel</sub>',etabar:'η̄',coll_ratio:'λ<sub>ii</sub>/RL',
+  P_line:'P<sub>line</sub>',tau_eta:'τ<sub>η</sub>',tauN_o_taueta:'τ<sub>N</sub>/τ<sub>η</sub>',ring_model:'ring',
+  Te0:'T<sub>e0</sub>',f_alpha_used:'f<sub>α,used</sub>',nu_eff_ang:'ν<sub>eff</sub>',Sn_sugg:'S<sub>n</sub><sup>Ang</sup>',
+  tauE_used:'τ<sub>E,used</sub>',taue_mode:'τ<sub>E</sub>mode',Pth:'P<sub>th</sub>',ring_model:'ring',
+  P_LH:'P<sub>LH</sub>',LH_ratio:'P<sub>sep</sub>/P<sub>LH</sub>',tau_ITPA20:'τ<sub>ITPA20</sub>',H_ITPA20:'H<sub>ITPA20</sub>',
+  tau_classical:'τ<sub>cl</sub>',tau_Bohm:'τ<sub>Bohm</sub>',a_over_rhoi:'a/ρ<sub>i</sub>'};
+const pk=k=>PR[k]?`<span class="sym">${PR[k]}</span>`:k;
+const chipLab=s=>{const u=(s.label.match(/\[[^\]]+\]/)||[''])[0];return (PR[s.f]?`<span class="sym">${PR[s.f]}</span>`:s.f)+(u?' '+u:'');};
+const GROUPS=[['rx','反应','Reaction'],['geo','几何','Geometry'],['prof','剖面','Profile'],['plasma','等离子体','Plasma'],['field','场·电流','Field·Current'],['fuel','燃料·杂质','Fuel·Impurity'],['conf','约束·修正','Confinement·Factors']];
+const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',tau_eta:'s',Te0:'keV',tauE_used:'s',P_LH:'MW',tau_ITPA20:'s',tau_classical:'s',tau_Bohm:'s'};
+const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','Pth','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth']],
+  ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ITPA20','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tau_ITPA20','tauE_used','taue_mode','tau_eta','tauN_o_taueta','tau_classical','tau_Bohm','ntau']],
+  ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_avg','beta_null','beta_o_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain','P_LH','LH_ratio','a_over_rhoi']],
+  ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','fTavg','fnavg','Sp','Sw','L_ax','L_in','A_throat','flux_p','lambda_ii','coll_ratio','nbar','kappa_s','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
+const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_c','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','beta_o_limit']);
+const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 28 40 28 32 28 24 30 14 40 8Z"/>',
+  mirror:'<path d="M10 20Q32 30 54 20M10 44Q32 34 54 44"/><circle cx="12" cy="32" r="8"/><circle cx="52" cy="32" r="8"/>',
+  frc:'<ellipse cx="32" cy="32" rx="20" ry="11"/><ellipse cx="32" cy="32" rx="11" ry="6"/>',
+  dipole:'<rect x="27" y="29" width="10" height="6" rx="2"/><ellipse cx="32" cy="32" rx="22" ry="14"/>',
+  stellarator:'<ellipse cx="32" cy="32" rx="22" ry="12"/><path d="M12 32Q22 20 32 32T52 32"/>'};
+const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'参数 Parameters',liveN:'编辑即重算',window:'最佳区判据 Operating Window',
+  contours:'显示等值线 Contours',scan:'POPCON 扫描轴 Scan Axes',xax:'横轴',yax:'纵轴',runBtn:'▶ 运行 POPCON 扫描',
+  opPoint:'工作点 Operating Point',saveP:'⬇ 保存参数',loadP:'⬆ 加载参数',expJson:'⬇ 结果 JSON',expCsv:'⬇ 扫描 CSV',
+  tabShape:'截面 Shape',tabProf:'剖面 Profiles',sub:'多位形零维系统设计台',cfgL:'位形',rxL:'反应',
+  help:'<h3>PolyFusion 使用说明</h3><p><b>1. 选位形</b>：顶部 5 选 1（托卡马克/磁镜/FRC/偶极/仿星器）。<br><b>2. 选预设</b>：加载真实/概念机型参数。<br><b>3. 改参数</b>：左栏字段可编辑，改完即时重算右栏工作点。<br><b>4. 最佳区判据</b>：编辑阈值（如 Q≥1、P_fus≥10MW、n̄/极限≤1）。<br><b>5. 选等值线</b>：勾选 POPCON 显示哪些量。<br><b>6. 扫描轴</b>：选 X/Y 两参数与范围 → 运行 POPCON。<br><b>7. 标签页</b>：POPCON / 截面 / 剖面。<br><b>8. 保存/加载参数</b>：JSON 存读；导出结果/扫描。</p><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
+ en:{config:'Configuration',preset:'Preset',params:'Parameters',liveN:'live recompute',window:'Operating Window',
+  contours:'Contours shown',scan:'POPCON Scan Axes',xax:'X axis',yax:'Y axis',runBtn:'▶ Run POPCON Scan',
+  opPoint:'Operating Point',saveP:'⬇ Save Params',loadP:'⬆ Load Params',expJson:'⬇ Result JSON',expCsv:'⬇ Scan CSV',
+  tabShape:'Shape',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
+  help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
+let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set();
+
+const DENS=new Set(['ni0','n0']);const BOOLS=new Set(['use_tauE']);const dsc=k=>DENS.has(k)?1e-20:1;  // density display in 10^20 m^-3
+const SELF_LOSS_PARAMS={
+  tokamak:['H_fac'],
+  mirror:['f_alpha','B_expand','phi_i_over_Te','lnLambda'],
+  frc:[],
+  dipole:[],
+  stellarator:['H_fac']
+};
+const FORCE_TAUE=new Set(['dipole']);
+const RANGES={
+  Ti0:[1,200],Ti:[1,200],Te0:[0.1,120],Te:[0.1,120],fT:[0.2,2.0],
+  ni0:[0.1e20,6e20],n0:[0.1e20,20e20],tauE:[1e-4,10],
+  B0:[0.5,12],BT0:[0.5,12],B_vac:[0.1,12],B_e:[0.5,12],B_ring:[0.5,15],
+  R0:[1,25],A:[2,15],kappa:[1,3.5],a_c:[0.05,1.5],L_c:[1,30],
+  r_s:[0.05,1.5],l_s:[0.5,10],r_w:[0.1,2],R_mirror:[2,50],
+  r_ring:[0.1,3],R_p:[1,20],kappa_s:[1,5],N_fp:[1,10],delta_h:[0,3],
+  Sn:[0,2],ST:[0,3],fsig:[0.1,2],fimp:[0,0.05],fHe:[0,0.2],Zimp:[1,74]
+};
+const jget=async u=>(await fetch(u)).json();
+const jpost=async(u,b)=>(await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})).json();
+const fillSel=(s,it,v)=>s.innerHTML=it.map(i=>`<option ${i===v?'selected':''}>${i}</option>`).join('');
+function fillPresets(sel,presets,groups,val){
+  if(!groups){fillSel(sel,presets,val);return;}
+  const used=new Set();let html='';
+  for(const[g,names]of Object.entries(groups)){const ms=names.filter(n=>presets.includes(n));if(!ms.length)continue;
+    ms.forEach(n=>used.add(n));html+=`<optgroup label="${g}">`+ms.map(n=>`<option ${n===val?'selected':''}>${n}</option>`).join('')+'</optgroup>';}
+  const rest=presets.filter(n=>!used.has(n));
+  if(rest.length)html+=`<optgroup label="${L('其他','Other')}">`+rest.map(n=>`<option ${n===val?'selected':''}>${n}</option>`).join('')+'</optgroup>';
+  sel.innerHTML=html;
+}
+const L=(zh,en)=>LANG==='zh'?zh:en;
+
+async function init(){
+  CONFIGS=(await jget('/api/meta')).configs;
+  buildConfigPick();
+  document.getElementById('cfgN').textContent=Object.keys(CONFIGS).length+' '+L('种','cfgs');
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setView(t.dataset.v));
+  document.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>setLang(b.dataset.lang));
+  run.onclick=runScan;preset.onchange=loadPreset;
+  helpBtn.onclick=()=>document.getElementById('help').classList.add('on');
+  document.getElementById('helpX').onclick=()=>document.getElementById('help').classList.remove('on');
+  saveP.onclick=()=>dl('polyfusion_'+CUR+'_params.json',JSON.stringify(VALS,null,2));
+  loadP.onclick=()=>document.getElementById('fileIn').click();
+  document.getElementById('fileIn').onchange=onLoadFile;
+  expJson.onclick=()=>LASTRUN&&dl('polyfusion_'+CUR+'_point.json',JSON.stringify(LASTRUN,null,2));
+  expCsv.onclick=()=>LASTSCAN&&dl('polyfusion_'+CUR+'_popcon.csv',scanCsv(LASTSCAN));
+  applyLang();
+  selectConfig(Object.keys(CONFIGS)[0]);
+}
+function buildConfigPick(){
+  const pick=document.getElementById('configPick');
+  pick.innerHTML=Object.keys(CONFIGS).map(n=>
+    `<button class="cfg ${n===CUR?'on':''}" data-c="${n}"><span class="ic"><svg viewBox="0 0 64 64" fill="none" stroke="#ffb02e" stroke-width="2">${SCHEMA[n]||''}</svg></span>${cfgL(n)}</button>`).join('');
+  pick.querySelectorAll('.cfg').forEach(b=>b.onclick=()=>selectConfig(b.dataset.c));
+}
+function setLang(l){LANG=l;document.querySelectorAll('[data-lang]').forEach(b=>b.classList.toggle('on',b.dataset.lang===l));applyLang();buildConfigPick();if(CUR)document.getElementById('stCfg').textContent=cfgL(CUR);buildParams();buildThresh();buildPlotOpts();if(LASTRUN)applyRun(LASTRUN);setView(VIEW);}
+function applyLang(){
+  document.documentElement.lang=LANG;
+  document.querySelectorAll('[data-t]').forEach(e=>{const k=e.dataset.t;if(T[LANG][k])e.firstChild&&e.childNodes[0].nodeType===3?e.childNodes[0].textContent=T[LANG][k]+' ':e.textContent=T[LANG][k];});
+  // simpler: set known elements
+  const set=(id,txt)=>{const e=document.getElementById(id);if(e)e.textContent=txt;};
+  document.getElementById('subTitle').textContent=T[LANG].sub;
+  document.getElementById('stCfgL').textContent=T[LANG].cfgL;document.getElementById('stRxL').textContent=T[LANG].rxL;
+  document.querySelectorAll('.sec-t[data-t]').forEach(e=>{const n=e.querySelector('.n');e.childNodes[0].textContent=T[LANG][e.dataset.t]+' ';if(n&&e.dataset.t==='params')n.textContent=T[LANG].liveN;});
+  document.querySelectorAll('[data-t]').forEach(e=>{if(e.classList.contains('sec-t'))return;const k=e.dataset.t;if(T[LANG][k]&&!e.querySelector('*'))e.textContent=T[LANG][k];});
+  run.textContent=T[LANG].runBtn;
+  document.getElementById('helpBody').innerHTML=T[LANG].help;
+}
+function selectConfig(name){
+  CUR=name;const m=CONFIGS[name];
+  document.querySelectorAll('.cfg').forEach(b=>b.classList.toggle('on',b.dataset.c===name));
+  const defP=(m.preset_groups&&Object.values(m.preset_groups).flat().find(n=>m.presets.includes(n)))||m.presets[0];
+  fillPresets(preset,m.presets,m.preset_groups,defP);
+  const ps=m.params.filter(p=>p!=='icase'&&!BOOLS.has(p));
+  fillSel(xkey,ps,m.scan_defaults.xkey);fillSel(ykey,ps,m.scan_defaults.ykey);
+  const sd=m.scan_defaults;xmin.value=sd.xmin*dsc(sd.xkey);xmax.value=sd.xmax*dsc(sd.xkey);ymin.value=sd.ymin*dsc(sd.ykey);ymax.value=sd.ymax*dsc(sd.ykey);
+  xkey.onchange=()=>{const r=RANGES[xkey.value]||[0,1];xmin.value=r[0]*dsc(xkey.value);xmax.value=r[1]*dsc(xkey.value);fitAxis(xkey.value,xmin,xmax);};
+  ykey.onchange=()=>{const r=RANGES[ykey.value]||[0,1];ymin.value=r[0]*dsc(ykey.value);ymax.value=r[1]*dsc(ykey.value);fitAxis(ykey.value,ymin,ymax);};
+  document.getElementById('stCfg').textContent=cfgL(name);
+  PLOTSEL=new Set(m.contour_spec.filter(c=>c.on).map(c=>c.f));
+  loadPreset();
+}
+async function loadPreset(){
+  const r=await jpost('/api/run',{config:CUR,preset:preset.value});
+  VALS=Object.assign({},r.inputs);
+  buildParams();buildThresh();buildPlotOpts();applyRun(r);fitScanRanges();setView(VIEW);
+}
+// keep the operating point inside the 2-D scan window: if the current value of
+// a scanned parameter falls outside [min,max], widen the bracket around it.
+function fitAxis(key,minEl,maxEl){
+  const v=VALS[key];if(typeof v!=='number'||!isFinite(v))return;
+  const vd=v*dsc(key);
+  let lo=parseFloat(minEl.value),hi=parseFloat(maxEl.value);
+  if(!isFinite(lo)||!isFinite(hi)){const r=RANGES[key]||[0,1];lo=r[0]*dsc(key);hi=r[1]*dsc(key);}
+  if(vd>lo&&vd<hi)return;
+  if(vd>0){lo=Math.min(lo,vd*0.5);hi=Math.max(hi,vd*1.5);}
+  else if(vd<0){lo=Math.min(lo,vd*1.5);hi=Math.max(hi,vd*0.5);}
+  else{lo=Math.min(lo,0);hi=Math.max(hi,1);}
+  minEl.value=+lo.toPrecision(3);maxEl.value=+hi.toPrecision(3);
+}
+function fitScanRanges(){fitAxis(xkey.value,xmin,xmax);fitAxis(ykey.value,ymin,ymax);}
+function buildParams(){
+  const groups={};for(const p of CONFIGS[CUR].params){
+    const m=META[p]||[p,p,'','conf'];(groups[m[3]]=groups[m[3]]||[]).push(p);}
+  let html='';
+  for(const[gk,gz,ge]of GROUPS){if(!groups[gk])continue;
+    let a0='';if(gk==='geo'&&'R0'in VALS&&'A'in VALS)a0=`<span class="a0"><i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m</span>`;
+    html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div><div class="pgrid">`;
+    for(const p of groups[gk]){const m=META[p];const desc=L(m[0],m[1]);
+      if(BOOLS.has(p)){html+=`<div class="fld full"><label title="${desc}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span></label><select data-p="${p}" data-bool="1"><option value="1" ${VALS[p]!==0?'selected':''}>${L('开启：输入 τE','on: input tauE')}</option><option value="0" ${VALS[p]===0?'selected':''}>${L('关闭：自洽损失','off: self-consistent losses')}</option></select></div>`;}
+      else if(p==='icase'){html+=`<div class="fld full"><label title="${desc}">${desc}</label><select data-p="icase">${Object.entries(RX).map(([k,v])=>`<option value="${k}" ${+VALS.icase===+k?'selected':''}>${k} · ${v}</option>`).join('')}</select></div>`;}
+      else if(p==='imp_name'){const SP=['','He','Li','Be','C','N','O','Ne','Ar','Kr','Xe','W'];
+        html+=`<div class="fld"><label title="${desc}"><span class="sym">imp</span><span class="nm">${desc}</span></label><select data-p="imp_name">${SP.map(s=>`<option value="${s}" ${(VALS.imp_name||'')===s?'selected':''}>${s||L('关闭(默认)','off (default)')}</option>`).join('')}</select></div>`;}
+      else{const dn=DENS.has(p);const un=dn?'10²⁰ m⁻³':m[2];const u=un?`<span class="u">[${un}]</span>`:'';
+        const tip=(m[1]+' · '+m[0]).replace(/<[^>]+>/g,'');
+        html+=`<div class="fld"><label title="${tip}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span>${u}</label><input type="number" step="any" data-p="${p}" ${dn?'data-sc="1e20"':''} value="${fmtIn(dn?VALS[p]*1e-20:VALS[p])}"></div>`;}
+    }html+='</div>';}
+  const box=document.getElementById('params');box.innerHTML=html;
+  // selecting a line-radiation species auto-fills Zimp with its nuclear
+  // charge (full-stripping approx; edit manually for <Z>(Te) of Kr/Xe/W —
+  // coronal <Z> self-consistency is queued as a later physics batch)
+  const IMPZ={He:2,Li:3,Be:4,C:6,N:7,O:8,Ne:10,Ar:18,Kr:36,Xe:54,W:74};
+  box.querySelectorAll('[data-p]').forEach(el=>el.oninput=()=>{
+    if(el.dataset.p==='imp_name'){
+      if(el.value){VALS.imp_name=el.value;
+        if(IMPZ[el.value]){VALS.Zimp=IMPZ[el.value];
+          const zEl=box.querySelector('[data-p="Zimp"]');if(zEl)zEl.value=IMPZ[el.value];}}
+      else delete VALS.imp_name;}
+    else if(el.dataset.bool)VALS[el.dataset.p]=+el.value;
+    else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
+    applyModeLocks();
+    clearTimeout(timer);timer=setTimeout(()=>{updateA0();fitScanRanges();recompute();},280);});
+  applyModeLocks();
+}
+function applyModeLocks(){
+  const manual=VALS.use_tauE!==0;
+  const lock=(p,disabled)=>{document.querySelectorAll(`[data-p="${p}"]`).forEach(el=>{el.disabled=!!disabled;const f=el.closest('.fld');if(f)f.style.opacity=disabled?0.45:1;});};
+  if(FORCE_TAUE.has(CUR)){VALS.use_tauE=1;document.querySelectorAll('[data-p="use_tauE"]').forEach(el=>el.value='1');lock('use_tauE',true);lock('tauE',false);return;}
+  lock('tauE',!manual);
+  (SELF_LOSS_PARAMS[CUR]||[]).forEach(p=>lock(p,manual));
+}
+function updateA0(){const h=[...document.querySelectorAll('.grp-h .a0')][0];if(h&&'R0'in VALS&&'A'in VALS)h.innerHTML=`<i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m`;}
+function buildThresh(){
+  const w=CONFIGS[CUR].best_window||{ge:{},le:{}};
+  const ow=CONFIGS[CUR].optional_window||{ge:{},le:{}};
+  // each criterion gets an enable checkbox: best_window rows ON by default,
+  // optional_window rows (audit red lines) OFF by default
+  const row=(k,op,v,on)=>`<input type="checkbox" data-thr-en="${k}" ${on?'checked':''} title="${L('启用该判据','enable criterion')}">`+
+    `<div class="k ${on?'':'off'}">${pk(k)}</div><div class="op ${on?'':'off'}">${op}</div>`+
+    `<input type="number" step="any" class="${on?'':'off'}" data-thr="${k}" data-op="${op==='≥'?'ge':'le'}" value="${v}">`;
+  let html='<div class="thr">';
+  for(const k in (w.ge||{}))html+=row(k,'≥',w.ge[k],true);
+  for(const k in (w.le||{}))html+=row(k,'≤',w.le[k],true);
+  for(const k in (ow.ge||{}))html+=row(k,'≥',ow.ge[k],false);
+  for(const k in (ow.le||{}))html+=row(k,'≤',ow.le[k],false);
+  html+='</div>';
+  const n=['ge','le'].reduce((s,o)=>s+Object.keys(w[o]||{}).length+Object.keys(ow[o]||{}).length,0);
+  if(!n)html='<div style="color:#4b566c;font-size:11px">'+L('该位形无默认判据','no default window')+'</div>';
+  document.getElementById('thresh').innerHTML=html;
+  document.querySelectorAll('[data-thr-en]').forEach(cb=>cb.onchange=()=>{
+    const k=cb.dataset.thrEn;
+    document.querySelectorAll(`[data-thr="${k}"]`).forEach(inp=>inp.classList.toggle('off',!cb.checked));
+    // dim the matching label/op cells (siblings just before the input)
+    const inp=document.querySelector(`[data-thr="${k}"]`);
+    let el=inp&&inp.previousElementSibling;for(let i=0;i<2&&el;i++){el.classList.toggle('off',!cb.checked);el=el.previousElementSibling;}
+  });
+}
+function getWindow(){const ge={},le={};document.querySelectorAll('[data-thr]').forEach(el=>{
+  const cb=document.querySelector(`[data-thr-en="${el.dataset.thr}"]`);
+  if(cb&&!cb.checked)return;                      // criterion opted out
+  const v=parseFloat(el.value);if(isFinite(v))(el.dataset.op==='ge'?ge:le)[el.dataset.thr]=v;});return{ge,le};}
+function buildPlotOpts(){
+  const box=document.getElementById('plotOpts');
+  box.innerHTML=CONFIGS[CUR].contour_spec.map(s=>{const on=PLOTSEL.has(s.f);
+    const lum=h=>{const x=h.replace('#','');return (0.299*parseInt(x.slice(0,2),16)+0.587*parseInt(x.slice(2,4),16)+0.114*parseInt(x.slice(4,6),16))/255;};
+    return `<span class="opt ${on?'on':''}" data-f="${s.f}" style="${on?'background:'+s.c+';border-color:'+s.c+';color:'+(lum(s.c)>0.55?'#0a0f18':'#fff'):'color:'+s.c+';border-color:'+s.c+'55'}">${chipLab(s)}</span>`;}).join('');
+  box.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{const f=o.dataset.f;PLOTSEL.has(f)?PLOTSEL.delete(f):PLOTSEL.add(f);buildPlotOpts();if(VIEW==='popcon')drawPopcon();});
+}
+function fmtIn(v){if(typeof v!=='number'||!isFinite(v))return '';const a=Math.abs(v);if(a!==0&&(a<1e-3||a>=1e5))return v.toExponential(3);return +v.toFixed(6);}
+function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return o;}
+async function recompute(){const r=await jpost('/api/run',{config:CUR,overrides:clean()});applyRun(r);if(VIEW!=='popcon')setView(VIEW);}
+function applyRun(r){
+  LASTRUN=r;const box=document.getElementById('results');
+  if(r.errors){box.innerHTML=`<div class="err">${r.errors.join('\n')}</div>`;caseBadge.textContent='';return;}
+  const o=r.outputs;caseBadge.textContent=o.strcase||CUR;document.getElementById('stRx').textContent=o.strcase||'—';
+  let html='';for(const[g,keys]of RGRP){const rows=keys.filter(k=>k in o&&typeof o[k]==='number').map(k=>{
+    const cls=HOT.has(k)?'hot':COOL.has(k)?'cool':WARN.has(k)?'warn':'';
+    const isd=k==='ne0'||k==='ni0'||k==='n0';const val=isd?o[k]*1e-20:o[k];const uu=isd?'10²⁰ m⁻³':(UNIT[k]||'');
+    const u=uu?` <span class="u">${uu}</span>`:'';
+    // audit P1: Q=1000 cap must read as ignition/self-sustain, not a number
+    if(k==='Qfus'&&o.ignited===1)return `<div class="kv hot"><span class="k">${pk(k)}</span><span class="v">∞ ⚡${L('点火','ignited')}</span></div>`;
+    return `<div class="kv ${cls}"><span class="k">${pk(k)}</span><span class="v">${fmt(val)}${u}</span></div>`;}).join('');
+    if(rows)html+=`<div class="grp"><div class="grp-t">${g}</div>${rows}</div>`;}
+  box.innerHTML=html;
+  if(VIEW==='popcon')document.getElementById('plotMeta').innerHTML=`<span>P_fus <b>${fmt(o.Pfus)}</b> MW</span><span>Q <b>${fmt(o.Qfus)}</b></span>`;
+}
+function fmt(v){if(v==null||typeof v!=='number'||!isFinite(v))return '—';const a=Math.abs(v);if(a!==0&&(a<1e-2||a>=1e5))return v.toExponential(3);return v.toFixed(a<1?4:3);}
+function setView(v){VIEW=v;document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));if(v==='popcon')drawPopcon();else if(v==='shape')drawShape();else drawProfiles();}
+const LAYOUT=(xt,yt)=>({paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(9,13,21,0.5)',font:{color:'#8b98a9',family:'JetBrains Mono',size:11},
+  margin:{l:64,r:16,t:10,b:50},xaxis:{title:{text:xt,font:{family:'Chakra Petch',size:13,color:'#e9eef7'}},gridcolor:'rgba(43,54,72,0.55)',zeroline:false,linecolor:'#2b3648'},
+  yaxis:{title:{text:yt,font:{family:'Chakra Petch',size:13,color:'#e9eef7'}},gridcolor:'rgba(43,54,72,0.55)',zeroline:false,linecolor:'#2b3648'},showlegend:true,legend:{orientation:'h',y:-0.18,font:{size:10,color:'#aab6cc'}}});
+function bestMarkerCloud(s,xs,ys){
+  const x=[],y=[],seen=new Set(),rows=new Set(),cols=new Set();
+  const add=(xx,yy)=>{const key=`${xx}|${yy}`;if(!seen.has(key)){seen.add(key);x.push(xx);y.push(yy);}};
+  for(let j=0;j<s.y.length;j++)for(let i=0;i<s.x.length;i++)if(s.best[j][i]){
+    rows.add(j);cols.add(i);add(xs[i],ys[j]);
+  }
+  const base=x.length;
+  if(!base)return{x,y,size:4,opacity:0.85};
+  const thin=rows.size<=2||cols.size<=2||base<=Math.max(6,Math.ceil(Math.min(s.x.length,s.y.length)/3));
+  if(thin){
+    const fill=(a0,a1,b0,b1,n=3)=>{for(let k=1;k<n;k++){const t=k/n;add(a0+(a1-a0)*t,b0+(b1-b0)*t);}};
+    for(const j of rows){
+      const is=[];for(let i=0;i<s.x.length;i++)if(s.best[j][i])is.push(i);
+      for(let n=0;n<is.length-1;n++)if(is[n+1]-is[n]<=2)fill(xs[is[n]],xs[is[n+1]],ys[j],ys[j]);
+    }
+    for(const i of cols){
+      const js=[];for(let j=0;j<s.y.length;j++)if(s.best[j][i])js.push(j);
+      for(let n=0;n<js.length-1;n++)if(js[n+1]-js[n]<=2)fill(xs[i],xs[i],ys[js[n]],ys[js[n+1]]);
+    }
+  }
+  const density=x.length/(s.x.length*s.y.length);
+  return{x,y,size:thin?3:(density>0.25?3:4),opacity:thin?0.95:0.78};
+}
+function drawPopcon(){
+  document.getElementById('plotTitle').innerHTML=`POPCON · <b>${cfgL(CUR)}</b>`;
+  if(!LASTSCAN){Plotly.purge('plot');document.getElementById('plot').innerHTML=`<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#4b566c;font-size:13px">${L('▶ 运行 POPCON 扫描以生成等值线图','▶ Run POPCON scan to generate contours')}</div>`;return;}
+  const s=LASTSCAN,tr=[];
+  const xs=DENS.has(s.xkey)?s.x.map(v=>v*1e-20):s.x, ys=DENS.has(s.ykey)?s.y.map(v=>v*1e-20):s.y;
+  const pl=q=>{const u=(q.label.match(/\[[^\]]+\]/)||[''])[0];return (PR[q.f]||q.f)+(u?' '+u:'');};
+  CONFIGS[CUR].contour_spec.forEach(q=>{
+    if(!PLOTSEL.has(q.f)||!(q.f in s.fields))return;
+    const z=q.scale?s.fields[q.f].map(r=>r.map(v=>v*q.scale)):s.fields[q.f];
+    // size must scale with |level|: Plotly's level iterator dies of float
+    // round-off when size << |start| (e.g. n*tau levels ~1e18 with size 1)
+    q.lv.forEach(level=>tr.push({type:'contour',x:xs,y:ys,z,name:pl(q),autocontour:false,showscale:false,showlegend:false,hoverinfo:'name+z',
+      contours:{coloring:'lines',showlabels:true,labelfont:{size:9,color:q.c,family:'JetBrains Mono'},start:level,end:level,size:Math.max(1,Math.abs(level))},
+      line:{width:q.w||1.6,color:q.c,dash:q.dash||'solid'},colorscale:[[0,q.c],[1,q.c]]}));
+    tr.push({x:[null],y:[null],mode:'lines',line:{color:q.c,width:4,dash:q.dash||'solid'},name:pl(q),showlegend:true,hoverinfo:'skip'});
+  });
+  const bm=bestMarkerCloud(s,xs,ys);
+  if(bm.x.length)tr.push({type:'scatter',mode:'markers',x:bm.x,y:bm.y,name:L('最佳区域','best region'),marker:{color:'#36e2c4',size:bm.size,symbol:'x',opacity:bm.opacity},showlegend:true,hoverinfo:'skip'});
+  if(VALS[s.xkey]!=null&&VALS[s.ykey]!=null)tr.push({type:'scatter',mode:'markers',x:[VALS[s.xkey]*dsc(s.xkey)],y:[VALS[s.ykey]*dsc(s.ykey)],name:L('当前点','selected'),
+    marker:{color:'#facc15',size:14,symbol:'star',line:{color:'#dc2626',width:2}},showlegend:true,hoverinfo:'skip'});
+  const ax=k=>{const mm=META[k];const sy=(mm&&mm[4])||k;const un=DENS.has(k)?'10²⁰ m⁻³':(mm&&mm[2]);return sy+(un?' ['+un+']':'');};
+  Plotly.react('plot',tr,LAYOUT(ax(s.xkey),ax(s.ykey)),{responsive:true,displayModeBar:false});
+}
+function drawShape(){
+  document.getElementById('plotTitle').innerHTML=`${L('等离子体截面','Cross-section')} · <b>${cfgL(CUR)}</b>`;document.getElementById('plotMeta').innerHTML='';
+  const v=VALS;let tr=[],lay=LAYOUT('R [m]','Z [m]');lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;
+  const line=(x,y,c,n,f)=>({type:'scatter',mode:'lines',x,y,name:n,line:{color:c,width:2.4},fill:f?'toself':undefined,fillcolor:'rgba(255,176,46,.07)',hoverinfo:'skip'});
+  if(CUR==='tokamak'){
+    const R0=v.R0,a=v.R0/v.A,k=v.kappa,d=v.delta,g=v.g||0;
+    const rr=[0.2*a,0.4*a,0.6*a,0.8*a,1.0*a,a+Math.max(g,0.01)];
+    const dshape=r=>{const R=[],Z=[];
+      for(let t=0.5*Math.PI;t<=1.502*Math.PI;t+=0.01){R.push(r*(1-d)*Math.cos(t)+R0-d*r);Z.push(r*(1-d)*Math.sin(t)*(k/(1-d)));}
+      for(let t=1.5*Math.PI;t<=2.502*Math.PI;t+=0.01){R.push(r*(1+d)*Math.cos(t)+R0-d*r);Z.push(r*(1+d)*Math.sin(t)*(k/(1+d)));}
+      return[R,Z];};
+    tr=[];
+    rr.forEach((r,j)=>{const ar=dshape(r);
+      if(j===rr.length-1)tr.push({type:'scatter',mode:'lines',x:ar[0],y:ar[1],name:L('壁面 (a+g)','wall (a+g)'),line:{color:'#ff5d8f',width:3},hoverinfo:'skip'});
+      else if(j===rr.length-2)tr.push({type:'scatter',mode:'lines',x:ar[0],y:ar[1],name:L('等离子体边界 (a)','plasma boundary (a)'),line:{color:'#36e2c4',width:2.6},fill:'toself',fillcolor:'rgba(54,226,196,.06)',hoverinfo:'skip'});
+      else tr.push({type:'scatter',mode:'lines',x:ar[0],y:ar[1],name:L('磁面','flux')+' '+(j+1),line:{color:'#4fd1c5',width:1.2,dash:'dash'},showlegend:false,hoverinfo:'skip'});});
+    tr.push({type:'scatter',mode:'lines+markers+text',x:[0,R0],y:[0,0],line:{color:'#ff6b6b',width:1.5,dash:'dot'},marker:{color:'#ff6b6b',size:3},text:['',`R<sub>0</sub>=${R0} m`],textposition:'top center',textfont:{color:'#ff6b6b',size:10},name:'R₀',hoverinfo:'skip'});
+    tr.push({type:'scatter',mode:'lines+markers+text',x:[R0,R0+a],y:[0,0],line:{color:'#ff9e3d',width:1.5,dash:'dot'},marker:{color:'#ff9e3d',size:3},text:['',`a=${a.toFixed(2)} m`],textposition:'bottom center',textfont:{color:'#ff9e3d',size:10},name:'a',hoverinfo:'skip'});
+    tr.push({type:'scatter',mode:'lines+markers+text',x:[R0,R0],y:[0,a*k],line:{color:'#7ddc6b',width:1.5,dash:'dot'},marker:{color:'#7ddc6b',size:3},text:['',`κa=${(a*k).toFixed(2)} m`],textposition:'middle right',textfont:{color:'#7ddc6b',size:10},name:'κa',hoverinfo:'skip'});
+  }else if(CUR==='stellarator'){
+    // server-computed cross-sections (LASTRUN.shape): near-axis mode gives the
+    // true first-order surfaces (elongation + sigma tilt vary along the field
+    // period); legacy mode gives the rotating ellipse.  Fallback: old client
+    // ellipse if shape data missing (e.g. stale point).
+    const sh=LASTRUN&&LASTRUN.shape;
+    if(sh&&sh.sections){
+      const cols=['#ffb02e','#36e2c4','#c792ff'];const dash=['solid','dash','dot'];
+      tr=sh.sections.map((s,i)=>({type:'scatter',mode:'lines',x:s.R,y:s.Z,
+        name:`${L('截面','section')} ${s.label} (e=${(+s.elong).toFixed(2)})`,
+        line:{color:cols[i%3],width:2.2,dash:dash[i%3]},hoverinfo:'skip'}));
+      tr.push({type:'scatter',mode:sh.axis.R.length>3?'lines':'markers',
+        x:sh.axis.R,y:sh.axis.Z,name:L('磁轴(螺旋)','axis'),
+        line:{color:'#ff5d8f',width:1.4,dash:'dot'},marker:{color:'#ff5d8f',size:6},hoverinfo:'skip'});
+      document.getElementById('plotMeta').innerHTML=
+        `<span>${sh.mode==='near-axis'?L('近轴 Garren–Boozer 几何','near-axis Garren–Boozer'):L('旋转椭圆几何','rotating ellipse')}</span>`;
+    }else{
+      const a=v.R0/v.A,ks=v.kappa_s||2,dh=v.delta_h||0;
+      const am=a*Math.sqrt(ks),an=a/Math.sqrt(ks);
+      const sect=(rot,Roff,color,name,ds)=>{const X=[],Y=[];
+        for(let i=0;i<=140;i++){const t=2*Math.PI*i/140;
+          const ex=am*Math.cos(t),ey=an*Math.sin(t);
+          X.push(v.R0+Roff+ex*Math.cos(rot)-ey*Math.sin(rot));
+          Y.push(ex*Math.sin(rot)+ey*Math.cos(rot));}
+        return {type:'scatter',mode:'lines',x:X,y:Y,name,line:{color,width:2.2,dash:ds||'solid'},hoverinfo:'skip'};};
+      tr=[sect(0,dh,'#ffb02e',L('截面 φ=0','section φ=0')),
+          sect(Math.PI/2,-dh,'#36e2c4',L('截面 φ=π/N','section φ=π/N'),'dash')];
+    }
+    lay=LAYOUT('R [m]','Z [m]');lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;
+  }else if(CUR==='mirror'){
+    // flux-mapped outline: a(z)=a_c/sqrt(B(z)/Bc), B/Bc=1+(R-1)sin^2(pi z~/2) in throats
+    const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
+    const Lth=ft*Lc,Z=[],Rr=[];
+    const prof=z=>{const az=Math.abs(z);
+      if(az<=Lc/2)return a;
+      const t=Math.min((az-Lc/2)/Math.max(Lth,1e-6),1);
+      return a/Math.sqrt(1+(Rm-1)*Math.pow(Math.sin(Math.PI*t/2),2));};
+    for(let i=0;i<=160;i++){const z=-Lc/2-Lth+(Lc+2*Lth)*i/160;Z.push(z);Rr.push(prof(z));}
+    const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rr].reverse().map(r=>-r)];
+    tr=[line(Zb,Rb,'#ffb02e',L('等离子体(磁通映射)','plasma (flux-mapped)'),true),
+        line([-Lc/2-Lth,Lc/2+Lth],[a+gg,a+gg],'#ff5d8f',L('壁 r_w','wall'),false),
+        line([-Lc/2-Lth,Lc/2+Lth],[-(a+gg),-(a+gg)],'#ff5d8f','',false),
+        {type:'scatter',mode:'markers',x:[-Lc/2-Lth,Lc/2+Lth],y:[0,0],name:L('镜喉','throat'),
+         marker:{color:'#36e2c4',size:10,symbol:'line-ns-open'},hoverinfo:'skip'}];
+    tr[2].showlegend=false;
+    lay=LAYOUT('z [m]','r [m]');lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;
+  }else if(CUR==='frc'){
+    // superellipse separatrix: |2z/l_s|^p + |r/r_s|^p = 1, p from f_shape
+    // (f_shape=2/3 -> ellipse p=2, ->1 racetrack p->inf); field null at r_s/sqrt(2)
+    const fs=(v.f_shape!=null?v.f_shape:0.85),p=Math.min(2/(3*Math.max(1-fs,0.017)),40);
+    const X=[],Y=[];
+    for(let i=0;i<=200;i++){const th=2*Math.PI*i/200,c=Math.cos(th),s=Math.sin(th);
+      const cr=Math.sign(c)*Math.pow(Math.abs(c),2/p),sr=Math.sign(s)*Math.pow(Math.abs(s),2/p);
+      X.push((v.l_s/2)*cr);Y.push(v.r_s*sr);}
+    const rn=v.r_s/Math.SQRT2;
+    tr=[line(X,Y,'#ffb02e',L('分离面','separatrix'),true),
+        line([-v.l_s/2,v.l_s/2],[rn,rn],'#36e2c4',L('场零点 r_s/√2','field null'),false),
+        line([-v.l_s/2,v.l_s/2],[-rn,-rn],'#36e2c4','',false),
+        line([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],'#ff5d8f',L('壁 r_w','wall'),false),
+        line([-v.l_s/2*1.15,v.l_s/2*1.15],[-v.r_w,-v.r_w],'#ff5d8f','',false)];
+    tr[1].line.dash='dot';tr[2].line.dash='dot';tr[2].showlegend=false;tr[4].showlegend=false;
+    lay=LAYOUT('z [m]','r [m]');lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;
+  }else if(CUR==='dipole'){
+    // dipole field lines r = L cos^2(lambda) in the poloidal (R,Z) plane
+    const Lin=(v.L_in_fac!=null?v.L_in_fac:1.5)*v.r_ring;
+    tr=[];const NL=6;
+    for(let j=0;j<NL;j++){const Lj=Lin*Math.pow(v.R_p/Lin,j/(NL-1));const X=[],Y=[];
+      for(let i=0;i<=160;i++){const lam=-Math.PI/2+Math.PI*i/160;const rr=Lj*Math.pow(Math.cos(lam),2);
+        X.push(rr*Math.cos(lam));Y.push(rr*Math.sin(lam));}
+      tr.push({type:'scatter',mode:'lines',x:X,y:Y,name:j===0?L('磁力线 r=Lcos²λ','field lines'):'',
+        line:{color:j===0||j===NL-1?'#ffb02e':'#4fd1c5',width:j===0||j===NL-1?2.4:1.2,dash:j===0||j===NL-1?'solid':'dash'},
+        showlegend:j===0,hoverinfo:'skip'});}
+    tr.push({type:'scatter',mode:'markers',x:[v.r_ring,-v.r_ring],y:[0,0],name:L('悬浮环','ring'),
+      marker:{color:'#ff5d8f',size:10,symbol:'square'},hoverinfo:'skip'});
+    lay=LAYOUT('R [m]','Z [m]');lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;}
+  Plotly.react('plot',tr,lay,{responsive:true,displayModeBar:false});
+}
+function drawProfiles(){
+  document.getElementById('plotTitle').innerHTML=`${L('剖面','Profiles')} n(x), T(x) · <b>${cfgL(CUR)}</b>`;document.getElementById('plotMeta').innerHTML='';
+  const v=VALS,X=[],N=[],TT=[];
+  for(let i=0;i<=100;i++){const x=i/100;X.push(x);
+    if('Sn'in v){N.push(Math.pow(1-x*x,v.Sn));TT.push(Math.pow(1-x*x,v.ST));}
+    else if(CUR==='dipole'){const Li=(v.L_in_fac!=null?v.L_in_fac:1.5);const r=1+x*(v.R_p/(Li*v.r_ring)-1);N.push(Math.pow(1/r,4));TT.push(Math.pow(1/r,8/3));}
+    else{N.push(1);TT.push(1);}}
+  const xl=CUR==='dipole'?L('归一化半径 (环→外)','normalized radius'):L('归一化小半径 x=r/a','normalized x=r/a');
+  Plotly.react('plot',[{type:'scatter',mode:'lines',x:X,y:N,name:'n/n<sub>0</sub>',line:{color:'#ffb02e',width:2.6}},
+    {type:'scatter',mode:'lines',x:X,y:TT,name:'T/T<sub>0</sub>',line:{color:'#36e2c4',width:2.6}}],LAYOUT(xl,L('归一化值','normalized')),{responsive:true,displayModeBar:false});
+}
+async function runScan(){
+  run.disabled=true;const t=run.textContent;run.textContent='⟳ '+L('计算中…','computing…');err.textContent='';
+  try{const xk=xkey.value,yk=ykey.value;
+    const body={config:CUR,overrides:clean(),window:getWindow(),xkey:xk,ykey:yk,
+      xmin:+xmin.value/dsc(xk),xmax:+xmax.value/dsc(xk),nx:+nx.value,ymin:+ymin.value/dsc(yk),ymax:+ymax.value/dsc(yk),ny:+ny.value};
+    const s=await jpost('/api/scan',body);if(s.error){err.textContent=s.error;return;}
+    LASTSCAN=s;setView('popcon');
+    if(s.n_invalid>0){const m=Object.entries(s.scan_errors||{})[0];
+      err.textContent=L(`⚠ ${s.n_invalid} 个扫描点物理无效（空洞显示）`,`⚠ ${s.n_invalid} scan points physically invalid (shown as holes)`)+(m?` — ${m[0]}`:'');}
+  }catch(e){err.textContent=String(e);}finally{run.disabled=false;run.textContent=t;}
+}
+function onLoadFile(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{try{const d=JSON.parse(rd.result);Object.assign(VALS,d);buildParams();recompute();}catch(err){document.getElementById('err').textContent='JSON: '+err.message;}};
+  rd.readAsText(f);e.target.value='';}
+function dl(name,text){const b=new Blob([text],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();URL.revokeObjectURL(a.href);}
+function scanCsv(s){const F=Object.keys(s.fields);let out='# '+s.xkey+','+s.ykey+','+F.join(',')+'\n';
+  for(let j=0;j<s.y.length;j++)for(let i=0;i<s.x.length;i++)out+=s.x[i]+','+s.y[j]+','+F.map(f=>s.fields[f][j][i]).join(',')+'\n';return out;}
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+"""Tokamak machine presets.
+
+ENN concept designs come from ``scan2d_sc.m`` / ``etsc.html``; real-device
+entries use published headline parameters (R0, a=R0/A, B0, Ip, kappa, delta)
+with representative 0-D density / temperature / confinement starting points
+(``ni0`` in m^-3; profiles default to Sn=0.5, ST=1.0).  These are illustrative
+operating points for POPCON scoping, not validated equilibria.
+"""
+
+PRESETS = {
+    # ---- ENN concept designs (original etsc.html / scan2d_sc.m) ----
+    "EHL-2": dict(  # D-T equivalent
+        icase=1, R0=1.05, A=1.85, kappa=2.2, delta=0.5, Sn=0.4, ST=0.8,
+        ni0=1.3e20, Ti0=30, fT=1 / 3, fsig=1.0, f1=0.5, BT0=3.0, Ip=3.0,
+        tauE=0.5, fHe=0.02, fimp=0.01, Zimp=10, Rw=0.95, g=0.0),
+    "EHL-3A": dict(  # p-B11 (Nevins)
+        icase=4, R0=2.0, A=1.8, kappa=2.5, delta=0.6, Sn=2.0, ST=2.0,
+        ni0=1.5e20, Ti0=70, fT=1 / 3, fsig=1.0, f1=0.9, BT0=4.0, Ip=10,
+        tauE=5, fHe=0.0, fimp=0.0, Zimp=10, Rw=0.95, g=0.0),
+    "EHL-3B": dict(  # p-B11 (Sikora)
+        icase=5, R0=3.2, A=1.7, kappa=2.5, delta=0.6, Sn=2.0, ST=2.0,
+        ni0=2.5e20, Ti0=140, fT=0.25, fsig=2.0, f1=0.9, BT0=4.0, Ip=25,
+        tauE=25, fHe=0.0, fimp=0.0, Zimp=10, Rw=0.95, g=0.0),
+    "pB-reactor": dict(  # original 'pB reactor'
+        icase=5, R0=4.0, A=1.7, kappa=2.5, delta=0.6, Sn=2.0, ST=2.0,
+        ni0=2.0e20, Ti0=250, fT=0.25, fsig=1.0, f1=0.9, BT0=6.0, Ip=30,
+        tauE=45, fHe=0.0, fimp=0.0, Zimp=10, Rw=0.95, g=0.0),
+    "CT": dict(  # p-B11 compact
+        icase=5, R0=4.0, A=3.5, kappa=2.5, delta=0.5, Sn=2.0, ST=2.0,
+        ni0=5e20, Ti0=100, fT=0.25, fsig=5.0, f1=0.9, BT0=12.0, Ip=15,
+        tauE=5, fHe=0.0, fimp=0.0, Zimp=10, Rw=0.95, g=0.0),
+    "ST": dict(  # p-B11 spherical
+        icase=5, R0=3.2, A=1.7, kappa=3.3, delta=0.6, Sn=2.0, ST=2.0,
+        ni0=2e20, Ti0=100, fT=0.25, fsig=5.0, f1=0.9, BT0=2.6, Ip=22,
+        tauE=19.3, fHe=0.0, fimp=0.0, Zimp=10, Rw=0.95, g=0.0),
+    # ---- Burning-plasma / reactor scale ----
+    "ITER": dict(  # D-T (ETSC roadmap values)
+        icase=1, R0=6.35, A=3.43, kappa=1.86, delta=0.5, Sn=0.5, ST=1.0,
+        ni0=0.681e20, Ti0=25, fT=1.0, fsig=1.0, f1=0.5, BT0=5.18, Ip=9.2,
+        tauE=2.0, fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7, g=0.05),
+    "SPARC": dict(  # CFS/MIT high-field HTS, Q~11
+        icase=1, R0=1.85, A=3.25, kappa=1.97, delta=0.5, Sn=0.5, ST=1.0,
+        ni0=3.0e20, Ti0=20, fT=1.0, fsig=1.0, f1=0.5, BT0=12.2, Ip=8.7,
+        tauE=0.5, fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7, g=0.03),
+    "CFETR": dict(  # China Fusion Engineering Test Reactor
+        icase=1, R0=6.6, A=3.67, kappa=2.0, delta=0.5, Sn=0.5, ST=1.0,
+        ni0=1.0e20, Ti0=18, fT=1.0, fsig=1.0, f1=0.5, BT0=6.0, Ip=10,
+        tauE=2.0, fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7, g=0.05),
+    # ---- Experiments ----
+    "EAST": dict(  # China SC tokamak
+        icase=1, R0=1.85, A=4.11, kappa=1.9, delta=0.5, Sn=0.5, ST=1.0,
+        ni0=0.5e20, Ti0=5, fT=1.0, fsig=1.0, f1=0.5, BT0=3.5, Ip=1.0,
+        tauE=0.1, fHe=0.02, fimp=0.01, Zimp=10, Rw=0.7, g=0.02),
+    "DIII-D": dict(  # General Atomics
+        icase=1, R0=1.67, A=2.49, kappa=2.0, delta=0.7, Sn=0.5, ST=1.0,
+        ni0=0.7e20, Ti0=6, fT=1.0, fsig=1.0, f1=0.5, BT0=2.2, Ip=1.5,
+        tauE=0.15, fHe=0.02, fimp=0.01, Zimp=10, Rw=0.7, g=0.02),
+    "JET": dict(  # Joint European Torus
+        icase=1, R0=2.96, A=3.08, kappa=1.7, delta=0.3, Sn=0.5, ST=1.0,
+        ni0=0.5e20, Ti0=12, fT=1.0, fsig=1.0, f1=0.5, BT0=3.45, Ip=3.2,
+        tauE=0.3, fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7, g=0.03),
+    "KSTAR": dict(  # Korea SC tokamak
+        icase=1, R0=1.8, A=3.6, kappa=2.0, delta=0.8, Sn=0.5, ST=1.0,
+        ni0=0.5e20, Ti0=6, fT=1.0, fsig=1.0, f1=0.5, BT0=3.5, Ip=2.0,
+        tauE=0.2, fHe=0.02, fimp=0.01, Zimp=10, Rw=0.7, g=0.02),
+    "JT-60SA": dict(  # Japan/EU SC tokamak
+        icase=1, R0=3.1, A=2.7, kappa=1.8, delta=0.5, Sn=0.5, ST=1.0,
+        ni0=0.5e20, Ti0=12, fT=1.0, fsig=1.0, f1=0.5, BT0=2.68, Ip=5.5,
+        tauE=0.5, fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7, g=0.03),
+    "HL-3": dict(  # SWIP China (ex HL-2M)
+        icase=1, R0=1.78, A=2.74, kappa=1.8, delta=0.5, Sn=0.5, ST=1.0,
+        ni0=0.5e20, Ti0=6, fT=1.0, fsig=1.0, f1=0.5, BT0=2.2, Ip=2.5,
+        tauE=0.2, fHe=0.02, fimp=0.01, Zimp=10, Rw=0.7, g=0.02),
+    "EXL-50U": dict(  # ENN spherical torus (玄龙50U)
+        icase=1, R0=0.7, A=1.6, kappa=2.5, delta=0.5, Sn=0.5, ST=1.0,
+        ni0=0.3e20, Ti0=5, fT=1.0, fsig=1.0, f1=0.5, BT0=1.0, Ip=1.0,
+        tauE=0.05, fHe=0.0, fimp=0.01, Zimp=10, Rw=0.9, g=0.02),
+}
+
+# Optional display grouping for the preset dropdown (<optgroup>).
+PRESET_GROUPS = {
+    "实验装置 Experiments": ["EAST", "DIII-D", "JET", "KSTAR", "JT-60SA", "HL-3", "EXL-50U"],
+    "燃烧·反应堆 Burning·Reactor": ["ITER", "SPARC", "CFETR"],
+    "ENN 概念 Concepts": ["EHL-2", "EHL-3A", "EHL-3B", "pB-reactor", "CT", "ST"],
+}
+
+# Canonical parameter order accepted positionally by funsc().
+PARAM_ORDER = ["R0", "A", "kappa", "delta", "Sn", "ST", "ni0", "Ti0", "fT",
+               "fsig", "f1", "BT0", "Ip", "tauE", "fHe", "fimp", "Zimp",
+               "Rw", "g", "icase"]
