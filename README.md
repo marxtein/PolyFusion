@@ -1,5 +1,8 @@
 # PolyFusion · 多位形零维聚变系统设计平台
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-polyfusion%2Ddang.onrender.com-brightgreen?style=flat-square)](https://polyfusion-dang.onrender.com/)
+[![GitHub](https://img.shields.io/github/stars/marxtein/PolyFusion?style=flat-square)](https://github.com/marxtein/PolyFusion)
+
 Multi-configuration 0-D fusion system design platform with web GUI.
 
 支持托卡马克、磁镜、场反位形（FRC）、偶极场、仿星器等多种位形的零维参数扫描与设计。
