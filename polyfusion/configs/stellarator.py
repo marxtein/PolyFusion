@@ -68,25 +68,37 @@ def axis_length(R0: float, N_fp: float, delta_h: float, n: int = 720) -> float:
     return float(np.trapezoid(np.sqrt(dR**2 + R**2 + dZ**2), phi))
 
 
-def section_outlines(R0, A, kappa_s, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
-                     n_theta=121, **_ignored) -> dict:
-    """Flux-surface cross-section outlines for the UI shape view.
+def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
+                     rc=None, zs=None, n_theta=121, **_ignored) -> dict:
+    """Flux-surface cross-section outlines for the UI shape view (Scheme D).
 
-    Returns ``{"mode", "sections": [{"label","R","Z"}...], "axis": {...}}``
-    with cuts at phi = 0, quarter period and half period.
+    Single near-axis (Garren-Boozer) geometry — the same analytic model the
+    0-D power account uses.  Returns ``{"mode", "metric_mode", "a", "g",
+    "sections": [...], "axis": {...}}`` with cuts at phi = 0, quarter period
+    and half period.  Each section carries:
 
-    * near-axis mode (etabar != 0): exact first-order surfaces
+        ``label``, ``elong``, ``R``/``Z`` (boundary polygon),
+        ``surfaces`` (nested first-order surfaces scaled by rho, last = boundary),
+        ``wall`` (``{"R", "Z"}``, the boundary offset outward by the wall gap g).
+
+    Exact first-order surfaces:
           P(theta) = axis + a [ X1(theta) n_hat + Y1(theta) b_hat ],
           X1 = (etabar/kappa) cos(theta),
           Y1 = (kappa/etabar) [ sigma cos(theta) + sin(theta) ],
-      projected on the (R, Z) display plane — elongation AND orientation vary
-      along the field period (sigma tilts the ellipse off the normal).
-    * legacy mode: rotating ellipse, semi-axes a*sqrt(ks), a/sqrt(ks), major
-      axis rotated by (N_fp/2)*phi, centred on the helical axis.
+    projected on the (R, Z) display plane — elongation AND orientation vary
+    along the field period (sigma tilts the ellipse off the normal).
 
-    Extra keyword arguments (the full parameter dict) are ignored so the
-    caller can pass ``**params`` directly.
+    The magnetic axis is the Fourier curve ``rc``/``zs`` when given, else the
+    default helical curve rc=[R0, delta_h], zs=[0, -delta_h] built from the
+    helical excursion ``delta_h``.
+
+    ``etabar`` (!= 0) is REQUIRED: the legacy rotating-ellipse "fourier-display"
+    cartoon was removed in Scheme D.  Extra keyword arguments (the full
+    parameter dict) are ignored so the caller can pass ``**params`` directly.
     """
+    if etabar == 0.0:
+        raise ValueError("etabar must be != 0 for section outlines "
+                         "(legacy mode removed)")
     a = R0 / A
     th = np.linspace(0.0, 2 * math.pi, n_theta)
     rhos = (0.22, 0.34, 0.46, 0.58, 0.70, 0.82, 0.94, 1.0)
@@ -108,52 +120,54 @@ def section_outlines(R0, A, kappa_s, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
         R, Z = np.asarray(R), np.asarray(Z)
         return 0.5 * abs(float(np.sum(R[:-1] * Z[1:] - R[1:] * Z[:-1])))
 
-    def _fourier_section(Rc, Zc, sx, sy, c2, c3, s2, s3, rot):
-        x = sx * (np.cos(th) + c2 * np.cos(2 * th) + c3 * np.cos(3 * th))
-        y = sy * (np.sin(th) + s2 * np.sin(2 * th) + s3 * np.sin(3 * th))
-        area = _poly_area(x, y)
-        if area > 0:
-            scale = math.sqrt((math.pi * a**2) / area)
-            x, y = scale * x, scale * y
-        Rsec = Rc + x * math.cos(rot) - y * math.sin(rot)
-        Zsec = Zc + x * math.sin(rot) + y * math.cos(rot)
-        return Rsec, Zsec
+    def _wall_offset(boundary_R, boundary_Z, center_R, center_Z, gap):
+        """Offset a closed boundary polygon outward by ``gap`` along its own
+        outward normal.  The polygon is closed (last point == first); we work
+        on the unique vertices, build per-vertex normals by averaging the two
+        adjacent edge normals, orient each outward relative to the section
+        centroid, then re-close.  This is the literal "boundary + g * outward
+        normal" offset, so the wall layer shows the same uniform gap the 0-D Sw
+        convention applies (+g on the section perimeter)."""
+        R = np.asarray(boundary_R, dtype=float)[:-1]
+        Z = np.asarray(boundary_Z, dtype=float)[:-1]
+        n = R.size
+        # tangents from neighbouring vertices (central difference, periodic)
+        tR = np.roll(R, -1) - np.roll(R, 1)
+        tZ = np.roll(Z, -1) - np.roll(Z, 1)
+        # 2-D normal candidates (rotate tangent by -90 deg): (tZ, -tR)
+        nR, nZ = tZ.copy(), -tR.copy()
+        norm = np.hypot(nR, nZ)
+        norm[norm == 0.0] = 1.0
+        nR, nZ = nR / norm, nZ / norm
+        # orient outward: flip where the normal points toward the centroid
+        outR, outZ = R - center_R, Z - center_Z
+        flip = (nR * outR + nZ * outZ) < 0.0
+        nR[flip] = -nR[flip]
+        nZ[flip] = -nZ[flip]
+        wR = (R + gap * nR).tolist()
+        wZ = (Z + gap * nZ).tolist()
+        wR.append(wR[0]); wZ.append(wZ[0])   # re-close
+        return {"R": wR, "Z": wZ}
 
-    if etabar:
-        na = solve_near_axis([R0, delta_h], [0.0, -delta_h],
-                             int(round(N_fp)), etabar, nphi=121)
-        period = 2 * math.pi / int(round(N_fp))
-        for frac, label in cuts:
-            j = int(np.argmin(np.abs(na.phi - frac * period)))
-            kap, sig = na.curvature[j], na.sigma[j]
-            X1 = (na.etabar / kap) * np.cos(th)
-            Y1 = (kap / na.etabar) * (sig * np.cos(th) + np.sin(th))
-            n_hat, b_hat = na.normal[:, j], na.binormal[:, j]
-            Rsec = na.R0_arr[j] + a * (X1 * n_hat[0] + Y1 * b_hat[0])
-            Zsec = na.Z0_arr[j] + a * (X1 * n_hat[2] + Y1 * b_hat[2])
-            sections.append(_section(label, na.elongation[j], na.R0_arr[j],
-                                     na.Z0_arr[j], Rsec, Zsec))
-        axis = {"R": na.R0_arr[::6].tolist(), "Z": na.Z0_arr[::6].tolist()}
-        mode = "near-axis"
-    else:
-        display = {
-            0.0: dict(sx=0.42 * a, sy=1.05 * a, c2=-0.36, c3=0.10,
-                      s2=0.04, s3=-0.04, rot=-0.05),
-            0.25: dict(sx=0.80 * a, sy=0.58 * a, c2=0.18, c3=-0.08,
-                       s2=0.16, s3=0.03, rot=0.48),
-            0.5: dict(sx=1.10 * a, sy=0.35 * a, c2=0.12, c3=-0.05,
-                      s2=0.12, s3=-0.02, rot=0.02),
-        }
-        for frac, label in cuts:
-            phi_c = frac * 2 * math.pi / N_fp
-            Rc = R0 + delta_h * math.cos(N_fp * phi_c)
-            Zc = delta_h * math.sin(N_fp * phi_c)
-            Rsec, Zsec = _fourier_section(Rc, Zc, **display[frac])
-            sections.append(_section(label, kappa_s, Rc, Zc, Rsec, Zsec))
-        axis = {"R": [R0 + delta_h, R0, R0 - delta_h],
-                "Z": [0.0, delta_h, 0.0]}
-        mode = "fourier-display"
-    return {"mode": mode, "metric_mode": "near-axis" if etabar else "rotating-ellipse",
+    na = solve_near_axis(
+        list(rc) if rc is not None else [R0, delta_h],
+        list(zs) if zs is not None else [0.0, -delta_h],
+        int(round(N_fp)), etabar, nphi=121)
+    period = 2 * math.pi / int(round(N_fp))
+    for frac, label in cuts:
+        j = int(np.argmin(np.abs(na.phi - frac * period)))
+        kap, sig = na.curvature[j], na.sigma[j]
+        X1 = (na.etabar / kap) * np.cos(th)
+        Y1 = (kap / na.etabar) * (sig * np.cos(th) + np.sin(th))
+        n_hat, b_hat = na.normal[:, j], na.binormal[:, j]
+        Rsec = na.R0_arr[j] + a * (X1 * n_hat[0] + Y1 * b_hat[0])
+        Zsec = na.Z0_arr[j] + a * (X1 * n_hat[2] + Y1 * b_hat[2])
+        sec = _section(label, na.elongation[j], na.R0_arr[j], na.Z0_arr[j],
+                       Rsec, Zsec)
+        sec["wall"] = _wall_offset(Rsec, Zsec, na.R0_arr[j], na.Z0_arr[j], g)
+        sections.append(sec)
+    axis = {"R": na.R0_arr[::6].tolist(), "Z": na.Z0_arr[::6].tolist()}
+    return {"mode": "near-axis", "metric_mode": "near-axis",
             "a": a, "g": g, "sections": sections, "axis": axis}
 
 
