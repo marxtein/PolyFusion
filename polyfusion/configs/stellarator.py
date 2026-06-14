@@ -106,8 +106,36 @@ def section_outlines(R0, A, kappa_s, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
     """
     a = R0 / A
     th = np.linspace(0.0, 2 * math.pi, n_theta)
+    rhos = (0.22, 0.34, 0.46, 0.58, 0.70, 0.82, 0.94, 1.0)
     cuts = [(0.0, "φ=0"), (0.25, "φ=T/4"), (0.5, "φ=T/2")]
     sections = []
+
+    def _section(label, elong, center_R, center_Z, boundary_R, boundary_Z):
+        Rb = np.asarray(boundary_R)
+        Zb = np.asarray(boundary_Z)
+        surfaces = []
+        for rho in rhos:
+            Rrho = center_R + rho * (Rb - center_R)
+            Zrho = center_Z + rho * (Zb - center_Z)
+            surfaces.append({"rho": float(rho), "R": Rrho.tolist(), "Z": Zrho.tolist()})
+        return {"label": label, "elong": float(elong), "R": Rb.tolist(),
+                "Z": Zb.tolist(), "surfaces": surfaces}
+
+    def _poly_area(R, Z):
+        R, Z = np.asarray(R), np.asarray(Z)
+        return 0.5 * abs(float(np.sum(R[:-1] * Z[1:] - R[1:] * Z[:-1])))
+
+    def _fourier_section(Rc, Zc, sx, sy, c2, c3, s2, s3, rot):
+        x = sx * (np.cos(th) + c2 * np.cos(2 * th) + c3 * np.cos(3 * th))
+        y = sy * (np.sin(th) + s2 * np.sin(2 * th) + s3 * np.sin(3 * th))
+        area = _poly_area(x, y)
+        if area > 0:
+            scale = math.sqrt((math.pi * a**2) / area)
+            x, y = scale * x, scale * y
+        Rsec = Rc + x * math.cos(rot) - y * math.sin(rot)
+        Zsec = Zc + x * math.sin(rot) + y * math.cos(rot)
+        return Rsec, Zsec
+
     if etabar:
         na = solve_near_axis([R0, delta_h], [0.0, -delta_h],
                              int(round(N_fp)), etabar, nphi=121)
@@ -120,32 +148,93 @@ def section_outlines(R0, A, kappa_s, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
             n_hat, b_hat = na.normal[:, j], na.binormal[:, j]
             Rsec = na.R0_arr[j] + a * (X1 * n_hat[0] + Y1 * b_hat[0])
             Zsec = na.Z0_arr[j] + a * (X1 * n_hat[2] + Y1 * b_hat[2])
-            sections.append({"label": label, "elong": float(na.elongation[j]),
-                             "R": Rsec.tolist(), "Z": Zsec.tolist()})
+            sections.append(_section(label, na.elongation[j], na.R0_arr[j],
+                                     na.Z0_arr[j], Rsec, Zsec))
         axis = {"R": na.R0_arr[::6].tolist(), "Z": na.Z0_arr[::6].tolist()}
         mode = "near-axis"
     else:
-        am, an = a * math.sqrt(kappa_s), a / math.sqrt(kappa_s)
+        display = {
+            0.0: dict(sx=0.42 * a, sy=1.05 * a, c2=-0.36, c3=0.10,
+                      s2=0.04, s3=-0.04, rot=-0.05),
+            0.25: dict(sx=0.80 * a, sy=0.58 * a, c2=0.18, c3=-0.08,
+                       s2=0.16, s3=0.03, rot=0.48),
+            0.5: dict(sx=1.10 * a, sy=0.35 * a, c2=0.12, c3=-0.05,
+                      s2=0.12, s3=-0.02, rot=0.02),
+        }
         for frac, label in cuts:
             phi_c = frac * 2 * math.pi / N_fp
-            rot = (N_fp / 2.0) * phi_c
             Rc = R0 + delta_h * math.cos(N_fp * phi_c)
             Zc = delta_h * math.sin(N_fp * phi_c)
-            ex, ey = am * np.cos(th), an * np.sin(th)
-            Rsec = Rc + ex * math.cos(rot) - ey * math.sin(rot)
-            Zsec = Zc + ex * math.sin(rot) + ey * math.cos(rot)
-            sections.append({"label": label, "elong": float(kappa_s),
-                             "R": Rsec.tolist(), "Z": Zsec.tolist()})
+            Rsec, Zsec = _fourier_section(Rc, Zc, **display[frac])
+            sections.append(_section(label, kappa_s, Rc, Zc, Rsec, Zsec))
         axis = {"R": [R0 + delta_h, R0, R0 - delta_h],
                 "Z": [0.0, delta_h, 0.0]}
-        mode = "rotating-ellipse"
-    return {"mode": mode, "a": a, "g": g, "sections": sections, "axis": axis}
+        mode = "fourier-display"
+    return {"mode": mode, "metric_mode": "near-axis" if etabar else "rotating-ellipse",
+            "a": a, "g": g, "sections": sections, "axis": axis}
 
 
 def _ellipse_perimeter(amaj, amin):
     """Ramanujan's approximation (works elementwise on numpy arrays)."""
     h = ((amaj - amin) / (amaj + amin)) ** 2
     return math.pi * (amaj + amin) * (1 + 3 * h / (10 + np.sqrt(4 - 3 * h)))
+
+
+def stellarator_geometry_metrics(R0, A, kappa_s, N_fp, delta_h=0.0,
+                                 etabar=0.0, g=0.1, n_rho=101) -> dict:
+    """Analytic stellarator geometry metrics shared by solver and UI.
+
+    ``A_flux`` is the true first-order flux-section area used by the 0-D
+    account.  The R-Z outlines returned by ``section_outlines`` are display
+    projections; in near-axis mode their projected polygon area is diagnostic,
+    not the volume integral.
+    """
+    a = R0 / A
+    A_flux = math.pi * a**2
+    if etabar:
+        na = solve_near_axis([R0, delta_h], [0.0, -delta_h],
+                             int(round(N_fp)), etabar)
+        L_ax = na.axis_length
+        iota_geom = abs(na.iota)
+        helicity = float(na.helicity)
+        kappa_eff = na.mean_elongation
+        elong_max = na.max_elongation
+        e = na.elongation
+        w_axis = na.d_l_d_phi
+        per_p = float(np.sum(_ellipse_perimeter(a * np.sqrt(e), a / np.sqrt(e)) * w_axis)
+                      / np.sum(w_axis))
+        per_w = float(np.sum(_ellipse_perimeter(a * np.sqrt(e) + g, a / np.sqrt(e) + g) * w_axis)
+                      / np.sum(w_axis))
+        mode = "near-axis"
+    else:
+        L_ax = axis_length(R0, N_fp, delta_h)
+        iota_geom = iota_rotating_ellipse(kappa_s, N_fp)
+        helicity = 0.0
+        kappa_eff = kappa_s
+        elong_max = kappa_s
+        amaj, amin = a * math.sqrt(kappa_s), a / math.sqrt(kappa_s)
+        per_p = float(_ellipse_perimeter(amaj, amin))
+        per_w = float(_ellipse_perimeter(amaj + g, amin + g))
+        mode = "rotating-ellipse"
+
+    rho = np.linspace(0.0, 1.0, n_rho)
+    profile_weight = 2.0 * rho
+    return {
+        "mode": mode,
+        "A_flux": A_flux,
+        "C_sec_mean": per_p,
+        "C_wall_mean": per_w,
+        "L_ax": L_ax,
+        "Vp_geom": A_flux * L_ax,
+        "Sp_geom": per_p * L_ax,
+        "Sw_geom": per_w * L_ax,
+        "profile_rho": rho.tolist(),
+        "profile_weight": profile_weight.tolist(),
+        "iota_geom": iota_geom,
+        "helicity": helicity,
+        "kappa_eff": kappa_eff,
+        "elong_max": elong_max,
+    }
 
 
 @dataclass
@@ -175,6 +264,12 @@ class StellaratorResult:
     tau_ISS04: float  # ISS04 predicted confinement time [s]
     Sp: float
     Sw: float
+    A_flux: float     # analytic flux-section area [m^2]
+    C_sec_mean: float # arclength-weighted plasma section perimeter [m]
+    C_wall_mean: float # arclength-weighted wall section perimeter [m]
+    Vp_geom: float    # geometry-helper plasma volume [m^3]
+    Sp_geom: float    # geometry-helper plasma surface area [m^2]
+    Sw_geom: float    # geometry-helper wall surface area [m^2]
     ne0: float
     nbar: float
     M: float
@@ -310,33 +405,15 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         if delta_h <= 0 and not (iota and iota > 0):
             raise ValueError("near-axis mode with a planar circular axis has "
                              "iota=0: set delta_h > 0 or give an explicit iota")
-        na = solve_near_axis([R0, delta_h], [0.0, -delta_h],
-                             int(round(N_fp)), etabar)
-        L_ax = na.axis_length
-        iota_geom = abs(na.iota)
-        helicity = float(na.helicity)
-        kappa_eff = na.mean_elongation
-        elong_max = na.max_elongation
-        # arclength-weighted mean perimeter of the (varying) elliptical section
-        e = na.elongation
-        w = na.d_l_d_phi
-        per_p = float(np.sum(_ellipse_perimeter(a * np.sqrt(e), a / np.sqrt(e)) * w)
-                      / np.sum(w))
-        per_w = float(np.sum(_ellipse_perimeter(a * np.sqrt(e) + g, a / np.sqrt(e) + g) * w)
-                      / np.sum(w))
-    else:
-        L_ax = axis_length(R0, N_fp, delta_h)
-        iota_geom = iota_rotating_ellipse(kappa_s, N_fp)
-        helicity = 0.0
-        kappa_eff = kappa_s
-        elong_max = kappa_s
-        amaj, amin = a * math.sqrt(kappa_s), a / math.sqrt(kappa_s)
-        per_p = float(_ellipse_perimeter(amaj, amin))
-        per_w = float(_ellipse_perimeter(amaj + g, amin + g))
-
-    Vp = math.pi * a**2 * L_ax                       # Pappus, constant section area
-    Sp = per_p * L_ax
-    Sw = per_w * L_ax
+    geom = stellarator_geometry_metrics(R0, A, kappa_s, N_fp, delta_h, etabar, g)
+    L_ax = geom["L_ax"]
+    iota_geom = geom["iota_geom"]
+    helicity = geom["helicity"]
+    kappa_eff = geom["kappa_eff"]
+    elong_max = geom["elong_max"]
+    Vp = geom["Vp_geom"]                       # Pappus, constant flux-section area
+    Sp = geom["Sp_geom"]
+    Sw = geom["Sw_geom"]
 
     # --- rotational transform actually used in the closure (overridable) ---
     iota_used = iota if (iota is not None and iota > 0) else iota_geom
@@ -429,7 +506,10 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         nbar_o_Sudo=nbar_o_Sudo, Pbrem=Pbrem, Pcycl=Pcycl, Ptrans=Pth, Vp=Vp,
         iota=iota_used, iota_geom=iota_geom, helicity=helicity, L_ax=L_ax,
         kappa_eff=kappa_eff, elong_max=elong_max, tau_ISS04=tau_ISS04,
-        Sp=Sp, Sw=Sw, ne0=ne0, nbar=nbar, M=M, Zeff=Zeff,
+        Sp=Sp, Sw=Sw, A_flux=geom["A_flux"], C_sec_mean=geom["C_sec_mean"],
+        C_wall_mean=geom["C_wall_mean"], Vp_geom=geom["Vp_geom"],
+        Sp_geom=geom["Sp_geom"], Sw_geom=geom["Sw_geom"],
+        ne0=ne0, nbar=nbar, M=M, Zeff=Zeff,
         kappa_s=kappa_s, N_fp=N_fp, etabar=etabar,
         P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
         P_ei=P_ei, Te0=Te0, fT_used=fT, te_mode=0.0, te_resid=0.0,

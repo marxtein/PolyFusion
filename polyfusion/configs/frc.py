@@ -52,6 +52,12 @@ class FRCResult:
     ntau: float       # <n_i> * tau_E
     # profile / stability
     K_rr: float       # rigid-rotor profile parameter (from average-beta theorem)
+    G1: float         # <n>/n_m volume-average factor used by the power account
+    G2: float         # <n^2>/n_m^2 volume-average factor used by fusion/radiation
+    GB: float         # <|B|>/B_e volume-average factor used by synchrotron estimate
+    p_shape: float    # superellipse exponent matching f_shape
+    f_shape_calc: float  # volume factor recovered from p_shape
+    geom_weighted: float # 1 = use finite-length superellipse weighting
     beta: float       # volume-averaged beta = 1 - x_s^2/2
     beta_null: float  # beta at the field null (=1 by pressure balance)
     x_s: float; elongation: float; s_param: float
@@ -92,8 +98,113 @@ def _solve_K(beta_avg: float) -> float:
     return 0.5 * (lo + hi)
 
 
+def _beta_fn(a: float, b: float) -> float:
+    """Beta(a,b) via the standard library to avoid a SciPy dependency."""
+    return math.exp(math.lgamma(a) + math.lgamma(b) - math.lgamma(a + b))
+
+
+def _frc_shape_factor_from_p(p: float) -> float:
+    """Volume factor for |2z/l_s|^p + |r/r_s|^p = 1.
+
+    The plasma volume is ``V = C(p) * pi * r_s**2 * l_s``.  The limits match
+    the existing FRC input convention: ``C(2)=2/3`` for an ellipse and
+    ``C(p)->1`` for a racetrack-like separatrix.
+    """
+    if p <= 0 or not math.isfinite(p):
+        raise ValueError(f"p must be positive and finite (got {p})")
+    return _beta_fn(1.0 / p, 1.0 + 2.0 / p) / p
+
+
+def _frc_p_from_f_shape(f_shape: float, p_max: float = 1.0e6) -> float:
+    """Invert the superellipse volume factor C(p)=f_shape."""
+    f_min = 2.0 / 3.0
+    if not f_min - 1e-12 <= f_shape <= 1.0 + 1e-12:
+        raise ValueError(f"f_shape must be in [2/3, 1], got {f_shape}")
+    if f_shape <= f_min + 1e-12:
+        return 2.0
+    if f_shape >= 1.0 - 1e-12:
+        return p_max
+
+    lo, hi = 2.0, 8.0
+    while _frc_shape_factor_from_p(hi) < f_shape and hi < p_max:
+        lo, hi = hi, min(hi * 2.0, p_max)
+    for _ in range(80):
+        mid = 0.5 * (lo + hi)
+        if _frc_shape_factor_from_p(mid) < f_shape:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def _frc_profile_factors(x_s: float, f_shape: float, n: int = 801) -> tuple[float, float, float, float, float]:
+    """Finite-length FRC profile factors weighted by superellipse volume.
+
+    The radial rigid-rotor profile is retained.  Only the volume element is
+    changed from a cylinder ``2x dx`` to the separatrix-consistent
+    ``2x(1-x^p)^(1/p) dx``.  K is then solved so the volume-averaged beta is
+    still ``1 - x_s**2/2``.
+    """
+    p = _frc_p_from_f_shape(f_shape)
+    x = np.linspace(0.0, 1.0, n)
+    shell = np.clip(1.0 - x**p, 0.0, 1.0)
+    weight = 2.0 * x * shell ** (1.0 / p)
+    norm = float(np.trapezoid(weight, x))
+    if norm <= 0.0:
+        raise ValueError("invalid FRC superellipse volume weight")
+    weight /= norm
+
+    beta_avg = 1.0 - x_s**2 / 2.0
+    u = 2.0 * x**2 - 1.0
+
+    def avg_sech2(k: float) -> float:
+        return float(np.trapezoid(weight / np.cosh(k * u) ** 2, x))
+
+    lo, hi = 1e-4, 25.0
+    if avg_sech2(lo) < beta_avg:
+        K = lo
+    else:
+        for _ in range(80):
+            mid = 0.5 * (lo + hi)
+            if avg_sech2(mid) > beta_avg:
+                lo = mid
+            else:
+                hi = mid
+        K = 0.5 * (lo + hi)
+
+    nrel = 1.0 / np.cosh(K * u) ** 2
+    brel = np.abs(np.tanh(K * u))
+    G1 = float(np.trapezoid(weight * nrel, x))
+    G2 = float(np.trapezoid(weight * nrel * nrel, x))
+    GB = float(np.trapezoid(weight * brel, x))
+    return p, K, G1, G2, GB
+
+
+def frc_shape_outlines(r_s, l_s, r_w, f_shape=0.85, n_theta=181, **_ignored) -> dict:
+    """JSON-able FRC separatrix geometry for front-end shape views."""
+    p = _frc_p_from_f_shape(float(f_shape))
+    th = np.linspace(0.0, 2.0 * math.pi, n_theta)
+    c, s = np.cos(th), np.sin(th)
+    z = (l_s / 2.0) * np.sign(c) * np.abs(c) ** (2.0 / p)
+    r = r_s * np.sign(s) * np.abs(s) ** (2.0 / p)
+    rn = r_s / math.sqrt(2.0)
+    return {
+        "type": "frc",
+        "mode": "superellipse",
+        "p_shape": p,
+        "f_shape_calc": _frc_shape_factor_from_p(p),
+        "separatrix": {"z": z.tolist(), "r": r.tolist()},
+        "wall": {
+            "z": [-(l_s / 2.0) * 1.15, (l_s / 2.0) * 1.15],
+            "r_upper": [r_w, r_w],
+            "r_lower": [-r_w, -r_w],
+        },
+        "null_points": {"z": [0.0, 0.0], "r": [rn, -rn]},
+    }
+
+
 def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
-              f_shape=0.85, fsig=1.0,
+              f_shape=0.85, fsig=1.0, geom_weighted=0.0,
               Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
               imp_name=None) -> FRCResult:
     """Evaluate the 0-D FRC power balance at one operating point.
@@ -126,21 +237,29 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
         raise ValueError(f"wall reflectivity Rw must be in [0, 1] (got {Rw})")
     if fsig < 0:
         raise ValueError(f"fsig must be >= 0 (got {fsig})")
+    use_geom_weight = bool(geom_weighted)
 
     # ---------- geometry ----------
     x_s = r_s / r_w
     elongation = l_s / (2 * r_s)
+    p_shape = _frc_p_from_f_shape(f_shape)
+    f_shape_calc = _frc_shape_factor_from_p(p_shape)
     Vp = f_shape * math.pi * r_s**2 * l_s
     Sp = 2 * math.pi * r_s * l_s * (0.5 + 0.5 * f_shape)   # ellipse<->racetrack side area
     Sw = 2 * math.pi * r_w * l_s + 2 * math.pi * r_w**2
 
     # ---------- rigid-rotor profile from the average-beta theorem ----------
     beta_avg = 1.0 - x_s**2 / 2.0
-    K = _solve_K(beta_avg)
-    tK = math.tanh(K)
-    G1 = tK / K                          # <n>/n_m   (== beta_avg by construction)
-    G2 = (tK - tK**3 / 3.0) / K          # <n^2>/n_m^2
-    GB = math.log(math.cosh(K)) / K      # <|B|>/B_e
+    if use_geom_weight:
+        p_shape, K, G1, G2, GB = _frc_profile_factors(x_s, f_shape)
+        f_shape_calc = _frc_shape_factor_from_p(p_shape)
+    else:
+        K = _solve_K(beta_avg)
+        tK = math.tanh(K)
+        G1 = tK / K                          # <n>/n_m   (== beta_avg by construction)
+        G2 = (tK - tK**3 / 3.0) / K          # <n^2>/n_m^2
+        GB = math.log(math.cosh(K)) / K      # <|B|>/B_e
+    GB_flux = math.log(math.cosh(K)) / K     # cross-section factor for trapped flux
 
     # ---------- composition (tokamak block) at the field null ----------
     d12 = rx["d12"]
@@ -207,7 +326,7 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
     Pwall = (Pfus + Pheat) / Sw
 
     # ---------- FRC-specific engineering quantities ----------
-    flux_p = math.pi * r_s**2 * B_e * GB / 2.0       # trapped poloidal flux [Wb]
+    flux_p = math.pi * r_s**2 * B_e * GB_flux / 2.0  # trapped poloidal flux [Wb]
     v_th = math.sqrt(Ti * _KEV_J / mi)
     rho_ie = mi * v_th / (Z1 * QE * B_e)
     s_param = r_s / rho_ie
@@ -240,7 +359,10 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
         Pbrem=Pbrem, Pcycl=Pcycl,
         Ptrans=Ptrans, Pn=Pn, Pwall=Pwall, Eth=Eth,
         tau_E=tau_E, ntau=ni_m * G1 * tau_E,
-        K_rr=K, beta=beta_avg, beta_null=1.0, x_s=x_s, elongation=elongation,
+        K_rr=K, G1=G1, G2=G2, GB=GB,
+        p_shape=p_shape, f_shape_calc=f_shape_calc,
+        geom_weighted=1.0 if use_geom_weight else 0.0,
+        beta=beta_avg, beta_null=1.0, x_s=x_s, elongation=elongation,
         s_param=s_param, flux_p=flux_p,
         B_int=B_int, ni0=ni_m, ne0=ne_m, nbar=nbar,
         Vp=Vp, Sp=Sp, Sw=Sw, Zeff=Zeff, M=M,

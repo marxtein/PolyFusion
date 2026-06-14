@@ -20,7 +20,7 @@ from ..tokamak import funsc
 from ..presets import (PRESETS as TOKAMAK_PRESETS, PARAM_ORDER as TOKAMAK_PARAMS,
                        PRESET_GROUPS as TOKAMAK_GROUPS)
 from .mirror import solve_mirror
-from .frc import solve_frc
+from .frc import solve_frc, frc_shape_outlines
 from .dipole import solve_dipole
 from .stellarator import solve_stellarator, section_outlines
 
@@ -29,7 +29,7 @@ _MIRROR_PARAMS = ["use_tauE", "a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "
                   "Sn", "ST", "g", "fsig", "f_throat", "f_alpha", "B_expand", "Rw",
                   "icase", "f1", "fHe", "fimp", "Zimp", "phi_i_over_Te", "lnLambda",
                   "imp_name"]
-_FRC_PARAMS = ["use_tauE", "r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "f_shape", "fsig", "Rw",
+_FRC_PARAMS = ["use_tauE", "geom_weighted", "r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "f_shape", "fsig", "Rw",
                "icase", "f1", "fHe", "fimp", "Zimp", "imp_name"]
 _DIPOLE_PARAMS = ["use_tauE", "r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
                   "L_in_fac", "fsig", "icase", "f1", "fHe", "fimp", "Zimp", "Rw",
@@ -460,6 +460,7 @@ FRC = ConfigSpec(
     required=["r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "icase"],
     positive=["r_s", "l_s", "r_w", "B_e", "Ti", "Te", "Zimp"],
     bounds={**_COMMON_BOUNDS, "use_tauE": (0.0, 1.0),
+            "geom_weighted": (0.0, 1.0),
             "tauE": (0.0, None), "f_shape": (2.0 / 3.0 - 1e-9, 1.0)},
     cross=_frc_cross,
     presets=FRC_PRESETS,
@@ -472,6 +473,7 @@ FRC = ConfigSpec(
     contour_spec=FRC_CONTOURS,
     preset_groups=FRC_GROUPS,
     _solve=solve_frc,
+    shape_fn=lambda params: frc_shape_outlines(**params),
 )
 
 DIPOLE = ConfigSpec(
@@ -528,6 +530,7 @@ for _p in MIRROR_PRESETS.values():
     _p.setdefault("phi_i_over_Te", 0.0)
 for _p in FRC_PRESETS.values():
     _p.setdefault("use_tauE", 1.0)
+    _p.setdefault("geom_weighted", 0.0)
 for _p in STELL_PRESETS.values():
     _p.setdefault("use_tauE", 1.0)
     _p.setdefault("f_aux_e", 0.5)

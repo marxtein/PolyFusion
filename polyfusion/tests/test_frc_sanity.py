@@ -34,9 +34,10 @@ def main():
     allok &= _ok(hi.ni0 > r.ni0 and hi.Pfus > r.Pfus,
                  f"B_e up -> ni0 & Pfus up (Pfus {r.Pfus:.1f}->{hi.Pfus:.1f})")
     # 3. larger separatrix -> longer LSX confinement -> higher Q
-    big = solve_frc(**{**BASE, "r_s": 0.9, "r_w": 1.1})
-    allok &= _ok(big.tau_E > r.tau_E and big.Qfus > r.Qfus,
-                 f"r_s up -> tau_E & Q up (Q {r.Qfus:.2f}->{big.Qfus:.2f})")
+    self_base = solve_frc(**{**BASE, "use_tauE": 0.0})
+    big = solve_frc(**{**BASE, "r_s": 0.9, "r_w": 1.1, "use_tauE": 0.0})
+    allok &= _ok(big.tau_E > self_base.tau_E and big.Qfus > self_base.Qfus,
+                 f"r_s up -> tau_E & Q up (Q {self_base.Qfus:.2f}->{big.Qfus:.2f})")
     # 4. smaller x_s (r_s far from wall) -> higher beta
     near = solve_frc(**{**BASE, "r_w": 0.65})  # x_s closer to 1
     allok &= _ok(near.beta < r.beta, f"x_s up -> beta down ({r.beta:.3f}->{near.beta:.3f})")

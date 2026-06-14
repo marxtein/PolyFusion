@@ -31,7 +31,8 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from polyfusion.configs import solve_stellarator  # noqa: E402
 from polyfusion.configs.stellarator import (iota_rotating_ellipse, axis_length,  # noqa: E402
-                                            section_outlines)
+                                            section_outlines,
+                                            stellarator_geometry_metrics)
 from polyfusion.tokamak import funsc  # noqa: E402
 
 PASS = True
@@ -41,6 +42,25 @@ def ok(cond, msg):
     global PASS
     print(("PASS" if cond else "FAIL"), msg)
     PASS = PASS and cond
+
+
+def ellipse_residual(R, Z):
+    """Residual of the best quadratic ellipse in normalized coords.
+
+    A perfect rotated/translated ellipse has residual near zero for
+    A*x^2 + B*x*y + C*y^2 + D*x + E*y = 1.  This intentionally catches the
+    old rotating-ellipse display geometry rather than only axis-aligned cases.
+    """
+    R, Z = np.asarray(R), np.asarray(Z)
+    Rc, Zc = np.mean(R), np.mean(Z)
+    xr, yz = R - Rc, Z - Zc
+    ar = max(np.max(np.abs(xr)), 1e-12)
+    bz = max(np.max(np.abs(yz)), 1e-12)
+    x, y = xr / ar, yz / bz
+    M = np.column_stack([x * x, x * y, y * y, x, y])
+    coef, *_ = np.linalg.lstsq(M, np.ones_like(x), rcond=None)
+    q = M @ coef
+    return float(np.sqrt(np.mean((q - 1.0) ** 2)))
 
 
 def iota_floquet_numeric(kappa_s, N_fp, nsteps=2000, nturns=100):
@@ -133,6 +153,15 @@ def main():
     ok(na.helicity == 0.0, "near-axis NAE-QA: helicity 0 (quasi-axisymmetric)")
     ok(abs(na.Vp - math.pi * 1.8**2 * na.L_ax) / na.Vp < 1e-12,
        "near-axis volume follows Pappus with flux-conserving section area")
+    gm = stellarator_geometry_metrics(R0=18.0, A=10.0, kappa_s=2.41, N_fp=3,
+                                      delta_h=0.045 * 18.0, etabar=0.9 / 18.0,
+                                      g=0.1)
+    ok(abs(gm["Vp_geom"] - na.Vp) / na.Vp < 1e-12,
+       "geometry metrics volume matches solver Vp")
+    ok(abs(np.trapezoid(gm["profile_weight"], gm["profile_rho"]) - 1.0) < 1e-6,
+       "geometry metrics profile weight integrates to 1")
+    ok(abs(gm["A_flux"] - math.pi * 1.8**2) / gm["A_flux"] < 1e-12,
+       "geometry metrics use flux-conserving cross-section area")
     # torsion contribution: stronger helical excursion -> different iota
     # (the legacy rotating ellipse is blind to delta_h by construction)
     na2 = solve_stellarator(R0=18.0, N_fp=3, delta_h=0.08 * 18.0,
@@ -158,12 +187,36 @@ def main():
     a = 18.0 / 10.0
     # legacy rotating ellipse: 3 closed sections, exact area pi*a^2, rotated
     leg = section_outlines(R0=18.0, A=10.0, kappa_s=2.7, N_fp=5, delta_h=0.9)
-    ok(leg["mode"] == "rotating-ellipse" and len(leg["sections"]) == 3,
-       "legacy outlines: 3 sections, rotating-ellipse mode")
+    legm = stellarator_geometry_metrics(R0=18.0, A=10.0, kappa_s=2.7,
+                                        N_fp=5, delta_h=0.9, etabar=0.0, g=0.1)
+    ok(abs(legm["A_flux"] - math.pi * a**2) / (math.pi * a**2) < 1e-12,
+       "legacy metrics: flux area is pi*a^2")
+    ok(abs(legm["Vp_geom"] - math.pi * a**2 * axis_length(18.0, 5, 0.9))
+       / legm["Vp_geom"] < 1e-12,
+       "legacy metrics: Vp_geom = pi*a^2*L_ax")
+    ok(leg["mode"] == "fourier-display" and leg["metric_mode"] == "rotating-ellipse"
+       and len(leg["sections"]) == 3,
+       "legacy outlines: 3 non-elliptic display sections with rotating-ellipse metrics")
+    residuals = [ellipse_residual(s["R"], s["Z"]) for s in leg["sections"]]
+    ok(max(residuals) > 0.05,
+       f"stellarator display sections are non-elliptic (residuals={['%.3f' % r for r in residuals]})")
+    spans = [(max(s["R"]) - min(s["R"]), max(s["Z"]) - min(s["Z"])) for s in leg["sections"]]
+    ok(max(w / h for w, h in spans) / min(w / h for w, h in spans) > 1.8,
+       "stellarator display sections change character between toroidal cuts")
     for s in leg["sections"]:
         ar = shoelace(s["R"], s["Z"])
         ok(abs(ar - math.pi * a**2) / (math.pi * a**2) < 1e-3,
            f"legacy section {s['label']}: area = pi*a^2 ({ar:.4f})")
+        ok("surfaces" in s and len(s["surfaces"]) >= 5,
+           f"legacy section {s['label']}: nested analytic flux surfaces returned")
+        edge = s["surfaces"][-1]
+        mid = min(s["surfaces"], key=lambda q: abs(q["rho"] - 0.5))
+        edge_area = shoelace(edge["R"], edge["Z"])
+        mid_area = shoelace(mid["R"], mid["Z"])
+        ok(abs(edge_area - ar) / ar < 1e-12,
+           f"legacy section {s['label']}: rho=1 surface matches boundary")
+        ok(abs(mid_area / edge_area - mid["rho"] ** 2) < 2e-3,
+           f"legacy section {s['label']}: area scales as rho^2")
     # near-axis: sections vary in elongation along the period; projected area
     # within ~20% of pi*a^2 (section plane is tilted vs the R-Z plane)
     nae = section_outlines(R0=18.0, A=10.0, kappa_s=2.41, N_fp=3,
@@ -174,6 +227,8 @@ def main():
     ok(max(elongs) - min(elongs) > 0.05,
        f"near-axis elongation varies along period: {['%.2f' % e for e in elongs]}")
     for s in nae["sections"]:
+        ok("surfaces" in s and len(s["surfaces"]) >= 5,
+           f"near-axis section {s['label']}: nested analytic flux surfaces returned")
         ar = shoelace(s["R"], s["Z"])
         ok(abs(ar - math.pi * a**2) / (math.pi * a**2) < 0.2,
            f"near-axis section {s['label']}: projected area ~ pi*a^2 ({ar:.3f})")
