@@ -8,8 +8,9 @@ five per-configuration audit reports:
 1. Composition: fHe + fimp >= 1 must be rejected for every configuration.
 2. Rw > 1 (complex cyclotron power) must be rejected for every configuration.
 3. Negative profile exponents (Sn/ST) must be rejected where they exist.
-4. Stellarator: kappa_s = 1 (rotating ellipse, no transform) must error, not
-   return H_ISS04 = inf; iota < 0 rejected.
+4. Stellarator (Scheme D): etabar = 0 (no near-axis shaping) rejected; a
+   planar axis (delta_h = 0) with no measured iota gives no transform and must
+   error, not return H_ISS04 = inf; iota < 0 rejected.
 5. FRC: r_s >= r_w (x_s >= 1, negative <beta>) rejected.
 6. Dipole: L_in >= R_p (negative volume) rejected; L_in_fac < 1 rejected.
 7. Mirror: R_mirror <= 1 rejected.
@@ -80,17 +81,19 @@ def main():
         expect_error(cfg, {"Sn": -1}, "Sn=-1")
         expect_error(cfg, {"ST": -0.5}, "ST=-0.5")
 
-    # ---- 4. stellarator transform ----
-    r = run_case({"kappa_s": 1.0}, preset="W7-X", config="stellarator")
-    ok("errors" in r and r["errors"],
-       f"stellarator: kappa_s=1 (iota=0) rejected, no H_ISS04=inf "
-       f"({(r.get('errors') or ['?'])[0][:60]})")
+    # ---- 4. stellarator transform (Scheme D: near-axis shaping required) ----
+    # etabar = 0 has no near-axis shaping (legacy rotating-ellipse mode removed)
+    expect_error("stellarator", {"etabar": 0.0}, "etabar=0 (no near-axis shaping)")
     expect_error("stellarator", {"iota": -0.5}, "iota=-0.5")
     expect_error("stellarator", {"delta_h": 6.0}, "delta_h >= R0")
-    # near-axis planar axis without explicit iota -> must error, not iota=0
-    r = run_case({"etabar": 0.5, "delta_h": 0.0}, preset="W7-X",
+    # planar axis (delta_h=0) gives no transform; WITHOUT a measured iota
+    # override the configuration must error, not return H_ISS04 = inf. The W7-X
+    # preset carries iota=0.88, so drop it explicitly to hit the no-transform path.
+    r = run_case({"etabar": 0.04, "delta_h": 0.0, "iota": 0.0}, preset="W7-X",
                  config="stellarator")
-    ok("errors" in r and r["errors"], "stellarator: near-axis planar axis rejected")
+    ok("errors" in r and r["errors"],
+       f"stellarator: planar no-transform (delta_h=0, no iota) rejected "
+       f"({(r.get('errors') or ['?'])[0][:60]})")
     # near-axis healthy case stays clean
     expect_clean("stellarator", {"etabar": 0.16, "delta_h": 0.25}, "near-axis mode")
 
