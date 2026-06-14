@@ -123,13 +123,19 @@ def main():
         return 0.5 * abs(np.sum(R[:-1] * Z[1:] - R[1:] * Z[:-1]))
 
     a = 18.0 / 10.0
-    # near-axis: sections vary in elongation along the period; projected area
-    # within ~20% of pi*a^2 (section plane is tilted vs the R-Z plane); each
-    # section carries nested flux surfaces and a wall layer (Scheme D).
+    # near-axis SHAPE view: now SECOND-ORDER (bean/crescent) by default — the
+    # r^2 terms break the first-order ellipse.  Sections vary in elongation
+    # along the period; each carries nested flux surfaces and a wall layer.
+    # NB the display boundary is drawn at a bounded display radius a_disp <= a
+    # (so the r^2 cartoon never self-intersects), so its PROJECTED area is no
+    # longer ~pi*a^2 — that is purely cosmetic.  The 0-D power-account anchor is
+    # A_flux = pi*a^2 in stellarator_geometry_metrics, asserted separately.
     nae = section_outlines(R0=18.0, A=10.0, N_fp=3, delta_h=0.81, etabar=0.05)
-    ok(nae["mode"] == "near-axis" and nae["metric_mode"] == "near-axis"
+    ok(nae["mode"] == "near-axis" and nae["metric_mode"] == "near-axis-r2"
        and len(nae["sections"]) == 3,
-       "near-axis outlines: 3 sections, near-axis metric mode")
+       "near-axis outlines: 3 sections, second-order (r2) metric mode")
+    ok(0 < nae["a_disp"] <= nae["a"] + 1e-12,
+       f"bounded display radius a_disp={nae['a_disp']:.3f} <= a={nae['a']:.3f}")
     elongs = [s["elong"] for s in nae["sections"]]
     ok(max(elongs) - min(elongs) > 0.05,
        f"near-axis elongation varies along period: {['%.2f' % e for e in elongs]}")
@@ -140,10 +146,14 @@ def main():
            and len(s["wall"]["Z"]) == len(s["Z"]),
            f"near-axis section {s['label']}: wall layer present")
         ar = shoelace(s["R"], s["Z"])
-        ok(abs(ar - math.pi * a**2) / (math.pi * a**2) < 0.2,
-           f"near-axis section {s['label']}: projected area ~ pi*a^2 ({ar:.3f})")
+        ok(ar > 0,
+           f"near-axis section {s['label']}: nonzero closed projected area ({ar:.4f})")
         ok(all(np.isfinite(s["R"])) and all(np.isfinite(s["Z"])),
            f"near-axis section {s['label']}: finite outline")
+    # the 0-D power-account section area stays first-order pi*a^2 (unchanged)
+    gm = stellarator_geometry_metrics(18.0, 10.0, 3, [18.0, 0.81], [0.0, -0.81], 0.05)
+    ok(abs(gm["A_flux"] - math.pi * a**2) < 1e-9,
+       f"power-account A_flux still pi*a^2 ({gm['A_flux']:.4f})")
 
     print("\nRESULT:", "STELLARATOR BENCHMARK PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1

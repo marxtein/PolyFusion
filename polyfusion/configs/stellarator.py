@@ -54,6 +54,7 @@ from ..nearaxis import solve_near_axis
 _KEV_J = 1e3 * QE
 _BETA_SOFT_LIMIT = 0.05   # ~5% soft stellarator beta limit (Mercier; can be exceeded)
 _IOTA_MIN = 1e-6          # below this the configuration has no effective transform
+_R2_DISPLAY_CAP = 0.5     # shape view: cap r^2 displacement at this fraction of r^1
 
 
 def axis_length(R0: float, N_fp: float, delta_h: float, n: int = 720) -> float:
@@ -69,32 +70,45 @@ def axis_length(R0: float, N_fp: float, delta_h: float, n: int = 720) -> float:
 
 
 def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
-                     rc=None, zs=None, n_theta=121, **_ignored) -> dict:
-    """Flux-surface cross-section outlines for the UI shape view (Scheme D).
+                     rc=None, zs=None, n_theta=121, B2c=0.0, **_ignored) -> dict:
+    """Flux-surface cross-section outlines for the UI shape view (Scheme D + r2).
 
     Single near-axis (Garren-Boozer) geometry — the same analytic model the
     0-D power account uses.  Returns ``{"mode", "metric_mode", "a", "g",
-    "sections": [...], "axis": {...}}`` with cuts at phi = 0, quarter period
-    and half period.  Each section carries:
+    "a_disp", "sections": [...], "axis": {...}}`` with cuts at phi = 0, quarter
+    period and half period.  Each section carries:
 
         ``label``, ``elong``, ``R``/``Z`` (boundary polygon),
-        ``surfaces`` (nested first-order surfaces scaled by rho, last = boundary),
+        ``surfaces`` (nested near-axis surfaces, last = boundary),
         ``wall`` (``{"R", "Z"}``, the boundary offset outward by the wall gap g).
 
-    Exact first-order surfaces:
-          P(theta) = axis + a [ X1(theta) n_hat + Y1(theta) b_hat ],
-          X1 = (etabar/kappa) cos(theta),
-          Y1 = (kappa/etabar) [ sigma cos(theta) + sin(theta) ],
-    projected on the (R, Z) display plane — elongation AND orientation vary
-    along the field period (sigma tilts the ellipse off the normal).
+    SECOND-ORDER (r^2) shape (Landreman-Sengupta-Plunk Part 2): each surface at
+    near-axis radius r and Boozer angle theta is
+
+        P(theta) = axis + X n_hat + Y b_hat + Z t_hat,
+        X = r X1c cos(theta) + r^2 (X20 + X2c cos2theta + X2s sin2theta),
+        Y = r (Y1s sin(theta) + Y1c cos(theta))
+            + r^2 (Y20 + Y2c cos2theta + Y2s sin2theta),
+        Z = r^2 (Z20 + Z2c cos2theta + Z2s sin2theta),
+
+    projected onto the (R, Z) display plane.  The r^2 terms bend the first-order
+    ellipse into the bean / crescent cross-sections of real machines.
+
+    DISPLAY RADIUS: the near-axis expansion is only valid for r small enough
+    that the r^2 term stays a sub-dominant correction.  At a reactor minor
+    radius the r^2 coefficients can exceed the r^1 ones, so the SHAPE VIEW is
+    drawn at a bounded display radius ``a_disp`` <= a chosen so the second-order
+    contribution never exceeds ``_R2_DISPLAY_CAP`` of the first-order one (no
+    self-intersecting cartoons).  This is purely cosmetic: the 0-D power account
+    (volume/area) is unchanged — see ``stellarator_geometry_metrics`` (still
+    first-order area-preserving pi a^2).  If the r^2 solve fails, the view falls
+    back to the first-order ellipse (``metric_mode = "near-axis"``).
 
     The magnetic axis is the Fourier curve ``rc``/``zs`` when given, else the
-    default helical curve rc=[R0, delta_h], zs=[0, -delta_h] built from the
-    helical excursion ``delta_h``.
-
-    ``etabar`` (!= 0) is REQUIRED: the legacy rotating-ellipse "fourier-display"
-    cartoon was removed in Scheme D.  Extra keyword arguments (the full
-    parameter dict) are ignored so the caller can pass ``**params`` directly.
+    default helical curve rc=[R0, delta_h], zs=[0, -delta_h].  ``etabar`` (!= 0)
+    is REQUIRED.  ``B2c`` is the second-order field-strength shaping input.
+    Extra keyword arguments (the full parameter dict) are ignored so the caller
+    can pass ``**params`` directly.
     """
     if etabar == 0.0:
         raise ValueError("etabar must be != 0 for section outlines "
@@ -104,17 +118,6 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
     rhos = (0.22, 0.34, 0.46, 0.58, 0.70, 0.82, 0.94, 1.0)
     cuts = [(0.0, "φ=0"), (0.25, "φ=T/4"), (0.5, "φ=T/2")]
     sections = []
-
-    def _section(label, elong, center_R, center_Z, boundary_R, boundary_Z):
-        Rb = np.asarray(boundary_R)
-        Zb = np.asarray(boundary_Z)
-        surfaces = []
-        for rho in rhos:
-            Rrho = center_R + rho * (Rb - center_R)
-            Zrho = center_Z + rho * (Zb - center_Z)
-            surfaces.append({"rho": float(rho), "R": Rrho.tolist(), "Z": Zrho.tolist()})
-        return {"label": label, "elong": float(elong), "R": Rb.tolist(),
-                "Z": Zb.tolist(), "surfaces": surfaces}
 
     def _wall_offset(boundary_R, boundary_Z, center_R, center_Z, gap):
         """Offset a closed boundary polygon outward by ``gap`` along its own
@@ -145,26 +148,83 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
         wR.append(wR[0]); wZ.append(wZ[0])   # re-close
         return {"R": wR, "Z": wZ}
 
-    na = solve_near_axis(
-        list(rc) if rc is not None else [R0, delta_h],
-        list(zs) if zs is not None else [0.0, -delta_h],
-        int(round(N_fp)), etabar, nphi=121)
-    period = 2 * math.pi / int(round(N_fp))
-    for frac, label in cuts:
-        j = int(np.argmin(np.abs(na.phi - frac * period)))
-        kap, sig = na.curvature[j], na.sigma[j]
-        X1 = (na.etabar / kap) * np.cos(th)
-        Y1 = (kap / na.etabar) * (sig * np.cos(th) + np.sin(th))
+    axis_rc = list(rc) if rc is not None else [R0, delta_h]
+    axis_zs = list(zs) if zs is not None else [0.0, -delta_h]
+    nfp_i = int(round(N_fp))
+    period = 2 * math.pi / nfp_i
+    cos_th, sin_th = np.cos(th), np.sin(th)
+    cos_2th, sin_2th = np.cos(2 * th), np.sin(2 * th)
+
+    # try the second-order (bean/crescent) shape; fall back to first-order
+    na = None
+    try:
+        na = solve_near_axis(axis_rc, axis_zs, nfp_i, etabar, nphi=121,
+                             order="r2", B2c=B2c)
+    except (RuntimeError, ValueError):
+        na = None
+    metric_mode = "near-axis-r2" if na is not None and na.second_order else "near-axis"
+
+    if na is None:
+        na = solve_near_axis(axis_rc, axis_zs, nfp_i, etabar, nphi=121)
+
+    cut_j = [int(np.argmin(np.abs(na.phi - frac * period))) for frac, _ in cuts]
+
+    def _first_order_RZ(j, r):
+        X1 = r * na.X1c[j] * cos_th
+        Y1 = r * (na.Y1s[j] * sin_th + na.Y1c[j] * cos_th)
         n_hat, b_hat = na.normal[:, j], na.binormal[:, j]
-        Rsec = na.R0_arr[j] + a * (X1 * n_hat[0] + Y1 * b_hat[0])
-        Zsec = na.Z0_arr[j] + a * (X1 * n_hat[2] + Y1 * b_hat[2])
-        sec = _section(label, na.elongation[j], na.R0_arr[j], na.Z0_arr[j],
-                       Rsec, Zsec)
+        R = na.R0_arr[j] + X1 * n_hat[0] + Y1 * b_hat[0]
+        Z = na.Z0_arr[j] + X1 * n_hat[2] + Y1 * b_hat[2]
+        return R, Z
+
+    if metric_mode == "near-axis-r2":
+        so = na.second_order
+        # display radius: keep the r^2 term a sub-dominant correction so the
+        # cartoon never self-intersects (cosmetic; power account untouched)
+        a_disp = a
+        for j in cut_j:
+            n_hat, b_hat, t_hat = na.normal[:, j], na.binormal[:, j], na.tangent[:, j]
+            v1R = na.X1c[j] * cos_th * n_hat[0] + (na.Y1s[j] * sin_th + na.Y1c[j] * cos_th) * b_hat[0]
+            v1Z = na.X1c[j] * cos_th * n_hat[2] + (na.Y1s[j] * sin_th + na.Y1c[j] * cos_th) * b_hat[2]
+            x2 = so.X20[j] + so.X2c[j] * cos_2th + so.X2s[j] * sin_2th
+            y2 = so.Y20[j] + so.Y2c[j] * cos_2th + so.Y2s[j] * sin_2th
+            z2 = so.Z20[j] + so.Z2c[j] * cos_2th + so.Z2s[j] * sin_2th
+            v2R = x2 * n_hat[0] + y2 * b_hat[0] + z2 * t_hat[0]
+            v2Z = x2 * n_hat[2] + y2 * b_hat[2] + z2 * t_hat[2]
+            s1 = float(np.max(np.hypot(v1R, v1Z)))
+            s2 = float(np.max(np.hypot(v2R, v2Z)))
+            if s2 > 0:
+                a_disp = min(a_disp, _R2_DISPLAY_CAP * s1 / s2)
+
+        def _RZ(j, r):
+            x2 = so.X20[j] + so.X2c[j] * cos_2th + so.X2s[j] * sin_2th
+            y2 = so.Y20[j] + so.Y2c[j] * cos_2th + so.Y2s[j] * sin_2th
+            z2 = so.Z20[j] + so.Z2c[j] * cos_2th + so.Z2s[j] * sin_2th
+            X = r * na.X1c[j] * cos_th + r * r * x2
+            Y = r * (na.Y1s[j] * sin_th + na.Y1c[j] * cos_th) + r * r * y2
+            Z = r * r * z2
+            n_hat, b_hat, t_hat = na.normal[:, j], na.binormal[:, j], na.tangent[:, j]
+            R = na.R0_arr[j] + X * n_hat[0] + Y * b_hat[0] + Z * t_hat[0]
+            Zc = na.Z0_arr[j] + X * n_hat[2] + Y * b_hat[2] + Z * t_hat[2]
+            return R, Zc
+    else:
+        a_disp = a
+        _RZ = _first_order_RZ
+
+    for (frac, label), j in zip(cuts, cut_j):
+        surfaces = []
+        for rho in rhos:
+            Rr, Zr = _RZ(j, rho * a_disp)
+            surfaces.append({"rho": float(rho), "R": Rr.tolist(), "Z": Zr.tolist()})
+        Rsec, Zsec = surfaces[-1]["R"], surfaces[-1]["Z"]
+        sec = {"label": label, "elong": float(na.elongation[j]),
+               "R": Rsec, "Z": Zsec, "surfaces": surfaces}
         sec["wall"] = _wall_offset(Rsec, Zsec, na.R0_arr[j], na.Z0_arr[j], g)
         sections.append(sec)
     axis = {"R": na.R0_arr[::6].tolist(), "Z": na.Z0_arr[::6].tolist()}
-    return {"mode": "near-axis", "metric_mode": "near-axis",
-            "a": a, "g": g, "sections": sections, "axis": axis}
+    return {"mode": "near-axis", "metric_mode": metric_mode,
+            "a": a, "a_disp": float(a_disp), "g": g,
+            "sections": sections, "axis": axis}
 
 
 def _ellipse_perimeter(amaj, amin):
