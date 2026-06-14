@@ -12,6 +12,7 @@ the packaged data so user presets override/extend the shipped ones).
 
 import json
 import os
+import warnings
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG_DIR = os.path.join(_HERE, "presets")
@@ -28,9 +29,15 @@ def load_presets(config):
     presets, groups = {}, {}
     for d in (_PKG_DIR, _USER_DIR):
         path = os.path.join(d, f"{config}.json")
-        if os.path.isfile(path):
+        if not os.path.isfile(path):
+            continue
+        try:
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
             presets.update(data.get("presets", {}))
             groups.update(data.get("groups", {}))
+        except (json.JSONDecodeError, OSError, ValueError) as e:
+            # a corrupt user-dir file must not crash the whole app at import;
+            # packaged files are always valid, so this only guards user data.
+            warnings.warn(f"skipping unreadable preset file {path}: {e}")
     return presets, groups

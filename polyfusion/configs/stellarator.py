@@ -116,10 +116,6 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
         return {"label": label, "elong": float(elong), "R": Rb.tolist(),
                 "Z": Zb.tolist(), "surfaces": surfaces}
 
-    def _poly_area(R, Z):
-        R, Z = np.asarray(R), np.asarray(Z)
-        return 0.5 * abs(float(np.sum(R[:-1] * Z[1:] - R[1:] * Z[:-1])))
-
     def _wall_offset(boundary_R, boundary_Z, center_R, center_Z, gap):
         """Offset a closed boundary polygon outward by ``gap`` along its own
         outward normal.  The polygon is closed (last point == first); we work
