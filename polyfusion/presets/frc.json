@@ -1,0 +1,70 @@
+{
+  "presets": {
+    "FRC-DT": {
+      "r_s": 0.5,
+      "l_s": 5.0,
+      "r_w": 0.7,
+      "B_e": 3.5,
+      "Ti": 15.0,
+      "Te": 12.0,
+      "tauE": 0.013,
+      "f_shape": 0.85,
+      "fsig": 1.0,
+      "Rw": 0.8,
+      "icase": 1,
+      "f1": 0.5,
+      "fHe": 0.0,
+      "fimp": 0.0,
+      "Zimp": 10,
+      "use_tauE": 1.0,
+      "geom_weighted": 0.0
+    },
+    "Helion-DHe3": {
+      "r_s": 0.3,
+      "l_s": 2.0,
+      "r_w": 0.4,
+      "B_e": 8.0,
+      "Ti": 70.0,
+      "Te": 50.0,
+      "tauE": 0.0011,
+      "f_shape": 0.75,
+      "fsig": 1.0,
+      "Rw": 0.9,
+      "icase": 3,
+      "f1": 0.5,
+      "fHe": 0.0,
+      "fimp": 0.0,
+      "Zimp": 10,
+      "use_tauE": 1.0,
+      "geom_weighted": 0.0
+    },
+    "C-2W": {
+      "r_s": 0.4,
+      "l_s": 3.0,
+      "r_w": 0.6,
+      "B_e": 1.0,
+      "Ti": 2.0,
+      "Te": 1.0,
+      "tauE": 0.0015,
+      "f_shape": 0.85,
+      "fsig": 1.0,
+      "Rw": 0.8,
+      "icase": 1,
+      "f1": 0.5,
+      "fHe": 0.0,
+      "fimp": 0.0,
+      "Zimp": 10,
+      "use_tauE": 1.0,
+      "geom_weighted": 0.0
+    }
+  },
+  "groups": {
+    "实验装置 Experiments": [
+      "C-2W"
+    ],
+    "概念·反应堆 Concepts": [
+      "FRC-DT",
+      "Helion-DHe3"
+    ]
+  }
+}

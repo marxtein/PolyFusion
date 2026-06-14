@@ -19,6 +19,7 @@ from typing import Callable
 from ..tokamak import funsc
 from ..presets import (PRESETS as TOKAMAK_PRESETS, PARAM_ORDER as TOKAMAK_PARAMS,
                        PRESET_GROUPS as TOKAMAK_GROUPS)
+from ..presets_io import load_presets
 from .mirror import solve_mirror
 from .frc import solve_frc, frc_shape_outlines
 from .dipole import solve_dipole
@@ -39,126 +40,22 @@ _STELL_PARAMS = ["use_tauE", "R0", "A", "N_fp", "delta_h", "etabar", "Sn", "ST",
                  "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name",
                  "H_fac", "rc", "zs", "Vp_override", "Sw_override"]
 
-# Mirror machine presets (open-field, Realta/Budker class).  v2: radial
-# peaking Sn/ST, wall gap g, throat fraction f_throat (docs/24).
-MIRROR_PRESETS = {
-    "BEAM": dict(  # Realta-class HTS break-even mirror, D-T
-        a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, ni0=3e20, Ti0=15.0, Te0=10.0,
-        tauE=1.0,
-        Sn=0.5, ST=1.0, g=0.05, fsig=1.0, f_throat=0.1,
-        Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10),
-    "GDT": dict(  # Budker gas-dynamic trap: warm collisional bulk plasma
-        # (bulk T ~ 0.25 keV keeps lambda_ii < R*L -> genuinely gas-dynamic
-        #  regime; the famous Te=0.9 keV record is an ECRH-heated state)
-        a_c=0.15, L_c=7.0, B_vac=0.35, R_mirror=35.0, ni0=5e19, Ti0=0.25, Te0=0.25,
-        tauE=0.01,
-        Sn=0.5, ST=1.0, g=0.03, fsig=1.0, f_throat=0.15,
-        Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10),
-    "pB-mirror": dict(  # aneutronic high-field mirror concept
-        a_c=0.5, L_c=15.0, B_vac=10.0, R_mirror=15.0, ni0=3e20, Ti0=150.0, Te0=100.0,
-        tauE=1.0,
-        Sn=0.5, ST=1.0, g=0.05, fsig=1.0, f_throat=0.1,
-        Rw=0.9, icase=5, f1=0.9, fHe=0.0, fimp=0.0, Zimp=10),
-    "GAMMA-10": dict(  # Tsukuba tandem mirror (experiment)
-        a_c=0.18, L_c=6.0, B_vac=0.5, R_mirror=6.4, ni0=0.2e20, Ti0=5.0, Te0=0.1,
-        tauE=0.01,
-        Sn=0.5, ST=1.0, g=0.03, fsig=1.0, f_throat=0.15,
-        Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10),
-}
-MIRROR_GROUPS = {
-    "实验装置 Experiments": ["GDT", "GAMMA-10"],
-    "概念·反应堆 Concepts": ["BEAM", "pB-mirror"],
-}
-
-# FRC machine presets (TAE / Helion class).
-FRC_PRESETS = {
-    "FRC-DT": dict(  # D-T compact FRC reactor point (illustrative, uncalibrated)
-        r_s=0.5, l_s=5.0, r_w=0.7, B_e=3.5, Ti=15.0, Te=12.0, tauE=0.013,
-        f_shape=0.85, fsig=1.0, Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10),
-    "Helion-DHe3": dict(  # Helion-class D-3He pulsed high-field FRC
-        r_s=0.3, l_s=2.0, r_w=0.4, B_e=8.0, Ti=70.0, Te=50.0, tauE=0.0011,
-        f_shape=0.75, fsig=1.0, Rw=0.9, icase=3, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10),
-    "C-2W": dict(  # TAE Norman-class beam-driven FRC (experiment-scale)
-        r_s=0.4, l_s=3.0, r_w=0.6, B_e=1.0, Ti=2.0, Te=1.0, tauE=0.0015,
-        f_shape=0.85, fsig=1.0, Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10),
-}
-
-# Levitated-dipole presets (Hasegawa/Kesner class; D-D signature fuel).
-DIPOLE_PRESETS = {
-    "Dipole-DD": dict(  # Kesner-class D-D dipole reactor point (illustrative)
-        r_ring=1.0, R_p=10.0, B_ring=10.0, n0=3e20, Ti0=30.0, Te0=20.0, tauE=5.0,
-        L_in_fac=1.5, fsig=1.0, icase=2, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10, Rw=0.9),
-    "Dipole-DHe3": dict(  # advanced-fuel D-3He dipole
-        r_ring=1.0, R_p=8.0, B_ring=12.0, n0=1.5e20, Ti0=80.0, Te0=60.0, tauE=10.0,
-        L_in_fac=1.5, fsig=1.0, icase=3, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10, Rw=0.9),
-    "LDX": dict(  # experiment-scale levitated dipole
-        r_ring=0.3, R_p=2.0, B_ring=2.0, n0=1e18, Ti0=0.5, Te0=0.5, tauE=0.1,
-        L_in_fac=1.5, fsig=1.0, icase=2, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10, Rw=0.9),
-}
-
-# Stellarator presets (HELIAS reactor / W7-X / LHD class).  Single near-axis
-# (Garren-Boozer) geometry (Scheme D): etabar [1/m] is the sole shaping knob
-# and must be != 0; elongation is a derived OUTPUT.  Concept reactors accept
-# the computed near-axis baseline (no iota/Vp override); real machines supply a
-# measured rotational transform (iota>0) and an approximate plasma volume
-# (Vp_override [m^3]) so the 0-D balance matches the as-built device.  See
-# configs/stellarator.py and docs/28.
-STELL_PRESETS = {
-    "HELIAS": dict(  # HELIAS-class D-T reactor (N_fp=5; iota from near-axis geom).
-        # iota_geom is dominated by the helical-axis excursion delta_h (not
-        # etabar); delta_h~0.32 puts iota_geom in the realistic HELIAS band
-        # (~0.86), etabar then sets the section elongation.
-        R0=18.0, A=10.0, N_fp=5, delta_h=0.32, etabar=0.05,
-        Sn=0.5, ST=1.0,
-        ni0=2e20, Ti0=15.0, fT=1.0, fsig=1.0, f1=0.5, B0=5.0, tauE=1.0,
-        fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7, g=0.1, icase=1, f_ren=1.0),
-    "NAE-QA": dict(  # near-axis quasi-axisymmetric D-T reactor (N_fp=3;
-        # iota from the self-consistent sigma equation, no override)
-        R0=18.0, A=10.0, N_fp=3, delta_h=0.81, etabar=0.05,
-        Sn=0.5, ST=1.0,
-        ni0=2e20, Ti0=15.0, fT=1.0, fsig=1.0, f1=0.5, B0=5.5, tauE=0.85,
-        fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7, g=0.1, icase=1, f_ren=1.2),
-    # Real machines: measured iota override + Vp_override [m^3] (approx plasma
-    # volume, confirm vs published); small etabar only sets elongation/Sw.
-    "W7-X": dict(  # N_fp=5; measured iota~0.88, Vp~30 m^3
-        R0=5.5, A=10.0, N_fp=5, delta_h=0.25, etabar=0.05, iota=0.88,
-        Vp_override=30.0,  # approx plasma volume, confirm vs published
-        Sn=0.5, ST=1.0,
-        ni0=2e19, Ti0=2.0, fT=1.0, fsig=1.0, f1=0.5, B0=2.5, tauE=0.2,
-        fHe=0.0, fimp=0.0, Zimp=10, Rw=0.7, g=0.05, icase=1, f_ren=1.2),
-    "LHD": dict(  # heliotron, N_fp=10; measured iota_0~0.40, Vp~30 m^3.
-        # delta_h=0.0 (planar axis): near-axis still runs (curvature=1/R0!=0)
-        # and the measured iota override satisfies the zero-transform guard.
-        R0=3.9, A=6.0, N_fp=10, delta_h=0.0, etabar=0.04, iota=0.40,
-        Vp_override=30.0,  # approx plasma volume, confirm vs published
-        Sn=0.5, ST=1.0,
-        ni0=5e19, Ti0=2.0, fT=1.0, fsig=1.0, f1=0.5, B0=2.85, tauE=0.3,
-        fHe=0.0, fimp=0.0, Zimp=10, Rw=0.7, g=0.05, icase=1, f_ren=1.0),
-    "HSX": dict(  # quasi-helical, N_fp=4; measured iota~1.05, Vp~0.4 m^3
-        R0=1.2, A=8.0, N_fp=4, delta_h=0.1, etabar=0.08, iota=1.05,
-        Vp_override=0.4,  # approx plasma volume, confirm vs published
-        Sn=0.5, ST=1.0,
-        ni0=5e18, Ti0=0.5, fT=1.0, fsig=1.0, f1=0.5, B0=1.0, tauE=0.01,
-        fHe=0.0, fimp=0.0, Zimp=10, Rw=0.7, g=0.03, icase=1, f_ren=1.0),
-    "CFQS": dict(  # quasi-axisymmetric, N_fp=2; measured iota~0.45, Vp~1 m^3
-        R0=1.0, A=4.0, N_fp=2, delta_h=0.05, etabar=0.06, iota=0.45,
-        Vp_override=1.0,  # approx plasma volume, confirm vs published
-        Sn=0.5, ST=1.0,
-        ni0=1e19, Ti0=1.0, fT=1.0, fsig=1.0, f1=0.5, B0=1.0, tauE=0.02,
-        fHe=0.0, fimp=0.0, Zimp=10, Rw=0.7, g=0.03, icase=1, f_ren=1.0),
-}
-STELL_GROUPS = {
-    "实验装置 Experiments": ["W7-X", "LHD", "HSX", "CFQS"],
-    "反应堆 Reactor": ["HELIAS", "NAE-QA"],
-}
-FRC_GROUPS = {
-    "实验装置 Experiments": ["C-2W"],
-    "概念·反应堆 Concepts": ["FRC-DT", "Helion-DHe3"],
-}
-DIPOLE_GROUPS = {
-    "实验装置 Experiments": ["LDX"],
-    "概念·反应堆 Concepts": ["Dipole-DD", "Dipole-DHe3"],
-}
+# Machine presets for every non-tokamak configuration now live in JSON data
+# files (``polyfusion/presets/<config>.json``, with any
+# ``~/.polyfusion/presets/<config>.json`` merged on top) so non-developers can
+# add presets by editing JSON instead of this module.  See presets_io.py.
+#   - mirror: open-field, Realta/Budker class (radial peaking Sn/ST, wall gap g,
+#     throat fraction f_throat; docs/24)
+#   - frc:    TAE / Helion class
+#   - dipole: levitated dipole, Hasegawa/Kesner class (D-D signature fuel)
+#   - stellarator: single near-axis (Garren-Boozer) geometry (Scheme D) where
+#     etabar [1/m] is the sole shaping knob (!= 0) and elongation is a derived
+#     OUTPUT; concept reactors use the near-axis baseline, real machines supply
+#     a measured iota>0 and an approximate Vp_override [m^3] (docs/28).
+MIRROR_PRESETS, MIRROR_GROUPS = load_presets("mirror")
+FRC_PRESETS, FRC_GROUPS = load_presets("frc")
+DIPOLE_PRESETS, DIPOLE_GROUPS = load_presets("dipole")
+STELL_PRESETS, STELL_GROUPS = load_presets("stellarator")
 
 
 # POPCON contour specs: per quantity -> fixed levels + colour, faithfully

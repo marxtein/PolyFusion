@@ -1,0 +1,70 @@
+{
+  "presets": {
+    "Dipole-DD": {
+      "r_ring": 1.0,
+      "R_p": 10.0,
+      "B_ring": 10.0,
+      "n0": 3e+20,
+      "Ti0": 30.0,
+      "Te0": 20.0,
+      "tauE": 5.0,
+      "L_in_fac": 1.5,
+      "fsig": 1.0,
+      "icase": 2,
+      "f1": 0.5,
+      "fHe": 0.0,
+      "fimp": 0.0,
+      "Zimp": 10,
+      "Rw": 0.9,
+      "use_tauE": 1.0,
+      "ring_model": 0
+    },
+    "Dipole-DHe3": {
+      "r_ring": 1.0,
+      "R_p": 8.0,
+      "B_ring": 12.0,
+      "n0": 1.5e+20,
+      "Ti0": 80.0,
+      "Te0": 60.0,
+      "tauE": 10.0,
+      "L_in_fac": 1.5,
+      "fsig": 1.0,
+      "icase": 3,
+      "f1": 0.5,
+      "fHe": 0.0,
+      "fimp": 0.0,
+      "Zimp": 10,
+      "Rw": 0.9,
+      "use_tauE": 1.0,
+      "ring_model": 0
+    },
+    "LDX": {
+      "r_ring": 0.3,
+      "R_p": 2.0,
+      "B_ring": 2.0,
+      "n0": 1e+18,
+      "Ti0": 0.5,
+      "Te0": 0.5,
+      "tauE": 0.1,
+      "L_in_fac": 1.5,
+      "fsig": 1.0,
+      "icase": 2,
+      "f1": 0.5,
+      "fHe": 0.0,
+      "fimp": 0.0,
+      "Zimp": 10,
+      "Rw": 0.9,
+      "use_tauE": 1.0,
+      "ring_model": 0
+    }
+  },
+  "groups": {
+    "实验装置 Experiments": [
+      "LDX"
+    ],
+    "概念·反应堆 Concepts": [
+      "Dipole-DD",
+      "Dipole-DHe3"
+    ]
+  }
+}
