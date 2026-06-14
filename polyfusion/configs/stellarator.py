@@ -1,30 +1,29 @@
-"""0-D stellarator power balance — v3 (near-axis geometry upgrade).
+"""0-D stellarator power balance — v4 (Scheme D: single near-axis geometry).
 
 Tokamak-parity treatment (docs/27 + docs/28, mirroring docs/01 section by
-section).  TWO analytic geometry levels are supported:
+section).  ONE analytic geometry: FIRST-ORDER NEAR-AXIS EXPANSION (Garren-
+Boozer / Mercier, in the Landreman-Sengupta-Plunk form used by pyQSC) — the
+standard analytic representation of modern optimized stellarators.  ``etabar``
+(!= 0, REQUIRED) is the single shaping parameter; the cross-section elongation
+is a DERIVED OUTPUT, not an input.  The axis is the 3-D Fourier curve
+R = R0 + delta_h cos(N_fp phi), Z = -delta_h sin(N_fp phi) by default, or an
+explicit ``rc``/``zs`` Fourier list for a custom axis.  The periodic sigma
+equation is solved for the self-consistent on-axis transform, INCLUDING the
+axis-torsion contribution and the full elongation profile e(phi) (see
+polyfusion/nearaxis.py; validated to machine precision against pyQSC).  Volume
+follows Pappus with the flux-conserving section area pi*a^2; surface areas use
+the arclength-weighted elongation profile.
 
-* LEVEL 1 (legacy, ``etabar == 0``): ROTATING-ELLIPSE stellarator — elliptical
-  cross-section of constant area pi*a^2 whose major axis rotates poloidally by
-  (N_fp/2)*phi (Spitzer's classical analytic stellarator).  On-axis transform
-  in closed form (validated against Floquet integration):
-      iota0 = (N_fp/2) * (kappa_s - 1)^2 / (kappa_s^2 + 1).
-  Limitation (audit docs/仿星器0D物理闭合性审核报告): the helical axis
-  excursion ``delta_h`` only lengthens the axis here — its TORSION does not
-  contribute to iota, and the ellipse/axis couplings are ignored.
+(The legacy rotating-ellipse / ``kappa_s`` mode was removed in Scheme D: it
+left ``kappa_s`` inert in near-axis mode and ``delta_h`` blind to iota in
+legacy mode.  See docs/superpowers/plans/2026-06-14-stellarator-scheme-d.md.)
 
-* LEVEL 2 (``etabar != 0``): FIRST-ORDER NEAR-AXIS EXPANSION (Garren-Boozer /
-  Mercier, in the Landreman-Sengupta-Plunk form used by pyQSC) — the standard
-  analytic representation of modern optimized stellarators.  The axis is the
-  3-D Fourier curve R = R0 + delta_h cos(N_fp phi), Z = -delta_h sin(N_fp phi)
-  and the periodic sigma equation is solved for the self-consistent on-axis
-  transform, INCLUDING the axis-torsion contribution and the full elongation
-  profile e(phi) (see polyfusion/nearaxis.py; validated to machine precision
-  against pyQSC published values).  Volume still follows Pappus with the
-  flux-conserving section area pi*a^2 (first-order surfaces are ellipses of
-  that area); surface areas use the arclength-weighted elongation profile.
+Measured-machine overrides (D1): a real device that single-harmonic near-axis
+cannot represent (W7-X quasi-isodynamic, LHD heliotron) supplies an explicit
+``iota`` (> 0) used in the ISS04/Sudo closure, and optionally ``Vp_override`` /
+``Sw_override`` (m^3 / m^2, > 0) to anchor the power account to the real
+plasma geometry instead of the near-axis estimate.
 
-* An explicit ``iota`` input (> 0) overrides the geometric value in the
-  ISS04/Sudo closure for machines with measured transforms.
 * PROFILES / REACTIVITY / RADIATION: identical to the tokamak core (already
   L3-verified); confinement closure stays ISS04 + Sudo (docs/23).
 
@@ -55,22 +54,6 @@ from ..nearaxis import solve_near_axis
 _KEV_J = 1e3 * QE
 _BETA_SOFT_LIMIT = 0.05   # ~5% soft stellarator beta limit (Mercier; can be exceeded)
 _IOTA_MIN = 1e-6          # below this the configuration has no effective transform
-
-
-def iota_rotating_ellipse(kappa_s: float, N_fp: float) -> float:
-    """On-axis rotational transform of a rotating-ellipse stellarator.
-
-    Closed form from the near-axis Floquet problem: in the frame rotating
-    with the ellipse (rate M = N_fp/2) the field-line equations become
-    constant-coefficient with matrix [[eps, M], [-M, -eps]]; elliptical
-    invariant curves of axis ratio kappa_s fix eps = M(k^2-1)/(k^2+1) and the
-    lab-frame transform is M - sqrt(M^2 - eps^2) = M (k-1)^2/(k^2+1).
-    (Equivalent to Mercier's vacuum formula M (cosh 2eta - 1)/cosh 2eta with
-    kappa_s = e^{2 eta}, zero axis torsion.)
-    """
-    M = N_fp / 2.0
-    k = kappa_s
-    return M * (k - 1.0) ** 2 / (k * k + 1.0)
 
 
 def axis_length(R0: float, N_fp: float, delta_h: float, n: int = 720) -> float:
@@ -180,42 +163,33 @@ def _ellipse_perimeter(amaj, amin):
     return math.pi * (amaj + amin) * (1 + 3 * h / (10 + np.sqrt(4 - 3 * h)))
 
 
-def stellarator_geometry_metrics(R0, A, kappa_s, N_fp, delta_h=0.0,
-                                 etabar=0.0, g=0.1, n_rho=101) -> dict:
+def stellarator_geometry_metrics(R0, A, N_fp, rc, zs, etabar, g=0.1,
+                                 n_rho=101) -> dict:
     """Analytic stellarator geometry metrics shared by solver and UI.
 
-    ``A_flux`` is the true first-order flux-section area used by the 0-D
+    Single near-axis (Garren-Boozer) path (Scheme D): the axis is the custom
+    Fourier curve ``rc``/``zs`` and ``etabar`` is the sole shaping knob — the
+    transform AND elongation profile come from the self-consistent sigma
+    equation.  ``A_flux`` is the first-order flux-section area used by the 0-D
     account.  The R-Z outlines returned by ``section_outlines`` are display
-    projections; in near-axis mode their projected polygon area is diagnostic,
-    not the volume integral.
+    projections; their projected polygon area is diagnostic, not the volume
+    integral.
     """
     a = R0 / A
     A_flux = math.pi * a**2
-    if etabar:
-        na = solve_near_axis([R0, delta_h], [0.0, -delta_h],
-                             int(round(N_fp)), etabar)
-        L_ax = na.axis_length
-        iota_geom = abs(na.iota)
-        helicity = float(na.helicity)
-        kappa_eff = na.mean_elongation
-        elong_max = na.max_elongation
-        e = na.elongation
-        w_axis = na.d_l_d_phi
-        per_p = float(np.sum(_ellipse_perimeter(a * np.sqrt(e), a / np.sqrt(e)) * w_axis)
-                      / np.sum(w_axis))
-        per_w = float(np.sum(_ellipse_perimeter(a * np.sqrt(e) + g, a / np.sqrt(e) + g) * w_axis)
-                      / np.sum(w_axis))
-        mode = "near-axis"
-    else:
-        L_ax = axis_length(R0, N_fp, delta_h)
-        iota_geom = iota_rotating_ellipse(kappa_s, N_fp)
-        helicity = 0.0
-        kappa_eff = kappa_s
-        elong_max = kappa_s
-        amaj, amin = a * math.sqrt(kappa_s), a / math.sqrt(kappa_s)
-        per_p = float(_ellipse_perimeter(amaj, amin))
-        per_w = float(_ellipse_perimeter(amaj + g, amin + g))
-        mode = "rotating-ellipse"
+    na = solve_near_axis(rc, zs, int(round(N_fp)), etabar)
+    L_ax = na.axis_length
+    iota_geom = abs(na.iota)
+    helicity = float(na.helicity)
+    kappa_eff = na.mean_elongation
+    elong_max = na.max_elongation
+    e = na.elongation
+    w_axis = na.d_l_d_phi
+    per_p = float(np.sum(_ellipse_perimeter(a * np.sqrt(e), a / np.sqrt(e)) * w_axis)
+                  / np.sum(w_axis))
+    per_w = float(np.sum(_ellipse_perimeter(a * np.sqrt(e) + g, a / np.sqrt(e) + g) * w_axis)
+                  / np.sum(w_axis))
+    mode = "near-axis"
 
     rho = np.linspace(0.0, 1.0, n_rho)
     profile_weight = 2.0 * rho
@@ -274,9 +248,8 @@ class StellaratorResult:
     nbar: float
     M: float
     Zeff: float
-    kappa_s: float    # section elongation input (echo)
     N_fp: float       # field periods (echo)
-    etabar: float     # near-axis shaping parameter (echo; 0 = legacy mode)
+    etabar: float     # near-axis shaping parameter (echo; required != 0)
     P_line: float     # impurity line radiation [MW] (0 unless imp_name given)
     Ecrit: float      # Stix critical energy of the fast product [keV]
     f_fast_ion: float # fraction of fast-product energy deposited on ions
@@ -294,14 +267,15 @@ class StellaratorResult:
         return asdict(self)
 
 
-def _check_inputs(R0, A, kappa_s, N_fp, delta_h, Sn, ST, fT, B0, tauE,
+def _check_inputs(R0, A, N_fp, delta_h, Sn, ST, fT, B0, tauE,
                   f1, fHe, fimp, Zimp, Rw, g, fsig, etabar):
     """Domain guards (audit P0).  Raise ValueError on unphysical inputs so
     that no complex/inf/NaN value can masquerade as a result."""
     if R0 <= 0 or A <= 0:
         raise ValueError(f"R0 and A must be > 0 (got R0={R0}, A={A})")
-    if kappa_s <= 0:
-        raise ValueError(f"kappa_s must be > 0 (got {kappa_s})")
+    if etabar == 0.0:
+        raise ValueError("etabar must be != 0: near-axis shaping is required "
+                         "(legacy rotating-ellipse mode was removed in Scheme D)")
     if N_fp < 1:
         raise ValueError(f"N_fp must be >= 1 (got {N_fp})")
     if delta_h < 0 or delta_h >= R0:
@@ -327,26 +301,29 @@ def _check_inputs(R0, A, kappa_s, N_fp, delta_h, Sn, ST, fT, B0, tauE,
         raise ValueError(f"fsig must be >= 0 (got {fsig})")
 
 
-def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
+def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                       B0, tauE, fHe, fimp, Zimp, Rw, g, icase,
                       delta_h=0.0, iota=None, f_ren=1.0,
-                      etabar=0.0, imp_name=None, f_aux_e=0.5,
-                      H_fac=1.0, use_tauE=1.0) -> StellaratorResult:
+                      etabar=0.05, imp_name=None, f_aux_e=0.5,
+                      H_fac=1.0, use_tauE=1.0,
+                      rc=None, zs=None, Vp_override=0.0,
+                      Sw_override=0.0) -> StellaratorResult:
     """Evaluate the 0-D stellarator power balance at one operating point.
 
-    Geometry inputs replace the tokamak's (kappa, delta, Ip):
-    ``kappa_s`` = elliptical section elongation (rotating-ellipse mode),
-    ``N_fp`` = number of field periods (5 for W7-X/HELIAS, 4 for HSX,
-    10 for LHD, 2 for CFQS), ``delta_h`` = helical axis excursion [m].
+    Single near-axis (Garren-Boozer) geometry (Scheme D).  ``etabar`` [1/m] is
+    the sole shaping knob; elongation is a derived OUTPUT.  The magnetic axis is
+    the Fourier curve ``rc``/``zs`` (default rc=[R0, delta_h], zs=[0, -delta_h]
+    built from the helical excursion ``delta_h``); iota and the elongation
+    profile come from the self-consistent sigma equation.
 
-    ``etabar`` [1/m] activates the first-order NEAR-AXIS geometry (Garren-
-    Boozer): axis rc=[R0, delta_h], zs=[0, -delta_h]; iota and the elongation
-    profile then come from the sigma equation (kappa_s is ignored except as a
-    drawing hint).  ``iota`` (optional, > 0) overrides the geometric transform
-    for machines with measured values.
+    ``N_fp`` = number of field periods (5 for W7-X/HELIAS, 4 for HSX, 10 for
+    LHD, 2 for CFQS).  ``iota`` (optional, > 0) overrides the geometric
+    transform for machines with a measured value; ``Vp_override`` /
+    ``Sw_override`` (> 0) override the geometric plasma volume / wall surface
+    for measured machines.
     """
     rx = _REACTIONS[icase]
-    _check_inputs(R0, A, kappa_s, N_fp, delta_h, Sn, ST, fT, B0, tauE,
+    _check_inputs(R0, A, N_fp, delta_h, Sn, ST, fT, B0, tauE,
                   f1, fHe, fimp, Zimp, Rw, g, fsig, etabar)
     if iota is not None and iota != 0 and iota < 0:
         raise ValueError(f"explicit iota must be > 0 (got {iota})")
@@ -364,12 +341,14 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     # tauE such that H_ISS04 = H_fac (implicit: tau_ISS04 depends on P_L)
     if tauE == 0:
         def _eval_t(t):
-            return solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0,
+            return solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0,
                                      fT, fsig, f1, B0, t, fHe, fimp, Zimp,
                                      Rw, g, icase, delta_h=delta_h, iota=iota,
                                      f_ren=f_ren, etabar=etabar,
                                      imp_name=imp_name, f_aux_e=f_aux_e,
-                                     H_fac=H_fac, use_tauE=1.0)
+                                     H_fac=H_fac, use_tauE=1.0,
+                                     rc=rc, zs=zs, Vp_override=Vp_override,
+                                     Sw_override=Sw_override)
 
         def _resid_t(t, res):
             return H_fac - res.H_ISS04
@@ -381,12 +360,14 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     # (docs/30 batch 2; same closure as the tokamak — shared loss structure)
     if fT == 0:
         def _eval(ft):
-            return solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0,
+            return solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0,
                                      ft, fsig, f1, B0, tauE, fHe, fimp, Zimp,
                                      Rw, g, icase, delta_h=delta_h, iota=iota,
                                      f_ren=f_ren, etabar=etabar,
                                      imp_name=imp_name, f_aux_e=f_aux_e,
-                                     H_fac=H_fac, use_tauE=1.0)
+                                     H_fac=H_fac, use_tauE=1.0,
+                                     rc=rc, zs=zs, Vp_override=Vp_override,
+                                     Sw_override=Sw_override)
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
@@ -399,29 +380,19 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                            fT_used=ft, Te0=ft * Ti0)
 
     a = R0 / A
-
-    # --- geometry: near-axis (etabar != 0) or rotating ellipse (legacy) ---
-    if etabar:
-        if delta_h <= 0 and not (iota and iota > 0):
-            raise ValueError("near-axis mode with a planar circular axis has "
-                             "iota=0: set delta_h > 0 or give an explicit iota")
-    geom = stellarator_geometry_metrics(R0, A, kappa_s, N_fp, delta_h, etabar, g)
-    L_ax = geom["L_ax"]
-    iota_geom = geom["iota_geom"]
-    helicity = geom["helicity"]
-    kappa_eff = geom["kappa_eff"]
-    elong_max = geom["elong_max"]
-    Vp = geom["Vp_geom"]                       # Pappus, constant flux-section area
+    axis_rc = list(rc) if rc is not None else [R0, delta_h]
+    axis_zs = list(zs) if zs is not None else [0.0, -delta_h]
+    geom = stellarator_geometry_metrics(R0, A, N_fp, axis_rc, axis_zs, etabar, g)
+    L_ax = geom["L_ax"]; iota_geom = geom["iota_geom"]
+    helicity = geom["helicity"]; kappa_eff = geom["kappa_eff"]; elong_max = geom["elong_max"]
+    Vp = Vp_override if (Vp_override and Vp_override > 0) else geom["Vp_geom"]
     Sp = geom["Sp_geom"]
-    Sw = geom["Sw_geom"]
-
-    # --- rotational transform actually used in the closure (overridable) ---
+    Sw = Sw_override if (Sw_override and Sw_override > 0) else geom["Sw_geom"]
     iota_used = iota if (iota is not None and iota > 0) else iota_geom
     if iota_used <= _IOTA_MIN:
-        raise ValueError(
-            "rotational transform is zero: a kappa_s=1 rotating ellipse (or a "
-            "planar near-axis configuration) has no closed flux surfaces in "
-            "this model — increase kappa_s/delta_h/etabar or set iota > 0")
+        raise ValueError("rotational transform is ~0: give an explicit iota "
+                         "override (measured machine) or shaping that produces "
+                         "transform (etabar + helical/multi-harmonic axis)")
 
     # --- composition (identical to funsc) ---
     Te0 = fT * Ti0
@@ -510,7 +481,7 @@ def solve_stellarator(R0, A, kappa_s, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         C_wall_mean=geom["C_wall_mean"], Vp_geom=geom["Vp_geom"],
         Sp_geom=geom["Sp_geom"], Sw_geom=geom["Sw_geom"],
         ne0=ne0, nbar=nbar, M=M, Zeff=Zeff,
-        kappa_s=kappa_s, N_fp=N_fp, etabar=etabar,
+        N_fp=N_fp, etabar=etabar,
         P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
         P_ei=P_ei, Te0=Te0, fT_used=fT, te_mode=0.0, te_resid=0.0,
         tauE_used=tauE, taue_mode=0.0, strcase=rx["name"],
