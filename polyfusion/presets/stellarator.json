@@ -85,7 +85,7 @@
       "use_tauE": 1.0,
       "f_aux_e": 0.5,
       "H_fac": 1.0,
-      "Sw_override": 0.0
+      "Sw_override": 128.0
     },
     "LHD": {
       "R0": 3.9,
@@ -114,7 +114,7 @@
       "use_tauE": 1.0,
       "f_aux_e": 0.5,
       "H_fac": 1.0,
-      "Sw_override": 0.0
+      "Sw_override": 120.0
     },
     "HSX": {
       "R0": 1.2,
@@ -143,7 +143,7 @@
       "use_tauE": 1.0,
       "f_aux_e": 0.5,
       "H_fac": 1.0,
-      "Sw_override": 0.0
+      "Sw_override": 9.1
     },
     "CFQS": {
       "R0": 1.0,
@@ -172,8 +172,11 @@
       "use_tauE": 1.0,
       "f_aux_e": 0.5,
       "H_fac": 1.0,
-      "Sw_override": 0.0
+      "Sw_override": 12.6
     }
+  },
+  "_notes": {
+    "Sw_override": "Plasma-facing surface area [m^2] for real machines (APPROX, confirm vs published). W7-X ~128 and LHD ~120 from published plasma-surface estimates; HSX 9.1 and CFQS 12.6 estimated from 2*pi*R0 * 2*pi*a * sqrt((1+kappa^2)/2) with kappa~1.5. Anchors Pwall=(Pfus+Pheat)/Sw instead of the extreme near-axis elongation profile (e.g. HSX elongation ~384). Concept reactors (HELIAS, NAE-QA) keep Sw_override=0 (pure near-axis). See docs/39."
   },
   "groups": {
     "实验装置 Experiments": [
