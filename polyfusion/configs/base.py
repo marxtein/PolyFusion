@@ -34,10 +34,10 @@ _FRC_PARAMS = ["use_tauE", "geom_weighted", "r_s", "l_s", "r_w", "B_e", "Ti", "T
 _DIPOLE_PARAMS = ["use_tauE", "r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
                   "L_in_fac", "fsig", "icase", "f1", "fHe", "fimp", "Zimp", "Rw",
                   "ring_model", "imp_name"]
-_STELL_PARAMS = ["use_tauE", "R0", "A", "kappa_s", "N_fp", "delta_h", "etabar", "Sn", "ST",
+_STELL_PARAMS = ["use_tauE", "R0", "A", "N_fp", "delta_h", "etabar", "Sn", "ST",
                  "ni0", "Ti0", "fT", "fsig", "f1", "B0", "iota", "tauE", "fHe",
                  "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name",
-                 "H_fac"]
+                 "H_fac", "rc", "zs", "Vp_override", "Sw_override"]
 
 # Mirror machine presets (open-field, Realta/Budker class).  v2: radial
 # peaking Sn/ST, wall gap g, throat fraction f_throat (docs/24).
@@ -96,40 +96,53 @@ DIPOLE_PRESETS = {
         L_in_fac=1.5, fsig=1.0, icase=2, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10, Rw=0.9),
 }
 
-# Stellarator presets (HELIAS reactor / W7-X / LHD class).  etabar=0 selects
-# the legacy rotating-ellipse geometry; etabar!=0 selects the first-order
-# near-axis (Garren-Boozer) geometry, see configs/stellarator.py and docs/28.
+# Stellarator presets (HELIAS reactor / W7-X / LHD class).  Single near-axis
+# (Garren-Boozer) geometry (Scheme D): etabar [1/m] is the sole shaping knob
+# and must be != 0; elongation is a derived OUTPUT.  Concept reactors accept
+# the computed near-axis baseline (no iota/Vp override); real machines supply a
+# measured rotational transform (iota>0) and an approximate plasma volume
+# (Vp_override [m^3]) so the 0-D balance matches the as-built device.  See
+# configs/stellarator.py and docs/28.
 STELL_PRESETS = {
-    "HELIAS": dict(  # HELIAS-class D-T reactor (N_fp=5; iota from geometry)
-        R0=18.0, A=10.0, kappa_s=2.7, N_fp=5, delta_h=0.9, etabar=0.0,
+    "HELIAS": dict(  # HELIAS-class D-T reactor (N_fp=5; iota from near-axis geom).
+        # iota_geom is dominated by the helical-axis excursion delta_h (not
+        # etabar); delta_h~0.32 puts iota_geom in the realistic HELIAS band
+        # (~0.86), etabar then sets the section elongation.
+        R0=18.0, A=10.0, N_fp=5, delta_h=0.32, etabar=0.05,
         Sn=0.5, ST=1.0,
         ni0=2e20, Ti0=15.0, fT=1.0, fsig=1.0, f1=0.5, B0=5.0, tauE=1.0,
         fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7, g=0.1, icase=1, f_ren=1.0),
-    "NAE-QA": dict(  # near-axis quasi-axisymmetric D-T reactor: the published
-        # Landreman-Sengupta r1 §5.1 configuration scaled to R0=18 m
-        # (rc=[R0, 0.045*R0], zs=[0, -0.045*R0], etabar=0.9/R0):
-        # iota_geom = 0.4183 from the sigma equation (torsion-consistent).
-        R0=18.0, A=10.0, kappa_s=2.41, N_fp=3, delta_h=0.81, etabar=0.05,
+    "NAE-QA": dict(  # near-axis quasi-axisymmetric D-T reactor (N_fp=3;
+        # iota from the self-consistent sigma equation, no override)
+        R0=18.0, A=10.0, N_fp=3, delta_h=0.81, etabar=0.05,
         Sn=0.5, ST=1.0,
         ni0=2e20, Ti0=15.0, fT=1.0, fsig=1.0, f1=0.5, B0=5.5, tauE=0.85,
         fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7, g=0.1, icase=1, f_ren=1.2),
-    "W7-X": dict(  # N_fp=5; kappa_s=2.72 -> iota_geom~0.88 = measured (no override)
-        R0=5.5, A=10.0, kappa_s=2.72, N_fp=5, delta_h=0.25, etabar=0.0,
+    # Real machines: measured iota override + Vp_override [m^3] (approx plasma
+    # volume, confirm vs published); small etabar only sets elongation/Sw.
+    "W7-X": dict(  # N_fp=5; measured iota~0.88, Vp~30 m^3
+        R0=5.5, A=10.0, N_fp=5, delta_h=0.25, etabar=0.05, iota=0.88,
+        Vp_override=30.0,  # approx plasma volume, confirm vs published
         Sn=0.5, ST=1.0,
         ni0=2e19, Ti0=2.0, fT=1.0, fsig=1.0, f1=0.5, B0=2.5, tauE=0.2,
         fHe=0.0, fimp=0.0, Zimp=10, Rw=0.7, g=0.05, icase=1, f_ren=1.2),
-    "LHD": dict(  # heliotron, N_fp=10; measured iota_0~0.4 overrides
-        R0=3.9, A=6.0, kappa_s=1.51, N_fp=10, delta_h=0.0, etabar=0.0,
+    "LHD": dict(  # heliotron, N_fp=10; measured iota_0~0.40, Vp~30 m^3.
+        # delta_h=0.0 (planar axis): near-axis still runs (curvature=1/R0!=0)
+        # and the measured iota override satisfies the zero-transform guard.
+        R0=3.9, A=6.0, N_fp=10, delta_h=0.0, etabar=0.04, iota=0.40,
+        Vp_override=30.0,  # approx plasma volume, confirm vs published
         Sn=0.5, ST=1.0,
-        ni0=5e19, Ti0=2.0, fT=1.0, fsig=1.0, f1=0.5, B0=2.85, iota=0.4, tauE=0.3,
+        ni0=5e19, Ti0=2.0, fT=1.0, fsig=1.0, f1=0.5, B0=2.85, tauE=0.3,
         fHe=0.0, fimp=0.0, Zimp=10, Rw=0.7, g=0.05, icase=1, f_ren=1.0),
-    "HSX": dict(  # quasi-helical, N_fp=4; strong shaping -> iota_geom~1.05
-        R0=1.2, A=8.0, kappa_s=3.96, N_fp=4, delta_h=0.1, etabar=0.0,
+    "HSX": dict(  # quasi-helical, N_fp=4; measured iota~1.05, Vp~0.4 m^3
+        R0=1.2, A=8.0, N_fp=4, delta_h=0.1, etabar=0.08, iota=1.05,
+        Vp_override=0.4,  # approx plasma volume, confirm vs published
         Sn=0.5, ST=1.0,
         ni0=5e18, Ti0=0.5, fT=1.0, fsig=1.0, f1=0.5, B0=1.0, tauE=0.01,
         fHe=0.0, fimp=0.0, Zimp=10, Rw=0.7, g=0.03, icase=1, f_ren=1.0),
-    "CFQS": dict(  # quasi-axisymmetric, N_fp=2
-        R0=1.0, A=4.0, kappa_s=3.34, N_fp=2, delta_h=0.05, etabar=0.0,
+    "CFQS": dict(  # quasi-axisymmetric, N_fp=2; measured iota~0.45, Vp~1 m^3
+        R0=1.0, A=4.0, N_fp=2, delta_h=0.05, etabar=0.06, iota=0.45,
+        Vp_override=1.0,  # approx plasma volume, confirm vs published
         Sn=0.5, ST=1.0,
         ni0=1e19, Ti0=1.0, fT=1.0, fsig=1.0, f1=0.5, B0=1.0, tauE=0.02,
         fHe=0.0, fimp=0.0, Zimp=10, Rw=0.7, g=0.03, icase=1, f_ren=1.0),
@@ -398,6 +411,10 @@ def _stell_cross(p: dict) -> list[str]:
     iota = _num(p, "iota")
     if iota is not None and iota < 0:
         errors.append(f"iota must be > 0 if given (got {iota})")
+    etabar = _num(p, "etabar")
+    if etabar is not None and etabar == 0:
+        errors.append("etabar must be != 0 (near-axis shaping required; "
+                      "legacy mode removed)")
     dh, R0 = _num(p, "delta_h"), _num(p, "R0")
     if dh is not None and R0 is not None and dh >= R0:
         errors.append(f"helical excursion delta_h must be < R0 (got {dh} >= {R0})")
@@ -496,14 +513,17 @@ DIPOLE = ConfigSpec(
 STELLARATOR = ConfigSpec(
     name="stellarator", label="仿星器 Stellarator",
     params=_STELL_PARAMS,
+    # etabar IS required (near-axis shaping); rc/zs/Vp_override/Sw_override/iota
+    # are optional overrides.
     required=[p for p in _STELL_PARAMS
-              if p not in ("f_ren", "iota", "delta_h", "etabar", "imp_name",
-                            "H_fac")],
-    positive=["R0", "A", "kappa_s", "N_fp", "ni0", "Ti0", "B0",
+              if p not in ("f_ren", "iota", "delta_h", "imp_name", "H_fac",
+                            "rc", "zs", "Vp_override", "Sw_override")],
+    positive=["R0", "A", "N_fp", "ni0", "Ti0", "B0",
               "Zimp", "f_ren"],
     bounds={**_COMMON_BOUNDS, "delta_h": (0.0, None), "N_fp": (1.0, None),
             "fT": (0.0, None), "tauE": (0.0, None), "use_tauE": (0.0, 1.0),
-            "H_fac": (0.0, None)},
+            "H_fac": (0.0, None),
+            "Vp_override": (0.0, None), "Sw_override": (0.0, None)},
     cross=_stell_cross,
     presets=STELL_PRESETS,
     contour_fields=["Pfus", "Qfus", "Pheat", "betaT", "nbar_o_Sudo", "H_ISS04"],
@@ -536,6 +556,8 @@ for _p in STELL_PRESETS.values():
     _p.setdefault("f_aux_e", 0.5)
     _p.setdefault("H_fac", 1.0)
     _p.setdefault("iota", 0.0)            # 0 = use geometric transform
+    _p.setdefault("Vp_override", 0.0)     # 0 = use geometric plasma volume
+    _p.setdefault("Sw_override", 0.0)     # 0 = use geometric wall surface
 for _p in DIPOLE_PRESETS.values():
     _p.setdefault("use_tauE", 1.0)
     _p.setdefault("ring_model", 0)
