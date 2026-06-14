@@ -36,9 +36,14 @@ def main():
     # 3. combined tau is the parallel-min (<= each channel)
     allok &= _ok(r.tau_c <= r.tau_rho and r.tau_c <= (r.tau_Past + r.tau_gd) + 1e-30,
                  "tau_c <= each channel")
-    # 4. higher mirror ratio -> better confinement -> higher Q
-    lo = solve_mirror(**{**BASE, "R_mirror": 6.0})
-    hi = solve_mirror(**{**BASE, "R_mirror": 20.0})
+    # 4. higher mirror ratio -> better confinement -> higher Q.
+    # Q reflects confinement only through the self-consistent end-loss closure
+    # (Ptrans = Int n(phi+T)dV / tau_c); under the DEFAULT use_tauE=1 the
+    # transport account is the fixed Eth/tauE energy-confinement model, which
+    # at this hot BEAM point already ignites (Pheat<=0 -> Q capped at 1000) so
+    # the Q-increase is unobservable.  Exercise the loss closure with use_tauE=0.
+    lo = solve_mirror(**{**BASE, "R_mirror": 6.0, "use_tauE": 0.0})
+    hi = solve_mirror(**{**BASE, "R_mirror": 20.0, "use_tauE": 0.0})
     allok &= _ok(hi.tau_c > lo.tau_c and hi.Qfus > lo.Qfus,
                  f"R_mirror up -> tau_c & Q up ({lo.Qfus:.2f}->{hi.Qfus:.2f})")
     # 5. higher density -> more fusion power
@@ -55,10 +60,19 @@ def main():
     allok &= _ok(math.isfinite(pb.Pfus) and pb.Pfus > 0, f"p-B11 runs (Pfus={pb.Pfus:.3f}MW)")
     # 9. v2 flat-profile limit reproduces v1 numbers exactly (Sn=ST=0,g=0,f_throat=0)
     # f_alpha=1.0 explicit: v1 assumed full charged-product deposition; the
-    # batch-2 default is the loss-cone bound sqrt(1-1/R_mc) (docs/30)
+    # batch-2 default is the loss-cone bound sqrt(1-1/R_mc) (docs/30).
+    # use_tauE=0: the v1 numbers (esp. Q=1.125) were derived against the
+    # self-consistent end-loss closure Ptrans = Int n(phi+T)dV / tau_c.
+    # The later use_tauE switch made the DEFAULT transport account the
+    # Eth/tauE energy-confinement model (Ptrans = Eth/tauE, tauE=1.0s here);
+    # since tau_c=0.2512s << tauE=1.0s that model under-predicts the end loss
+    # ~10x at this hot point (Ptrans 53.8 MW -> 5.1 MW), collapsing Pheat to
+    # -4.4 MW (false ignition, Q capped at 1000).  Pfus/tau_c/beta/phi_i are
+    # closure-independent and still match v1; only the transport/heating side
+    # (hence Q) is governed by the closure, so reproduce v1 with use_tauE=0.
     flat = solve_mirror(a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, ni0=3e20,
                         Ti0=15.0, Te0=10.0, Sn=0.0, ST=0.0, g=0.0, f_throat=0.0,
-                        Rw=0.8, icase=1, f_alpha=1.0)
+                        Rw=0.8, icase=1, f_alpha=1.0, use_tauE=0.0)
     # Pfus/Q carry the funsc quadrature convention (2*sum(x)*dx = 1.01) now
     # that the mirror uses the tokamak-identical profile integral: v1*1.0100.
     v1 = dict(Pfus=49.871, Qfus=1.125, tau_c=0.2512, beta=0.336, phi_i=23.03)

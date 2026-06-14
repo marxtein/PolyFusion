@@ -65,20 +65,26 @@ def main():
     ok(s["te_mode"] == 1.0 and abs(s["te_resid"]) < 1e-6 and 0.9 < s["fT_used"] < 1.2,
        f"HELIAS fT=0: fT_used = {s['fT_used']:.3f}, converged")
 
-    # 1d. mirror predictive Te0
-    m = run_case({"Te0": 0}, preset="BEAM", config="mirror")["outputs"]
+    # 1d. mirror predictive Te0 (self-consistent solve is gated behind
+    # use_tauE=0: with the default tauE transport account there is no
+    # electron end-loss channel to balance, so Te0=0 must pair with
+    # use_tauE=0 to invoke the implemented electron-channel closure).
+    m = run_case({"Te0": 0, "use_tauE": 0}, preset="BEAM", config="mirror")["outputs"]
     ok(m["te_mode"] == 1.0 and abs(m["te_resid"]) < 1e-6,
        f"BEAM Te0=0 converged (resid={m['te_resid']:.1e})")
     ok(0.2 < m["Te0_used"] < 15.0,
        f"BEAM solved Te0 = {m['Te0_used']:.2f} keV (< Ti = 15: end loss + radiation)")
-    gdt = run_case({"Te0": 0}, preset="GDT", config="mirror")["outputs"]
+    gdt = run_case({"Te0": 0, "use_tauE": 0}, preset="GDT", config="mirror")["outputs"]
     ok(gdt["te_mode"] == 1.0 and 0.6 < gdt["Te0_used"] / 0.25 < 1.1,
        f"GDT bulk Te0 = {gdt['Te0_used']:.3f} ~ Ti (collisional bulk equilibrates; "
        "Te<<Ti hierarchy needs fast ions, batch 3)")
 
     # ---- 2. mirror f_alpha loss-cone default ----
+    # The loss-cone deposition model lives in the self-consistent loss closure;
+    # under the default tauE transport account f_alpha_used is pinned to 1.0
+    # (full deposition), so exercise the loss-cone default with use_tauE=0.
     base = dict(a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, ni0=3e20,
-                Ti0=15.0, Te0=10.0, Rw=0.8, icase=1)
+                Ti0=15.0, Te0=10.0, Rw=0.8, icase=1, use_tauE=0.0)
     d = solve_mirror(**base)                       # default: computed
     expect = math.sqrt(1.0 - 1.0 / d.R_mc)
     ok(abs(d.f_alpha_used - expect) < 1e-12,
@@ -99,10 +105,14 @@ def main():
        f"ITER Sn_sugg = {i['Sn_sugg']:.3f} (Angioni band; compare input Sn=0.5)")
 
     # ---- 3b. predictive tauE (tauE=0 sentinel, batch 2b) ----
-    t = run_case({"tauE": 0}, preset="ITER", config="tokamak")["outputs"]
+    # The predictive-tauE solve is the implemented loss closure, so the tauE=0
+    # sentinel requires use_tauE=0 (the default manual account would reject
+    # tauE=0).  The refeed below intentionally uses the default manual account
+    # to show the solved tauE is a fixed point of it.
+    t = run_case({"tauE": 0, "use_tauE": 0}, preset="ITER", config="tokamak")["outputs"]
     ok(t["taue_mode"] == 1.0 and abs(t["H98"] - 1.0) < 1e-6,
        f"ITER tauE=0: solved tauE={t['tauE_used']:.3f}s with H98={t['H98']:.6f}=H_fac")
-    t12 = run_case({"tauE": 0, "H_fac": 1.2}, preset="ITER", config="tokamak")["outputs"]
+    t12 = run_case({"tauE": 0, "H_fac": 1.2, "use_tauE": 0}, preset="ITER", config="tokamak")["outputs"]
     ok(abs(t12["H98"] - 1.2) < 1e-6 and t12["tauE_used"] > t["tauE_used"],
        f"H_fac=1.2 -> tauE {t['tauE_used']:.3f}->{t12['tauE_used']:.3f}s, H98=1.2")
     tr = run_case({"tauE": t["tauE_used"]}, preset="ITER", config="tokamak")["outputs"]
@@ -114,10 +124,10 @@ def main():
     ok(leg["H98"] > 1.3 and t["Qfus"] < leg["Qfus"],
        f"preset assumption exposed: legacy H98={leg['H98']:.2f} Q={leg['Qfus']:.2f} "
        f"vs H=1 predictive Q={t['Qfus']:.2f}")
-    st = run_case({"tauE": 0}, preset="HELIAS", config="stellarator")["outputs"]
+    st = run_case({"tauE": 0, "use_tauE": 0}, preset="HELIAS", config="stellarator")["outputs"]
     ok(st["taue_mode"] == 1.0 and abs(st["H_ISS04"] - 1.0) < 1e-6,
        f"HELIAS tauE=0: tauE={st['tauE_used']:.3f}s, H_ISS04=1 (Q={st['Qfus']:.2f})")
-    both = run_case({"tauE": 0, "fT": 0}, preset="ITER", config="tokamak")["outputs"]
+    both = run_case({"tauE": 0, "fT": 0, "use_tauE": 0}, preset="ITER", config="tokamak")["outputs"]
     ok(both["taue_mode"] == 1.0 and both["te_mode"] == 1.0
        and abs(both["H98"] - 1.0) < 1e-4,
        f"combined fT=0 + tauE=0 nests cleanly (fT={both['fT_used']:.3f}, "
@@ -126,10 +136,15 @@ def main():
     # ---- 4. consistency sweep of the input interface ----
     bad = run_case({"fT": -0.5}, preset="ITER", config="tokamak")
     ok("errors" in bad, "fT < 0 rejected")
-    bad = run_case({"f_aux_e": 1.5}, preset="ITER", config="tokamak")
-    ok("errors" in bad, "f_aux_e > 1 rejected")
-    okm = run_case({"Te0": 0}, preset="GDT", config="mirror")
-    ok("outputs" in okm, "mirror Te0=0 passes validation (moved out of positive)")
+    # f_aux_e was removed from the public tokamak parameter surface (it is now
+    # an internal solver-only knob: not in the config params/bounds), so an
+    # out-of-range f_aux_e is silently filtered rather than rejected.  Exercise
+    # the bounds-rejection path on a parameter that IS part of the exposed,
+    # bounded interface instead — use_tauE has bound [0, 1].
+    bad = run_case({"use_tauE": 1.5}, preset="ITER", config="tokamak")
+    ok("errors" in bad, "use_tauE > 1 rejected")
+    okm = run_case({"Te0": 0, "use_tauE": 0}, preset="GDT", config="mirror")
+    ok("outputs" in okm, "mirror Te0=0 (use_tauE=0) passes validation (moved out of positive)")
     oks = run_case({"fT": 0}, preset="W7-X", config="stellarator")
     ok("outputs" in oks, "stellarator fT=0 passes validation")
 
