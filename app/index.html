@@ -125,7 +125,8 @@
 <div class="wrap">
   <div class="col left">
     <div class="sec"><p class="sec-t" data-t="config">位形 Configuration <span class="n" id="cfgN"></span></p><div id="configPick" class="configs"></div></div>
-    <div class="sec"><p class="sec-t" data-t="preset">机型预设 Preset</p><select id="preset"></select></div>
+    <div class="sec"><p class="sec-t" data-t="preset">机型预设 Preset</p><select id="preset"></select>
+      <div class="exports" style="margin-top:6px"><button id="saveAsP">★ 另存为预设</button><button id="delP" disabled>✕ 删除预设</button></div></div>
     <div class="sec"><p class="sec-t" data-t="params">参数 Parameters <span class="n" data-t="liveN">编辑即重算</span></p><div id="params"></div></div>
     <div class="sec"><p class="sec-t" data-t="window">最佳区判据 Operating Window</p><div id="thresh" class="scanbox"></div></div>
     <div class="sec"><p class="sec-t" data-t="contours">显示等值线 Contours</p><div id="plotOpts" class="opts"></div></div>
@@ -282,6 +283,35 @@ function fillPresets(sel,presets,groups,val){
   sel.innerHTML=html;
 }
 const L=(zh,en)=>LANG==='zh'?zh:en;
+// ---- named user presets in localStorage (Task B3) ----
+// store shape: { [config]: { [presetName]: VALS-dict } }; user presets are
+// distinguished from packaged ones in the <select> by a leading ★ marker on the
+// option value (display text stays the bare name). Loading a user preset goes
+// through recompute()/clean() (server-agnostic) since the backend only knows
+// packaged presets.
+const UPKEY='polyfusion_user_presets';
+const UMARK='★';
+const upAll=()=>{try{return JSON.parse(localStorage.getItem(UPKEY)||'{}')}catch(e){return{}}};
+const upGet=cfg=>upAll()[cfg]||{};
+const upSave=(cfg,name,vals)=>{const a=upAll();(a[cfg]=a[cfg]||{})[name]=vals;localStorage.setItem(UPKEY,JSON.stringify(a));};
+const upDelete=(cfg,name)=>{const a=upAll();if(a[cfg]){delete a[cfg][name];localStorage.setItem(UPKEY,JSON.stringify(a));}};
+// rebuild the preset <select>: packaged optgroups first, then a "My presets"
+// optgroup of user presets (values prefixed with UMARK). selectedName may be a
+// packaged name or a UMARK-prefixed user value.
+function refreshPresetOptions(selectedName){
+  const m=CONFIGS[CUR];
+  fillPresets(preset,m.presets,m.preset_groups,selectedName);
+  const u=upGet(CUR),names=Object.keys(u);
+  if(names.length){
+    const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    preset.innerHTML+=`<optgroup label="${L('我的预设','My presets')}">`+
+      names.map(n=>{const val=UMARK+n;return `<option value="${esc(val)}" ${val===selectedName?'selected':''}>${esc(n)}</option>`;}).join('')+'</optgroup>';
+  }
+  if(selectedName!=null)preset.value=selectedName;
+  updateDelState();
+}
+// enable the delete button only when the selected option is a user preset
+function updateDelState(){const b=document.getElementById('delP');if(b)b.disabled=!(preset.value||'').startsWith(UMARK);}
 
 async function init(){
   CONFIGS=(await jget('/api/meta')).configs;
@@ -290,6 +320,7 @@ async function init(){
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setView(t.dataset.v));
   document.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>setLang(b.dataset.lang));
   run.onclick=runScan;preset.onchange=loadPreset;
+  document.getElementById('saveAsP').onclick=savePreset;document.getElementById('delP').onclick=deletePreset;
   helpBtn.onclick=()=>document.getElementById('help').classList.add('on');
   document.getElementById('helpX').onclick=()=>document.getElementById('help').classList.remove('on');
   saveP.onclick=()=>dl('polyfusion_'+CUR+'_params.json',JSON.stringify(VALS,null,2));
@@ -317,13 +348,15 @@ function applyLang(){
   document.querySelectorAll('.sec-t[data-t]').forEach(e=>{const n=e.querySelector('.n');e.childNodes[0].textContent=T[LANG][e.dataset.t]+' ';if(n&&e.dataset.t==='params')n.textContent=T[LANG].liveN;});
   document.querySelectorAll('[data-t]').forEach(e=>{if(e.classList.contains('sec-t'))return;const k=e.dataset.t;if(T[LANG][k]&&!e.querySelector('*'))e.textContent=T[LANG][k];});
   run.textContent=T[LANG].runBtn;
+  document.getElementById('saveAsP').textContent='★ '+L('另存为预设','Save preset');
+  document.getElementById('delP').textContent='✕ '+L('删除预设','Delete preset');
   document.getElementById('helpBody').innerHTML=T[LANG].help;
 }
 function selectConfig(name){
   CUR=name;const m=CONFIGS[name];
   document.querySelectorAll('.cfg').forEach(b=>b.classList.toggle('on',b.dataset.c===name));
   const defP=(m.preset_groups&&Object.values(m.preset_groups).flat().find(n=>m.presets.includes(n)))||m.presets[0];
-  fillPresets(preset,m.presets,m.preset_groups,defP);
+  refreshPresetOptions(defP);
   const ps=m.params.filter(p=>p!=='icase'&&p!=='rc'&&p!=='zs'&&!BOOLS.has(p));
   fillSel(xkey,ps,m.scan_defaults.xkey);fillSel(ykey,ps,m.scan_defaults.ykey);
   const sd=m.scan_defaults;xmin.value=sd.xmin*dsc(sd.xkey);xmax.value=sd.xmax*dsc(sd.xkey);ymin.value=sd.ymin*dsc(sd.ykey);ymax.value=sd.ymax*dsc(sd.ykey);
@@ -334,9 +367,39 @@ function selectConfig(name){
   loadPreset();
 }
 async function loadPreset(){
-  const r=await jpost('/api/run',{config:CUR,preset:preset.value});
+  updateDelState();
+  const pv=preset.value||'';
+  if(pv.startsWith(UMARK)){
+    // user preset: server doesn't know it -> load locally and recompute via overrides
+    const name=pv.slice(UMARK.length);const stored=upGet(CUR)[name];
+    if(!stored){await selectConfig(CUR);return;}   // gone (e.g. cleared) -> reset
+    VALS=JSON.parse(JSON.stringify(stored));
+    buildParams();buildThresh();buildPlotOpts();fitScanRanges();
+    await recompute();setView(VIEW);
+    return;
+  }
+  const r=await jpost('/api/run',{config:CUR,preset:pv});
   VALS=Object.assign({},r.inputs);
   buildParams();buildThresh();buildPlotOpts();applyRun(r);fitScanRanges();setView(VIEW);
+}
+function savePreset(){
+  const raw=prompt(L('预设名称','Preset name'));
+  if(raw==null)return;
+  const name=raw.trim();
+  if(!name){alert(L('名称不能为空','Name cannot be empty'));return;}
+  if(name.startsWith(UMARK)){alert(L('名称不能以 ★ 开头','Name cannot start with ★'));return;}
+  if((name in upGet(CUR))&&!confirm(L('已存在同名预设，覆盖？','A preset with this name exists. Overwrite?')))return;
+  upSave(CUR,name,JSON.parse(JSON.stringify(VALS)));
+  refreshPresetOptions(UMARK+name);
+}
+function deletePreset(){
+  const pv=preset.value||'';
+  if(!pv.startsWith(UMARK))return;
+  const name=pv.slice(UMARK.length);
+  if(!confirm(L('删除预设 "','Delete preset "')+name+'"?'))return;
+  upDelete(CUR,name);
+  refreshPresetOptions();          // falls back to first packaged preset
+  loadPreset();
 }
 // keep the operating point inside the 2-D scan window: if the current value of
 // a scanned parameter falls outside [min,max], widen the bracket around it.
