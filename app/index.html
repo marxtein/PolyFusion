@@ -195,9 +195,12 @@ const META={
   f_shape:['分离面形状因子','separatrix shape (2/3=椭圆,1=跑道)','','geo','f<sub>V</sub>'],
   L_in_fac:['内边界/环半径','inner boundary in ring radii','','geo','L<sub>in</sub>/r<sub>c</sub>'],
   N_fp:['场周期数','field periods','','geo','N<sub>fp</sub>'],
-  kappa_s:['截面拉长比','section elongation','','geo','κ<sub>s</sub>'],
   delta_h:['轴螺旋偏移','helical axis excursion','m','geo','δ<sub>h</sub>'],
-  etabar:['近轴形参 η̄ (0=旋转椭圆模式)','near-axis etabar (0 = rotating-ellipse mode)','1/m','geo','η̄'],
+  etabar:['近轴形参 η̄ (塑形;拉长比为输出)','near-axis shaping η̄ (elongation is derived)','1/m','geo','η̄'],
+  Vp_override:['等离子体体积实测覆盖 (0=几何算)','plasma volume override (0=use geometry)','m³','geo','V_p^*'],
+  Sw_override:['壁面积实测覆盖 (0=几何算)','wall-area override (0=use geometry)','m²','geo','S_w^*'],
+  rc:['自定义轴 R 傅里叶 (逗号分隔; 留空=用 δ_h)','custom axis R Fourier (comma list; blank=use δ_h)','','geo','rc'],
+  zs:['自定义轴 Z 傅里叶 (逗号分隔; 留空=用 δ_h)','custom axis Z Fourier (comma list; blank=use δ_h)','','geo','zs'],
   ring_model:['有限环几何 (0=点偶极,1=载流环)','finite-ring geometry (0=point,1=loop)','','geo','ring'],
   f_alpha:['α沉积份额 (留空=损失锥自动)','alpha deposit fraction (blank = loss-cone auto)','','conf','f<sub>α</sub>'],
   B_expand:['端部扩张比','expander ratio','','conf','B<sub>exp</sub>'],
@@ -210,7 +213,7 @@ const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub
   Ptrans:'P<sub>trans</sub>',Pwall:'P<sub>wall</sub>',Eth:'E<sub>th</sub>',Qfus:'Q<sub>fus</sub>',H98:'H<sub>98</sub>',HST:'H<sub>ST</sub>',
   H_ISS04:'H<sub>ISS04</sub>',tau_c:'τ<sub>c</sub>',tau_E:'τ<sub>E</sub>',tau_ISS04:'τ<sub>ISS04</sub>',tau_Past:'τ<sub>Past</sub>',
   tau_gd:'τ<sub>gd</sub>',tau_rho:'τ<sub>ρ</sub>',ntau:'nτ',betaT:'β<sub>T</sub>',betaN:'β<sub>N</sub>',beta:'β',
-  beta_in:'β<sub>in</sub>',beta_out:'β<sub>out</sub>',U_ratio:'U<sub>out</sub>/U<sub>in</sub>',p_slope:'dlnp/dlnL',B_in:'B<sub>in</sub>',B_out:'B<sub>out</sub>',L_in:'L<sub>in</sub>',P_coll_flux:'q<sub>coll</sub>',P_alpha_loss:'P<sub>α,loss</sub>',Past_domain:'Past⊂dom',flux_p:'Φ<sub>p</sub>',K_rr:'K',A_throat:'A<sub>th</sub>',P_end_flux:'q<sub>end</sub>',iota_geom:'ι<sub>geom</sub>',L_ax:'L<sub>ax</sub>',kappa_s:'κ<sub>s</sub>',N_fp:'N<sub>fp</sub>',tau_ISS04:'τ<sub>ISS04</sub>',lambda_ii:'λ<sub>ii</sub>',beta_avg:'⟨β⟩',beta_null:'β<sub>null</sub>',beta_o_limit:'β/β<sub>lim</sub>',betap:'β<sub>p</sub>',q:'q',nbar_o_nGw:'n̄/n<sub>Gw</sub>',
+  beta_in:'β<sub>in</sub>',beta_out:'β<sub>out</sub>',U_ratio:'U<sub>out</sub>/U<sub>in</sub>',p_slope:'dlnp/dlnL',B_in:'B<sub>in</sub>',B_out:'B<sub>out</sub>',L_in:'L<sub>in</sub>',P_coll_flux:'q<sub>coll</sub>',P_alpha_loss:'P<sub>α,loss</sub>',Past_domain:'Past⊂dom',flux_p:'Φ<sub>p</sub>',K_rr:'K',A_throat:'A<sub>th</sub>',P_end_flux:'q<sub>end</sub>',iota_geom:'ι<sub>geom</sub>',L_ax:'L<sub>ax</sub>',N_fp:'N<sub>fp</sub>',tau_ISS04:'τ<sub>ISS04</sub>',lambda_ii:'λ<sub>ii</sub>',beta_avg:'⟨β⟩',beta_null:'β<sub>null</sub>',beta_o_limit:'β/β<sub>lim</sub>',betap:'β<sub>p</sub>',q:'q',nbar_o_nGw:'n̄/n<sub>Gw</sub>',
   nbar_o_Sudo:'n̄/n<sub>Sudo</sub>',x_s:'x<sub>s</sub>',s_param:'s',elongation:'ε',R_mc:'R<sub>mc</sub>',ne0:'n<sub>e0</sub>',
   ni0:'n<sub>i0</sub>',Vp:'V<sub>p</sub>',Zeff:'Z<sub>eff</sub>',M:'M',B0:'B<sub>0</sub>',B_int:'B<sub>int</sub>',
   G1:'G<sub>1</sub>',G2:'G<sub>2</sub>',GB:'G<sub>B</sub>',p_shape:'p<sub>shape</sub>',f_shape_calc:'f<sub>V,calc</sub>',geom_weighted:'geom',
@@ -229,7 +232,7 @@ const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'
 const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','Pth','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth']],
   ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ITPA20','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tau_ITPA20','tauE_used','taue_mode','tau_eta','tauN_o_taueta','tau_classical','tau_Bohm','ntau']],
   ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_avg','beta_null','beta_o_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain','P_LH','LH_ratio','a_over_rhoi']],
-  ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','fTavg','fnavg','Sp','Sw','L_ax','L_in','A_throat','flux_p','G1','G2','GB','p_shape','f_shape_calc','geom_weighted','A_flux','C_sec_mean','C_wall_mean','Vp_geom','Sp_geom','Sw_geom','lambda_ii','coll_ratio','nbar','kappa_s','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
+  ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','fTavg','fnavg','Sp','Sw','L_ax','L_in','A_throat','flux_p','G1','G2','GB','p_shape','f_shape_calc','geom_weighted','A_flux','C_sec_mean','C_wall_mean','Vp_geom','Sp_geom','Sw_geom','lambda_ii','coll_ratio','nbar','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
 const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_c','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','beta_o_limit']);
 const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 28 40 28 32 28 24 30 14 40 8Z"/>',
   mirror:'<path d="M10 20Q32 30 54 20M10 44Q32 34 54 44"/><circle cx="12" cy="32" r="8"/><circle cx="52" cy="32" r="8"/>',
@@ -263,7 +266,7 @@ const RANGES={
   B0:[0.5,12],BT0:[0.5,12],B_vac:[0.1,12],B_e:[0.5,12],B_ring:[0.5,15],
   R0:[1,25],A:[2,15],kappa:[1,3.5],a_c:[0.05,1.5],L_c:[1,30],
   r_s:[0.05,1.5],l_s:[0.5,10],r_w:[0.1,2],R_mirror:[2,50],
-  r_ring:[0.1,3],R_p:[1,20],kappa_s:[1,5],N_fp:[1,10],delta_h:[0,3],
+  r_ring:[0.1,3],R_p:[1,20],etabar:[0.01,0.2],N_fp:[1,10],delta_h:[0,3],
   Sn:[0,2],ST:[0,3],fsig:[0.1,2],fimp:[0,0.05],fHe:[0,0.2],Zimp:[1,74]
 };
 const jget=async u=>(await fetch(u)).json();
@@ -321,7 +324,7 @@ function selectConfig(name){
   document.querySelectorAll('.cfg').forEach(b=>b.classList.toggle('on',b.dataset.c===name));
   const defP=(m.preset_groups&&Object.values(m.preset_groups).flat().find(n=>m.presets.includes(n)))||m.presets[0];
   fillPresets(preset,m.presets,m.preset_groups,defP);
-  const ps=m.params.filter(p=>p!=='icase'&&!BOOLS.has(p));
+  const ps=m.params.filter(p=>p!=='icase'&&p!=='rc'&&p!=='zs'&&!BOOLS.has(p));
   fillSel(xkey,ps,m.scan_defaults.xkey);fillSel(ykey,ps,m.scan_defaults.ykey);
   const sd=m.scan_defaults;xmin.value=sd.xmin*dsc(sd.xkey);xmax.value=sd.xmax*dsc(sd.xkey);ymin.value=sd.ymin*dsc(sd.ykey);ymax.value=sd.ymax*dsc(sd.ykey);
   xkey.onchange=()=>{const r=RANGES[xkey.value]||[0,1];xmin.value=r[0]*dsc(xkey.value);xmax.value=r[1]*dsc(xkey.value);fitAxis(xkey.value,xmin,xmax);};
@@ -363,6 +366,9 @@ function buildParams(){
       else if(p==='icase'){html+=`<div class="fld full"><label title="${desc}">${desc}</label><select data-p="icase">${Object.entries(RX).map(([k,v])=>`<option value="${k}" ${+VALS.icase===+k?'selected':''}>${k} · ${v}</option>`).join('')}</select></div>`;}
       else if(p==='imp_name'){const SP=['','He','Li','Be','C','N','O','Ne','Ar','Kr','Xe','W'];
         html+=`<div class="fld"><label title="${desc}"><span class="sym">imp</span><span class="nm">${desc}</span></label><select data-p="imp_name">${SP.map(s=>`<option value="${s}" ${(VALS.imp_name||'')===s?'selected':''}>${s||L('关闭(默认)','off (default)')}</option>`).join('')}</select></div>`;}
+      else if(p==='rc'||p==='zs'){const tip=(m[1]+' · '+m[0]).replace(/<[^>]+>/g,'');
+        const cur=Array.isArray(VALS[p])?VALS[p].join(','):'';
+        html+=`<div class="fld full"><label title="${tip}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span></label><input type="text" data-p="${p}" placeholder="e.g. 18,0.9,0.1" value="${cur}"></div>`;}
       else{const dn=DENS.has(p);const un=dn?'10²⁰ m⁻³':m[2];const u=un?`<span class="u">[${un}]</span>`:'';
         const tip=(m[1]+' · '+m[0]).replace(/<[^>]+>/g,'');
         html+=`<div class="fld"><label title="${tip}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span>${u}</label><input type="number" step="any" data-p="${p}" ${dn?'data-sc="1e20"':''} value="${fmtIn(dn?VALS[p]*1e-20:VALS[p])}"></div>`;}
@@ -378,6 +384,11 @@ function buildParams(){
         if(IMPZ[el.value]){VALS.Zimp=IMPZ[el.value];
           const zEl=box.querySelector('[data-p="Zimp"]');if(zEl)zEl.value=IMPZ[el.value];}}
       else delete VALS.imp_name;}
+    else if(el.dataset.p==='rc'||el.dataset.p==='zs'){
+      // custom near-axis Fourier list: comma-separated floats. blank or all-bad
+      // -> drop the key entirely so backend falls back to its delta_h default.
+      const arr=(el.value||'').split(',').map(s=>parseFloat(s.trim())).filter(x=>isFinite(x));
+      if(arr.length)VALS[el.dataset.p]=arr;else delete VALS[el.dataset.p];}
     else if(el.dataset.bool)VALS[el.dataset.p]=+el.value;
     else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
     applyModeLocks();
@@ -390,6 +401,19 @@ function applyModeLocks(){
   if(FORCE_TAUE.has(CUR)){VALS.use_tauE=1;document.querySelectorAll('[data-p="use_tauE"]').forEach(el=>el.value='1');lock('use_tauE',true);lock('tauE',false);return;}
   lock('tauE',!manual);
   (SELF_LOSS_PARAMS[CUR]||[]).forEach(p=>lock(p,manual));
+  // stellarator: when iota is measured (>0) the near-axis transform is overridden,
+  // but etabar still drives elongation/Sw — annotate (do NOT disable) the field.
+  if(CUR==='stellarator'){
+    const measured=typeof VALS.iota==='number'&&VALS.iota>0;
+    document.querySelectorAll('[data-p="etabar"]').forEach(el=>{
+      const f=el.closest('.fld');if(!f)return;
+      const lab=f.querySelector('label'),nm=f.querySelector('.nm');
+      const base=L(META.etabar[0],META.etabar[1]);
+      const hint=L('实测 ι：η̄ 与轴仅定尺寸/拉长比，不改旋转变换','measured iota: η̄ & axis set size/elongation only, not the transform');
+      if(lab)lab.title=measured?base+' — '+hint:base;
+      if(nm)nm.textContent=measured?base+' ⚠':base;
+    });
+  }
 }
 function updateA0(){const h=[...document.querySelectorAll('.grp-h .a0')][0];if(h&&'R0'in VALS&&'A'in VALS)h.innerHTML=`<i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m`;}
 function buildThresh(){
@@ -429,7 +453,7 @@ function buildPlotOpts(){
   box.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{const f=o.dataset.f;PLOTSEL.has(f)?PLOTSEL.delete(f):PLOTSEL.add(f);buildPlotOpts();if(VIEW==='popcon')drawPopcon();});
 }
 function fmtIn(v){if(typeof v!=='number'||!isFinite(v))return '';const a=Math.abs(v);if(a!==0&&(a<1e-3||a>=1e5))return v.toExponential(3);return +v.toFixed(6);}
-function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return o;}
+function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(Array.isArray(v)){const a=v.filter(x=>typeof x==='number'&&isFinite(x));if(a.length)o[k]=a;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return o;}
 async function recompute(){const r=await jpost('/api/run',{config:CUR,overrides:clean()});applyRun(r);if(VIEW!=='popcon')setView(VIEW);}
 function applyRun(r){
   LASTRUN=r;const box=document.getElementById('results');
@@ -542,11 +566,13 @@ function drawShape(){
       const cols=['#ff5d73','#e9eef7','#36e2c4'];
       sh.sections.forEach((s,si)=>{const surfs=s.surfaces||[{rho:1,R:s.R,Z:s.Z}];
         surfs.forEach((q,qi)=>{const isB=qi===surfs.length-1;
-          const t=add({type:'scatter',mode:'lines',x:q.R,y:q.Z,line:{color:isB?cols[si%cols.length]:'#8fb6c7',width:isB?2.5:1.18},opacity:isB?1:0.68},isB?'boundary':'flux');});});
+          const t=add({type:'scatter',mode:'lines',x:q.R,y:q.Z,line:{color:isB?cols[si%cols.length]:'#8fb6c7',width:isB?2.5:1.18},opacity:isB?1:0.68},isB?'boundary':'flux');});
+        // Scheme D: near-axis wall polygon = boundary + gap g, returned per section
+        if(s.wall)add({type:'scatter',mode:'lines',x:s.wall.R,y:s.wall.Z,line:{color:GC('wall'),width:2.0,dash:'dash'},opacity:0.9},'wall');});
       if(sh.axis)add({type:'scatter',mode:'markers+text',x:sh.sections.map(s=>s.surfaces?avg(s.surfaces[0].R):avg(s.R)),
         y:sh.sections.map(s=>s.surfaces?avg(s.surfaces[0].Z):avg(s.Z)),
         text:sh.sections.map(_=>L('磁轴','axis')),textposition:'bottom center',textfont:{color:'#ff5d8f',size:10},marker:{color:'#ff5d8f',size:6}},'annot');
-      document.getElementById('plotMeta').innerHTML=`<span>${L('后端解析磁面：','backend flux surfaces: ')}${sh.mode} · ${L('壁面待下一阶段(Scheme D)','wall pending next phase (Scheme D)')}</span>`;
+      document.getElementById('plotMeta').innerHTML=`<span>${L('后端解析磁面：','backend flux surfaces: ')}${sh.mode} · ${L('壁面 = 边界 + g','wall = boundary + g')}</span>`;
     }else document.getElementById('plotMeta').innerHTML=`<span>${L('等待后端解析磁面','waiting for backend flux surfaces')}</span>`;
   }else if(CUR==='mirror'){
     const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
