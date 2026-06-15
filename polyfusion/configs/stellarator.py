@@ -124,6 +124,35 @@ def boundary_metrics(boundary_fn, nfp, g=0.0, n_phi=120):
     return float(V), float(S)
 
 
+def _shape_boundary_fn(R0, a, shape, n_theta=200):
+    """Return ``(boundary_fn, nfp)`` for an explicit Fourier ``shape`` descriptor.
+
+    ``boundary_fn(phi) -> (R[n_theta], Z[n_theta])`` evaluates the DESC
+    double-Fourier product basis (same as the display), so the integrated
+    volume/area come from the exact boundary the UI draws.
+    """
+    nfp = int(shape.get("nfp"))
+    R_modes = [(int(m), int(n), float(c)) for m, n, c in shape["R"]]
+    Z_modes = [(int(m), int(n), float(c)) for m, n, c in shape["Z"]]
+    th = np.linspace(0.0, 2 * math.pi, n_theta, endpoint=False)
+    cos_m = {}
+    for m, _, _ in R_modes + Z_modes:
+        if m not in cos_m:
+            cos_m[m] = np.cos(m * th) if m >= 0 else np.sin(-m * th)
+
+    def boundary_fn(phi):
+        Rh = np.zeros(n_theta); Zh = np.zeros(n_theta)
+        for m, n, c in R_modes:
+            Bn = math.cos(n * nfp * phi) if n >= 0 else math.sin(-n * nfp * phi)
+            Rh += c * cos_m[m] * Bn
+        for m, n, c in Z_modes:
+            Bn = math.cos(n * nfp * phi) if n >= 0 else math.sin(-n * nfp * phi)
+            Zh += c * cos_m[m] * Bn
+        return R0 + a * Rh, a * Zh
+
+    return boundary_fn, nfp
+
+
 def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
     """Explicit Fourier boundary for a real machine (SHAPE VIEW), from a public
     equilibrium.
@@ -522,7 +551,7 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                       etabar=0.05, imp_name=None, f_aux_e=0.5,
                       H_fac=1.0, use_tauE=1.0,
                       rc=None, zs=None, Vp_override=0.0,
-                      Sw_override=0.0) -> StellaratorResult:
+                      Sw_override=0.0, shape=None) -> StellaratorResult:
     """Evaluate the 0-D stellarator power balance at one operating point.
 
     Single near-axis (Garren-Boozer) geometry (Scheme D).  ``etabar`` [1/m] is
@@ -563,7 +592,7 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                                      imp_name=imp_name, f_aux_e=f_aux_e,
                                      H_fac=H_fac, use_tauE=1.0,
                                      rc=rc, zs=zs, Vp_override=Vp_override,
-                                     Sw_override=Sw_override)
+                                     Sw_override=Sw_override, shape=shape)
 
         def _resid_t(t, res):
             return H_fac - res.H_ISS04
@@ -582,7 +611,7 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                                      imp_name=imp_name, f_aux_e=f_aux_e,
                                      H_fac=H_fac, use_tauE=1.0,
                                      rc=rc, zs=zs, Vp_override=Vp_override,
-                                     Sw_override=Sw_override)
+                                     Sw_override=Sw_override, shape=shape)
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
@@ -600,18 +629,25 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     geom = stellarator_geometry_metrics(R0, A, N_fp, axis_rc, axis_zs, etabar, g)
     L_ax = geom["L_ax"]; iota_geom = geom["iota_geom"]
     helicity = geom["helicity"]; kappa_eff = geom["kappa_eff"]; elong_max = geom["elong_max"]
-    Vp = Vp_override if (Vp_override and Vp_override > 0) else geom["Vp_geom"]
+    # geometric volume/wall: when an explicit Fourier ``shape`` is given (real
+    # machines / custom boundaries), integrate that EXACT boundary — the same one
+    # the UI draws — so frontend shape and backend power geometry are identical.
+    # Otherwise use the near-axis estimate (concepts: pi a^2 * L_ax).
+    Vp_geom = geom["Vp_geom"]; Sw_geom = geom["Sw_geom"]
+    if shape is not None:
+        _bfn, _nfp = _shape_boundary_fn(R0, a, shape)
+        Vp_geom, Sw_geom = boundary_metrics(_bfn, _nfp, g)
+    Vp = Vp_override if (Vp_override and Vp_override > 0) else Vp_geom
     Sp = geom["Sp_geom"]
-    Sw = Sw_override if (Sw_override and Sw_override > 0) else geom["Sw_geom"]
-    # measured machine: both volume and wall are measured overrides, so the
-    # single-harmonic near-axis geometry is discarded.  Report the geometric
-    # volume/wall AS the values actually used (consistency), and flag that the
-    # remaining near-axis diagnostics (iota_geom/kappa_eff/elong_max) are
-    # estimates, not the machine's real geometry.
+    Sw = Sw_override if (Sw_override and Sw_override > 0) else Sw_geom
+    # measured machine: Vp AND Sw are measured overrides, so the near-axis
+    # diagnostics (iota_geom/kappa_eff/elong_max) are estimates only; flag it.
+    # Vp_geom/Sw_geom are reported as the (exact-integral or near-axis) geometry
+    # estimate so the user can compare measured vs computed geometry.
     geom_is_measured = 1.0 if (Vp_override and Vp_override > 0
                                and Sw_override and Sw_override > 0) else 0.0
-    Vp_geom_report = Vp
-    Sw_geom_report = Sw
+    Vp_geom_report = Vp_geom
+    Sw_geom_report = Sw_geom
     iota_used = iota if (iota is not None and iota > 0) else iota_geom
     if iota_used <= _IOTA_MIN:
         raise ValueError("rotational transform is ~0: give an explicit iota "

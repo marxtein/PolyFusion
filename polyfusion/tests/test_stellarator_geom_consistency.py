@@ -1,11 +1,11 @@
-"""Backend geometry diagnostics must be consistent with the values actually used.
+"""Backend geometry diagnostics are consistent with the displayed boundary.
 
-For measured machines (Vp_override AND Sw_override set) the single-harmonic
-near-axis geometry is discarded, so reporting its near-axis Vp_geom/Sw_geom
-(e.g. W7-X Sw_geom=268 vs Sw used=128) is misleading.  The reported geometric
-volume/wall are set to the values actually used, and a ``geom_is_measured`` flag
-lets the UI label the remaining near-axis estimates (iota_geom/kappa_eff/
-elong_max) as estimates rather than the machine's real geometry.
+For a measured machine (Vp_override AND Sw_override set) the power account uses
+the measured Vp/Sw, while Vp_geom/Sw_geom now report the EXACT integral of the
+displayed Fourier boundary (a real geometry estimate, e.g. W7-X Vp_geom~32.8 vs
+measured Vp=30) — no longer the unphysical near-axis value.  geom_is_measured
+flags that iota_geom/kappa_eff/elong_max are near-axis estimates.  For concept
+reactors (no override) the near-axis geometry IS what is used, so Vp_geom == Vp.
 
 Run: python polyfusion/tests/test_stellarator_geom_consistency.py
 """
@@ -31,10 +31,16 @@ def main():
     for name in MACHINES:
         o = run_preset(name, "stellarator")["outputs"]
         ok(o["geom_is_measured"] == 1.0, f"{name}: geom_is_measured == 1")
-        ok(abs(o["Vp_geom"] - o["Vp"]) < 1e-9 * max(o["Vp"], 1),
-           f"{name}: Vp_geom == Vp used ({o['Vp_geom']:.3f} == {o['Vp']:.3f})")
-        ok(abs(o["Sw_geom"] - o["Sw"]) < 1e-9 * max(o["Sw"], 1),
-           f"{name}: Sw_geom == Sw used ({o['Sw_geom']:.3f} == {o['Sw']:.3f})")
+        # power account uses the measured override
+        ok(o["Vp"] > 0 and o["Sw"] > 0, f"{name}: measured Vp/Sw used")
+        # Vp_geom/Sw_geom report the exact-integral geometry estimate (sane,
+        # within ~40% of measured), NOT the discarded near-axis value
+        ok(0.6 < o["Vp_geom"] / o["Vp"] < 1.6,
+           f"{name}: Vp_geom is the boundary-integral estimate "
+           f"({o['Vp_geom']:.3f} vs measured {o['Vp']:.3f})")
+        ok(0.6 < o["Sw_geom"] / o["Sw"] < 1.6,
+           f"{name}: Sw_geom is the boundary-integral estimate "
+           f"({o['Sw_geom']:.3f} vs measured {o['Sw']:.3f})")
 
     for name in CONCEPTS:
         o = run_preset(name, "stellarator")["outputs"]

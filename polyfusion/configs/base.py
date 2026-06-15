@@ -38,7 +38,7 @@ _DIPOLE_PARAMS = ["use_tauE", "r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "ta
 _STELL_PARAMS = ["use_tauE", "R0", "A", "N_fp", "delta_h", "etabar", "Sn", "ST",
                  "ni0", "Ti0", "fT", "fsig", "f1", "B0", "iota", "tauE", "fHe",
                  "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name",
-                 "H_fac", "rc", "zs", "Vp_override", "Sw_override"]
+                 "H_fac", "rc", "zs", "Vp_override", "Sw_override", "shape"]
 
 # Machine presets for every non-tokamak configuration now live in JSON data
 # files (``polyfusion/presets/<config>.json``, with any
@@ -414,7 +414,7 @@ STELLARATOR = ConfigSpec(
     # are optional overrides.
     required=[p for p in _STELL_PARAMS
               if p not in ("f_ren", "iota", "delta_h", "imp_name", "H_fac",
-                            "rc", "zs", "Vp_override", "Sw_override")],
+                            "rc", "zs", "Vp_override", "Sw_override", "shape")],
     positive=["R0", "A", "N_fp", "ni0", "Ti0", "B0",
               "Zimp", "f_ren"],
     bounds={**_COMMON_BOUNDS, "delta_h": (0.0, None), "N_fp": (1.0, None),
