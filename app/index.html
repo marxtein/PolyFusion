@@ -433,7 +433,7 @@ function buildParams(){
   let html='';
   for(const[gk,gz,ge]of GROUPS){if(!groups[gk])continue;
     let a0='';if(gk==='geo'&&'R0'in VALS&&'A'in VALS)a0=`<span class="a0"><i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m</span>`;
-    html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div><div class="pgrid">`;
+    html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div><div class="pgrid" data-grp="${gk}">`;
     for(const p of groups[gk]){const m=META[p];const desc=L(m[0],m[1]);
       if(BOOLS.has(p)){const onTxt=p==='use_tauE'?L('开启：输入 τE','on: input tauE'):L('开启','on');
         const offTxt=p==='use_tauE'?L('关闭：自洽损失','off: self-consistent losses'):L('关闭','off');
@@ -459,7 +459,11 @@ function buildParams(){
     const bar=document.createElement('div');bar.className='advbar';
     bar.innerHTML=`<button id="advBtn" class="advbtn${ADVANCED?' on':''}">`+
       `${ADVANCED?'▾ ':'▸ '}${L('高级输入（自定义轴 / 实测体积·面积覆写）','Advanced (custom axis / measured Vp·Sw)')}</button>`;
-    box.prepend(bar);
+    // place the toggle at the END of the geometry group so the advanced fields
+    // (rc/zs/Vp*/Sw*, which live in that group) expand in place right below it,
+    // instead of floating at the very top of the whole parameter panel.
+    const geoGrid=box.querySelector('.pgrid[data-grp="geo"]');
+    if(geoGrid)geoGrid.insertAdjacentElement('afterend',bar);else box.prepend(bar);
     document.getElementById('advBtn').onclick=()=>{ADVANCED=!ADVANCED;buildParams();};
   }
   // selecting a line-radiation species auto-fills Zimp with its nuclear
