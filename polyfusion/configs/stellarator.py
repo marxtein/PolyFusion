@@ -631,6 +631,57 @@ class StellaratorResult:
         return asdict(self)
 
 
+_GEOM_CACHE: dict = {}
+
+
+def _stellarator_geometry(R0, A, N_fp, delta_h, etabar, g, rc, zs, shape,
+                          B2c=0.0):
+    """Scan-invariant stellarator geometry (near-axis solves + exact boundary
+    integral), MEMOIZED.
+
+    A POPCON scan sweeps Ti0/ni0/B0/density/temperature — none of which change
+    the geometry — yet ``solve_stellarator`` was recomputing the (expensive)
+    near-axis r1+r2 solves and the boundary integral at every one of the
+    ~nx*ny grid points (and at every step of the tauE/Te self-consistency
+    recursion).  Keyed by the geometry parameters ONLY, this is computed once
+    and reused across the whole grid.  If a scan key IS geometric (R0, A, N_fp,
+    delta_h, etabar, g, or the axis/shape), the key changes and it recomputes —
+    so the cache is always correct, never stale.
+
+    Returns the ``stellarator_geometry_metrics`` dict plus ``Vp_integ`` /
+    ``Sw_integ`` (the exact toroidal volume / wall area of the drawn boundary).
+    """
+    rc_key = tuple(rc) if rc is not None else None
+    zs_key = tuple(zs) if zs is not None else None
+    shape_key = None if shape is None else (
+        int(shape.get("nfp", round(N_fp))),
+        tuple(tuple(t) for t in shape["R"]),
+        tuple(tuple(t) for t in shape["Z"]))
+    key = (R0, A, int(round(N_fp)), delta_h, etabar, g,
+           rc_key, zs_key, shape_key, B2c)
+    cached = _GEOM_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    a = R0 / A
+    axis_rc = list(rc) if rc is not None else [R0, delta_h]
+    axis_zs = list(zs) if zs is not None else [0.0, -delta_h]
+    geom = stellarator_geometry_metrics(R0, A, N_fp, axis_rc, axis_zs, etabar, g)
+    if shape is not None:
+        bfn, nfp = _shape_boundary_fn(R0, a, shape)
+    else:
+        bfn, nfp = _nearaxis_boundary_fn(R0, A, N_fp, delta_h, etabar,
+                                         rc=rc, zs=zs, B2c=B2c)
+    Vp_geom, Sw_geom = boundary_metrics(bfn, nfp, g)
+    res = dict(geom)
+    res["Vp_integ"] = Vp_geom
+    res["Sw_integ"] = Sw_geom
+    if len(_GEOM_CACHE) >= 256:        # bound memory; geometry sets are tiny
+        _GEOM_CACHE.clear()
+    _GEOM_CACHE[key] = res
+    return res
+
+
 def _check_inputs(R0, A, N_fp, delta_h, Sn, ST, fT, B0, tauE,
                   f1, fHe, fimp, Zimp, Rw, g, fsig, etabar):
     """Domain guards (audit P0).  Raise ValueError on unphysical inputs so
@@ -744,23 +795,15 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
                            fT_used=ft, Te0=ft * Ti0)
 
     a = R0 / A
-    axis_rc = list(rc) if rc is not None else [R0, delta_h]
-    axis_zs = list(zs) if zs is not None else [0.0, -delta_h]
-    geom = stellarator_geometry_metrics(R0, A, N_fp, axis_rc, axis_zs, etabar, g)
+    # scan-invariant geometry (near-axis solves + exact boundary integral),
+    # memoized so a POPCON scan / the tauE recursion computes it ONCE.  The
+    # boundary volume/wall is ALWAYS the exact integral of the EXACT boundary the
+    # UI draws (shape Fourier for machines, near-axis capped-r2 bean for
+    # concepts), so frontend shape and backend power geometry are identical.
+    geom = _stellarator_geometry(R0, A, N_fp, delta_h, etabar, g, rc, zs, shape)
     L_ax = geom["L_ax"]; iota_geom = geom["iota_geom"]
     helicity = geom["helicity"]; kappa_eff = geom["kappa_eff"]; elong_max = geom["elong_max"]
-    # geometric volume/wall: ALWAYS the exact integral of the EXACT boundary the
-    # UI draws, so frontend shape and backend power geometry are identical.  Real
-    # machines / custom boundaries integrate the explicit Fourier ``shape``;
-    # concepts integrate the near-axis capped-r2 boundary (the same drawn bean).
-    # (The near-axis Pappus estimate geom["Vp_geom"]=pi a^2 L_ax is kept only as
-    # the analytic A_flux diagnostic, no longer the power-account volume.)
-    if shape is not None:
-        _bfn, _nfp = _shape_boundary_fn(R0, a, shape)
-    else:
-        _bfn, _nfp = _nearaxis_boundary_fn(R0, A, N_fp, delta_h, etabar,
-                                           rc=rc, zs=zs)
-    Vp_geom, Sw_geom = boundary_metrics(_bfn, _nfp, g)
+    Vp_geom = geom["Vp_integ"]; Sw_geom = geom["Sw_integ"]
     Vp = Vp_override if (Vp_override and Vp_override > 0) else Vp_geom
     Sp = geom["Sp_geom"]
     Sw = Sw_override if (Sw_override and Sw_override > 0) else Sw_geom

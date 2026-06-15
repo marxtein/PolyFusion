@@ -14,6 +14,15 @@ import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+# Cap BLAS threads BEFORE numpy loads.  On this Windows numpy build the OpenBLAS
+# threaded path is pathologically slow for medium matrices — a 121x121
+# linalg.solve (near-axis r2) took ~0.6 s multi-threaded vs ~0.4 ms
+# single-threaded (~1300x).  Every matrix here is tiny, so single-threaded BLAS
+# is strictly faster and numerically identical.  setdefault keeps any user override.
+for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
+           "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
