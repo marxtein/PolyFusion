@@ -400,9 +400,11 @@ class StellaratorResult:
     A_flux: float     # analytic flux-section area [m^2]
     C_sec_mean: float # arclength-weighted plasma section perimeter [m]
     C_wall_mean: float # arclength-weighted wall section perimeter [m]
-    Vp_geom: float    # geometry-helper plasma volume [m^3]
+    Vp_geom: float    # plasma volume used [m^3] (= override for measured machines)
     Sp_geom: float    # geometry-helper plasma surface area [m^2]
-    Sw_geom: float    # geometry-helper wall surface area [m^2]
+    Sw_geom: float    # wall surface area used [m^2] (= override for measured machines)
+    geom_is_measured: float  # 1 if Vp & Sw are measured overrides (near-axis
+                             # iota_geom/kappa_eff/elong_max are then estimates only)
     ne0: float
     nbar: float
     M: float
@@ -547,6 +549,15 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     Vp = Vp_override if (Vp_override and Vp_override > 0) else geom["Vp_geom"]
     Sp = geom["Sp_geom"]
     Sw = Sw_override if (Sw_override and Sw_override > 0) else geom["Sw_geom"]
+    # measured machine: both volume and wall are measured overrides, so the
+    # single-harmonic near-axis geometry is discarded.  Report the geometric
+    # volume/wall AS the values actually used (consistency), and flag that the
+    # remaining near-axis diagnostics (iota_geom/kappa_eff/elong_max) are
+    # estimates, not the machine's real geometry.
+    geom_is_measured = 1.0 if (Vp_override and Vp_override > 0
+                               and Sw_override and Sw_override > 0) else 0.0
+    Vp_geom_report = Vp
+    Sw_geom_report = Sw
     iota_used = iota if (iota is not None and iota > 0) else iota_geom
     if iota_used <= _IOTA_MIN:
         raise ValueError("rotational transform is ~0: give an explicit iota "
@@ -637,8 +648,9 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         iota=iota_used, iota_geom=iota_geom, helicity=helicity, L_ax=L_ax,
         kappa_eff=kappa_eff, elong_max=elong_max, tau_ISS04=tau_ISS04,
         Sp=Sp, Sw=Sw, A_flux=geom["A_flux"], C_sec_mean=geom["C_sec_mean"],
-        C_wall_mean=geom["C_wall_mean"], Vp_geom=geom["Vp_geom"],
-        Sp_geom=geom["Sp_geom"], Sw_geom=geom["Sw_geom"],
+        C_wall_mean=geom["C_wall_mean"], Vp_geom=Vp_geom_report,
+        Sp_geom=geom["Sp_geom"], Sw_geom=Sw_geom_report,
+        geom_is_measured=geom_is_measured,
         ne0=ne0, nbar=nbar, M=M, Zeff=Zeff,
         N_fp=N_fp, etabar=etabar,
         P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,

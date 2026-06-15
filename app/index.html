@@ -91,6 +91,10 @@
   .chip{margin-left:auto;display:flex;gap:7px}
   .chip span{font-size:10px;letter-spacing:.04em;color:var(--mut);border:1px solid var(--line2);border-radius:20px;padding:2px 9px;background:var(--panel)}
   .chip b{color:var(--teal);font-family:"JetBrains Mono"}
+  .phsel{margin-left:14px;display:inline-flex;align-items:center;gap:5px}
+  .phbtn{font-size:10.5px;color:var(--mut);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;background:var(--panel);cursor:pointer;font-family:"JetBrains Mono"}
+  .phbtn:hover{border-color:var(--teal);color:var(--fg)}
+  .phbtn.on{border-color:var(--teal);color:var(--teal);background:rgba(54,226,196,.1)}
   #plot{flex:1;min-height:0;width:100%}
   .badge{display:inline-flex;font-size:10px;letter-spacing:.08em;color:var(--teal);border:1px solid rgba(54,226,196,.35);border-radius:20px;padding:2px 8px;text-transform:uppercase}
   .grp{margin-bottom:12px}
@@ -250,7 +254,7 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   opPoint:'Operating Point',saveP:'⬇ Save Params',loadP:'⬆ Load Params',expJson:'⬇ Result JSON',expCsv:'⬇ Scan CSV',
   tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
   help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
-let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set();
+let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1;
 
 const DENS=new Set(['ni0','n0']);const BOOLS=new Set(['use_tauE','geom_weighted']);const dsc=k=>DENS.has(k)?1e-20:1;  // density display in 10^20 m^-3
 const SELF_LOSS_PARAMS={
@@ -627,15 +631,26 @@ function drawShape(){
     const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.sections)?LASTRUN.shape:null;
     if(sh){
       const cols=['#ff5d73','#e9eef7','#36e2c4'];
-      sh.sections.forEach((s,si)=>{const surfs=s.surfaces||[{rho:1,R:s.R,Z:s.Z}];
+      // phase (toroidal cut) selector: -1 = show all, else only that section
+      const nsec=sh.sections.length;
+      if(SHAPE_PHASE>=nsec)SHAPE_PHASE=-1;
+      const shown=sh.sections.map((s,i)=>i).filter(i=>SHAPE_PHASE<0||i===SHAPE_PHASE);
+      shown.forEach(si=>{const s=sh.sections[si];const surfs=s.surfaces||[{rho:1,R:s.R,Z:s.Z}];
         surfs.forEach((q,qi)=>{const isB=qi===surfs.length-1;
-          const t=add({type:'scatter',mode:'lines',x:q.R,y:q.Z,line:{color:isB?cols[si%cols.length]:'#8fb6c7',width:isB?2.5:1.18},opacity:isB?1:0.68},isB?'boundary':'flux');});
+          add({type:'scatter',mode:'lines',x:q.R,y:q.Z,line:{color:isB?cols[si%cols.length]:'#8fb6c7',width:isB?2.5:1.18},opacity:isB?1:0.68},isB?'boundary':'flux');});
         // Scheme D: near-axis wall polygon = boundary + gap g, returned per section
         if(s.wall)add({type:'scatter',mode:'lines',x:s.wall.R,y:s.wall.Z,line:{color:GC('wall'),width:2.0,dash:'dash'},opacity:0.9},'wall');});
-      if(sh.axis)add({type:'scatter',mode:'markers+text',x:sh.sections.map(s=>s.surfaces?avg(s.surfaces[0].R):avg(s.R)),
-        y:sh.sections.map(s=>s.surfaces?avg(s.surfaces[0].Z):avg(s.Z)),
-        text:sh.sections.map(_=>L('磁轴','axis')),textposition:'bottom center',textfont:{color:'#ff5d8f',size:10},marker:{color:'#ff5d8f',size:6}},'annot');
-      document.getElementById('plotMeta').innerHTML=`<span>${L('后端解析磁面：','backend flux surfaces: ')}${sh.mode} · ${L('壁面 = 边界 + g','wall = boundary + g')}</span>`;
+      if(sh.axis)add({type:'scatter',mode:'markers+text',x:shown.map(si=>{const s=sh.sections[si];return s.surfaces?avg(s.surfaces[0].R):avg(s.R);}),
+        y:shown.map(si=>{const s=sh.sections[si];return s.surfaces?avg(s.surfaces[0].Z):avg(s.Z);}),
+        text:shown.map(_=>L('磁轴','axis')),textposition:'bottom center',textfont:{color:'#ff5d8f',size:10},marker:{color:'#ff5d8f',size:6}},'annot');
+      // phase toggle buttons (default: all phases)
+      const phBtn=(ph,lab,on)=>`<button class="phbtn${on?' on':''}" data-ph="${ph}">${lab}</button>`;
+      const btns=phBtn(-1,L('全部相位','all φ'),SHAPE_PHASE<0)+
+        sh.sections.map((s,i)=>phBtn(i,s.label,SHAPE_PHASE===i)).join('');
+      document.getElementById('plotMeta').innerHTML=
+        `<span>${L('后端解析磁面：','backend flux surfaces: ')}${sh.mode} · ${L('壁面 = 边界 + g','wall = boundary + g')}</span>`+
+        `<span class="phsel">${L('相位 φ：','phase φ: ')}${btns}</span>`;
+      document.querySelectorAll('#plotMeta .phbtn').forEach(b=>b.onclick=()=>{SHAPE_PHASE=+b.dataset.ph;drawShape();});
     }else document.getElementById('plotMeta').innerHTML=`<span>${L('等待后端解析磁面','waiting for backend flux surfaces')}</span>`;
   }else if(CUR==='mirror'){
     const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
