@@ -115,14 +115,18 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
     for frac, label in cuts:
         phi = frac * 2 * math.pi / nfp
         Rh, Zh = _shape_RZ(phi)
-        cR = R0                                  # axis already in the harmonics
+        Rb = R0 + a * Rh                          # boundary at this cut
+        Zb = a * Zh
+        # nest the flux surfaces and offset the wall from the TRUE section
+        # centroid: the n!=0 harmonics shift each toroidal cut away from R0, so
+        # scaling from R0 (which can fall OUTSIDE the cut) fans surfaces past the
+        # wall.  Centroid scaling keeps surfaces ⊂ boundary ⊂ wall.
+        cR = float(Rb.mean()); cZ = float(Zb.mean())
         surfaces = []
         for rho in rhos:
-            R = R0 + rho * a * Rh
-            Z = rho * a * Zh
-            surfaces.append({"rho": float(rho), "R": R.tolist(), "Z": Z.tolist()})
-        Rb = np.asarray(surfaces[-1]["R"]); Zb = np.asarray(surfaces[-1]["Z"])
-        cZ = float(Zb.mean())
+            surfaces.append({"rho": float(rho),
+                             "R": (cR + rho * (Rb - cR)).tolist(),
+                             "Z": (cZ + rho * (Zb - cZ)).tolist()})
         elong = float((Zb.max() - Zb.min()) / (Rb.max() - Rb.min()))
         sec = {"label": label, "elong": elong,
                "R": Rb.tolist(), "Z": Zb.tolist(), "surfaces": surfaces}
