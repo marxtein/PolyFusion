@@ -101,35 +101,34 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
     rhos = (0.25, 0.4, 0.55, 0.7, 0.85, 1.0)
     cuts = [(0.0, "φ=0"), (0.25, "φ=T/4"), (0.5, "φ=T/2")]
 
-    def _shape_RZ(phi):
+    def _shape_RZ(phi, rho=1.0):
+        # nested flux surfaces: scale each poloidal harmonic m by rho^|m|.  The
+        # m=0 part (the magnetic-axis position at this phi) does NOT scale, so
+        # surfaces collapse onto the axis; the m=2 (bean) term fades as rho^2,
+        # so inner surfaces round out to the m=1 ellipse — as real flux surfaces
+        # do.  (Uniform rho scaling made every inner surface a mini-bean.)
         Rh = np.zeros_like(th); Zh = np.zeros_like(th)
         for m, n, c in R_modes:
             Bn = math.cos(n * nfp * phi) if n >= 0 else math.sin(-n * nfp * phi)
-            Rh += c * cos_m[m] * Bn
+            Rh += c * rho ** abs(m) * cos_m[m] * Bn
         for m, n, c in Z_modes:
             Bn = math.cos(n * nfp * phi) if n >= 0 else math.sin(-n * nfp * phi)
-            Zh += c * cos_m[m] * Bn
-        return Rh, Zh
+            Zh += c * rho ** abs(m) * cos_m[m] * Bn
+        return R0 + a * Rh, a * Zh
 
     sections = []
     for frac, label in cuts:
         phi = frac * 2 * math.pi / nfp
-        Rh, Zh = _shape_RZ(phi)
-        Rb = R0 + a * Rh                          # boundary at this cut
-        Zb = a * Zh
-        # nest the flux surfaces and offset the wall from the TRUE section
-        # centroid: the n!=0 harmonics shift each toroidal cut away from R0, so
-        # scaling from R0 (which can fall OUTSIDE the cut) fans surfaces past the
-        # wall.  Centroid scaling keeps surfaces ⊂ boundary ⊂ wall.
-        cR = float(Rb.mean()); cZ = float(Zb.mean())
+        Rb, Zb = _shape_RZ(phi, 1.0)              # boundary at this cut
         surfaces = []
         for rho in rhos:
-            surfaces.append({"rho": float(rho),
-                             "R": (cR + rho * (Rb - cR)).tolist(),
-                             "Z": (cZ + rho * (Zb - cZ)).tolist()})
+            Rr, Zr = _shape_RZ(phi, rho)
+            surfaces.append({"rho": float(rho), "R": Rr.tolist(), "Z": Zr.tolist()})
         elong = float((Zb.max() - Zb.min()) / (Rb.max() - Rb.min()))
         sec = {"label": label, "elong": elong,
                "R": Rb.tolist(), "Z": Zb.tolist(), "surfaces": surfaces}
+        # wall = boundary offset outward from its centroid by gap g
+        cR = float(Rb.mean()); cZ = float(Zb.mean())
         rad = np.hypot(Rb - cR, Zb - cZ)
         scale = 1.0 + g / max(rad.max(), 1e-9)
         sec["wall"] = {"R": (cR + (Rb - cR) * scale).tolist(),
