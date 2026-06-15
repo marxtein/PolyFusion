@@ -41,6 +41,55 @@ UI 在 $\varphi=0,\,T/4,\,T/2$ 三个环向切面画磁面截面 + 壁层。这�
 
 二者的唯一物理绑定：\textbf{视图截面的面积 $=$ 功率账用的 $\Aflux=\pi a^2$}（见 \S\ref{sec:consistency}）。
 
+\section{UI 几何面板：每个输入参数干什么}\label{sec:inputs}
+
+UI「几何」面板的输入与它们进入几何/功率的方式如下表，逐项公式见后。
+
+\begin{center}
+\renewcommand{\arraystretch}{1.32}
+\begin{tabular}{@{}llp{7.4cm}@{}}
+\toprule
+输入 & 含义 & 作用（进入哪里）\\
+\midrule
+$R_0$ & 大半径 [m] & 磁轴平均大半径；定 $a=R_0/A$；进 ISS04（$R_0^{0.64}$）与 Sudo 限 \\
+$A$ & 环径比 & 唯一定小半径 $a=R_0/A$ \\
+$N_\mathrm{fp}$ & 场周期数 & 磁轴/边界的环向周期数；切面间距 $2\pi/N_\mathrm{fp}$；定 helicity \\
+$\delta_h$ & 轴螺旋偏移 [m] & 默认螺旋轴的偏移幅度；改 $\Lax$、曲率/扭率$\to\iotabar_\mathrm{geom}$、拉长比 \\
+$\bar\eta$ & 近轴形参 [1/m] & 一阶近轴塑形量（$\ne0$ 必填）；定截面拉长比（导出量）；概念堆驱动几何，真机仅驱动显示 \\
+$g$ & 壁间隙 [m] & 壁 $=$ 边界外扩 $g$；定壁周长$\to\Sw$（概念堆） \\
+$rc,zs$ & 自定义轴傅里叶 & 覆写默认螺旋轴，给任意三维 Fourier 磁轴 \\
+$\Vp^{*}$ & 体积实测覆写 [m$^3$] & $>0$ 时\textbf{直接替换} $\Vp$（真机） \\
+$\Sw^{*}$ & 壁面积实测覆写 [m$^2$] & $>0$ 时\textbf{直接替换} $\Sw$（真机） \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{磁轴怎么定（$R_0,\delta_h,N_\mathrm{fp},rc,zs$）。}
+默认磁轴是一条螺旋闭曲线
+\begin{equation}
+R(\varphi)=R_0+\delta_h\cos(N_\mathrm{fp}\varphi),\qquad
+Z(\varphi)=-\delta_h\sin(N_\mathrm{fp}\varphi),
+\end{equation}
+即 $rc=[R_0,\delta_h],\ zs=[0,-\delta_h]$。给定 $rc,zs$ 列表则改为任意
+$R=\sum_n rc_n\cos(nN_\mathrm{fp}\varphi),\ Z=\sum_n zs_n\sin(nN_\mathrm{fp}\varphi)$。
+轴长 $\Lax=\oint\!\sqrt{R^2+R'^2+Z'^2}\,\mathrm d\varphi$ 进体积/壁面；曲率 $\kappa(\varphi)$、扭率 $\tau(\varphi)$ 进 $\sigma$ 方程定 $\iotabar_\mathrm{geom}$。约束 $0\le\delta_h<R_0$。$\delta_h=0$ $\Rightarrow$ 平面圆轴 $\Rightarrow$ $\iotabar_\mathrm{geom}=0$（须给实测 $\iotabar$）。
+
+\paragraph{$\bar\eta$ 怎么定形状。}
+一阶近轴磁场 $B=B_0\,[1+r\,\bar\eta\cos\theta]$。该塑形给出一阶截面（法向 $\hat n$、副法向 $\hat b$）
+\begin{equation}
+X_{1c}=\frac{\bar\eta}{\kappa},\qquad
+Y_{1s}=\frac{\kappa}{\bar\eta},\qquad
+Y_{1c}=\frac{\kappa\,\sigma}{\bar\eta},
+\end{equation}
+拉长比是\textbf{导出量}
+\begin{equation}
+e=\frac{p+\sqrt{p^2-4}}{2},\quad p=X_{1c}^2+Y_{1s}^2+Y_{1c}^2,
+\end{equation}
+随 $\bar\eta$ 减小而增大（量级 $\sim(\kappa/\bar\eta)^2$）。故 $\bar\eta$ 太小给针状截面——真机预设的 $\bar\eta$ 仅为显示挑选，几何由实测覆写决定。
+
+\paragraph{$g,\Vp^{*},\Sw^{*}$。}
+壁层 $=$ 边界沿外法向外扩 $g$；概念堆 $\Sw=\bar C_\mathrm{wall}\Lax$ 即由 $g$ 决定。真机给 $\Vp^{*},\Sw^{*}$（$>0$）后\textbf{直接替换}对应几何量进功率账（见 \S\ref{sec:power}），近轴几何只剩诊断。
+
 \section{功率账几何怎么取（后端）}\label{sec:backend}
 
 固定关系：
