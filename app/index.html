@@ -715,6 +715,26 @@ function drawShape(){
     document.getElementById('plotMeta').innerHTML=`<span>${(v.ring_model?L('有限电流环示意','finite-loop schematic'):L('点偶极示意','point-dipole schematic'))}${L('；真空室壁 R_p；功率沿磁通壳积分','; vessel wall R_p; power integrates over flux shells')}</span>`;
   }
   lay.legend=Object.assign({},lay.legend,{groupclick:'togglegroup'});
+  // equal-aspect shape views: set EXPLICIT ranges from the data + the plot's
+  // pixel aspect instead of relying on Plotly scaleanchor+autorange, which
+  // produces a broken x-range (e.g. width 80 for 4-wide data) that jumps on
+  // every redraw. Deterministic ranges => stable view, no "突变".
+  if(lay.yaxis&&lay.yaxis.scaleanchor&&!(lay.xaxis&&lay.xaxis.range)){
+    const pd=document.getElementById('plot');const w=pd.clientWidth,h=pd.clientHeight;
+    // fall back to ~square if the plot is hidden/mid-transition (clientW/H tiny),
+    // so a transient bad read can't blow the range up to +/-200
+    const ar=(w>50&&h>50)?w/h:1.1;
+    let xmn=1e30,xmx=-1e30,ymn=1e30,ymx=-1e30;
+    tr.forEach(t=>{(t.x||[]).forEach(x=>{if(x!=null&&isFinite(x)){if(x<xmn)xmn=x;if(x>xmx)xmx=x;}});
+                   (t.y||[]).forEach(y=>{if(y!=null&&isFinite(y)){if(y<ymn)ymn=y;if(y>ymx)ymx=y;}});});
+    if(xmx>xmn&&ymx>ymn){
+      const cx=(xmn+xmx)/2,cy=(ymn+ymx)/2;let hx=(xmx-xmn)/2*1.12,hy=(ymx-ymn)/2*1.12;
+      if(hx/hy<ar)hx=hy*ar; else hy=hx/ar;
+      delete lay.yaxis.scaleanchor;delete lay.yaxis.scaleratio;
+      lay.xaxis.range=[cx-hx,cx+hx];lay.yaxis.range=[cy-hy,cy+hy];
+      lay.xaxis.autorange=false;lay.yaxis.autorange=false;
+    }
+  }
   Plotly.react('plot',tr,lay,{responsive:true,displayModeBar:false});
 }
 function drawProfiles(){
