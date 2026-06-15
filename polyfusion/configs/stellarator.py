@@ -232,6 +232,104 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
             "axis": axis, "shape_source": shape.get("source", "")}
 
 
+def _nearaxis_reconstruct(na, nfp, a, th):
+    """Shared near-axis cross-section reconstructor (display AND power integral).
+
+    Returns ``rz(phi, rho) -> (R[len(th)], Z[len(th)])``, the SAME analytic
+    surface the UI draws and the backend integrates, so frontend shape and
+    backend power geometry are one boundary.  Full-size first-order body (radius
+    ``rho*a``, correct size) plus a BOUNDED second-order bean/crescent wobble
+    (radius ``rho*r2r(phi)``, with ``r2r`` capped so the r^2 displacement never
+    exceeds ``_R2_DISPLAY_CAP`` of the r^1 one).  The cap is essential: the raw
+    near-axis expansion is only valid for small r, and at the full minor radius a
+    the unbounded r^2 surface self-intersects (volume blows up) — the capped
+    surface stays a simple, correctly-sized bean.  Periodic in phi over one field
+    period; ``rho`` in [0, 1].  If ``na`` has no second order, the pure r^1
+    ellipse is returned (``r2r`` then unused).  ``rz.r2r(phi)`` exposes the per-
+    phi cap for the display radius.
+    """
+    period = 2 * math.pi / int(nfp)
+    cos_th, sin_th = np.cos(th), np.sin(th)
+    cos_2th, sin_2th = np.cos(2 * th), np.sin(2 * th)
+    so = na.second_order
+
+    def _P(arr, phi):
+        xp = np.append(na.phi, na.phi[0] + period)
+        fp = np.append(arr, arr[0])
+        return float(np.interp(math.fmod(phi, period), xp, fp))
+
+    def _frame(phi):
+        n_hat = [_P(na.normal[k], phi) for k in range(3)]
+        b_hat = [_P(na.binormal[k], phi) for k in range(3)]
+        t_hat = [_P(na.tangent[k], phi) for k in range(3)]
+        return n_hat, b_hat, t_hat
+
+    def _second(phi):
+        x2 = _P(so.X20, phi) + _P(so.X2c, phi) * cos_2th + _P(so.X2s, phi) * sin_2th
+        y2 = _P(so.Y20, phi) + _P(so.Y2c, phi) * cos_2th + _P(so.Y2s, phi) * sin_2th
+        z2 = _P(so.Z20, phi) + _P(so.Z2c, phi) * cos_2th + _P(so.Z2s, phi) * sin_2th
+        return x2, y2, z2
+
+    def r2r(phi):
+        if so is None:
+            return a
+        n_hat, b_hat, t_hat = _frame(phi)
+        X1c, Y1s, Y1c = _P(na.X1c, phi), _P(na.Y1s, phi), _P(na.Y1c, phi)
+        v1R = X1c * cos_th * n_hat[0] + (Y1s * sin_th + Y1c * cos_th) * b_hat[0]
+        v1Z = X1c * cos_th * n_hat[2] + (Y1s * sin_th + Y1c * cos_th) * b_hat[2]
+        x2, y2, z2 = _second(phi)
+        v2R = x2 * n_hat[0] + y2 * b_hat[0] + z2 * t_hat[0]
+        v2Z = x2 * n_hat[2] + y2 * b_hat[2] + z2 * t_hat[2]
+        s1 = float(np.max(np.hypot(v1R, v1Z)))
+        s2 = float(np.max(np.hypot(v2R, v2Z)))
+        return min(a, _R2_DISPLAY_CAP * s1 / s2) if s2 > 0 else a
+
+    def rz(phi, rho):
+        n_hat, b_hat, t_hat = _frame(phi)
+        X1c, Y1s, Y1c = _P(na.X1c, phi), _P(na.Y1s, phi), _P(na.Y1c, phi)
+        R0p, Z0p = _P(na.R0_arr, phi), _P(na.Z0_arr, phi)
+        if so is None:
+            r = rho * a
+            X = r * X1c * cos_th
+            Y = r * (Y1s * sin_th + Y1c * cos_th)
+            return R0p + X * n_hat[0] + Y * b_hat[0], Z0p + X * n_hat[2] + Y * b_hat[2]
+        x2, y2, z2 = _second(phi)
+        r1, r2 = rho * a, rho * r2r(phi)       # size from a; wobble bounded
+        X = r1 * X1c * cos_th + r2 * r2 * x2
+        Y = r1 * (Y1s * sin_th + Y1c * cos_th) + r2 * r2 * y2
+        Z = r2 * r2 * z2
+        R = R0p + X * n_hat[0] + Y * b_hat[0] + Z * t_hat[0]
+        Zc = Z0p + X * n_hat[2] + Y * b_hat[2] + Z * t_hat[2]
+        return R, Zc
+
+    rz.r2r = r2r
+    return rz
+
+
+def _nearaxis_boundary_fn(R0, A, N_fp, delta_h=0.0, etabar=0.05,
+                          rc=None, zs=None, B2c=0.0, n_theta=200):
+    """``(boundary_fn, nfp)`` for a CONCEPT (near-axis, no explicit shape).
+
+    ``boundary_fn(phi) -> (R[n_theta], Z[n_theta])`` is the rho=1 outline of the
+    SAME capped-r2 near-axis surface the UI draws (see ``_nearaxis_reconstruct``),
+    on a uniform theta grid in [0, 2pi).  Feeding it to ``boundary_metrics`` gives
+    the concept plasma volume / wall area by exact integration of the drawn
+    boundary — frontend shape == backend power geometry for concepts too.
+    """
+    a = R0 / A
+    nfp_i = int(round(N_fp))
+    axis_rc = list(rc) if rc is not None else [R0, delta_h]
+    axis_zs = list(zs) if zs is not None else [0.0, -delta_h]
+    try:
+        na = solve_near_axis(axis_rc, axis_zs, nfp_i, etabar, nphi=121,
+                             order="r2", B2c=B2c)
+    except (RuntimeError, ValueError):
+        na = solve_near_axis(axis_rc, axis_zs, nfp_i, etabar, nphi=121)
+    th = np.linspace(0.0, 2 * math.pi, n_theta, endpoint=False)
+    rz = _nearaxis_reconstruct(na, nfp_i, a, th)
+    return (lambda phi: rz(phi, 1.0)), nfp_i
+
+
 def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
                      rc=None, zs=None, n_theta=121, B2c=0.0, shape=None,
                      **_ignored) -> dict:
@@ -321,8 +419,6 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
     axis_zs = list(zs) if zs is not None else [0.0, -delta_h]
     nfp_i = int(round(N_fp))
     period = 2 * math.pi / nfp_i
-    cos_th, sin_th = np.cos(th), np.sin(th)
-    cos_2th, sin_2th = np.cos(2 * th), np.sin(2 * th)
 
     # try the second-order (bean/crescent) shape; fall back to first-order
     na = None
@@ -338,53 +434,18 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
 
     cut_j = [int(np.argmin(np.abs(na.phi - frac * period))) for frac, _ in cuts]
 
-    def _first_order_RZ(j, rho):
-        r = rho * a
-        X1 = r * na.X1c[j] * cos_th
-        Y1 = r * (na.Y1s[j] * sin_th + na.Y1c[j] * cos_th)
-        n_hat, b_hat = na.normal[:, j], na.binormal[:, j]
-        R = na.R0_arr[j] + X1 * n_hat[0] + Y1 * b_hat[0]
-        Z = na.Z0_arr[j] + X1 * n_hat[2] + Y1 * b_hat[2]
-        return R, Z
-
+    # ONE reconstructor for display AND the power integral (frontend == backend).
+    # r2 mode draws the full-size first-order body with a bounded second-order
+    # bean wobble (capped so it never self-intersects); r1 mode the plain
+    # ellipse.  See _nearaxis_reconstruct.
+    rz = _nearaxis_reconstruct(na, nfp_i, a, th)
     if metric_mode == "near-axis-r2":
-        so = na.second_order
-        # The first-order body is drawn at the REAL minor radius a (correct
-        # SIZE); only the second-order *wobble* is drawn at a bounded radius
-        # r2r[j] <= a, chosen per cut so the r^2 displacement never exceeds
-        # _R2_DISPLAY_CAP of the r^1 one.  This is what gives the bean/crescent
-        # character without ever shrinking the plasma to a speck or self-
-        # intersecting — purely cosmetic; the 0-D power account is untouched.
-        r2r = {}
-        for j in cut_j:
-            n_hat, b_hat, t_hat = na.normal[:, j], na.binormal[:, j], na.tangent[:, j]
-            v1R = na.X1c[j] * cos_th * n_hat[0] + (na.Y1s[j] * sin_th + na.Y1c[j] * cos_th) * b_hat[0]
-            v1Z = na.X1c[j] * cos_th * n_hat[2] + (na.Y1s[j] * sin_th + na.Y1c[j] * cos_th) * b_hat[2]
-            x2 = so.X20[j] + so.X2c[j] * cos_2th + so.X2s[j] * sin_2th
-            y2 = so.Y20[j] + so.Y2c[j] * cos_2th + so.Y2s[j] * sin_2th
-            z2 = so.Z20[j] + so.Z2c[j] * cos_2th + so.Z2s[j] * sin_2th
-            v2R = x2 * n_hat[0] + y2 * b_hat[0] + z2 * t_hat[0]
-            v2Z = x2 * n_hat[2] + y2 * b_hat[2] + z2 * t_hat[2]
-            s1 = float(np.max(np.hypot(v1R, v1Z)))
-            s2 = float(np.max(np.hypot(v2R, v2Z)))
-            r2r[j] = min(a, _R2_DISPLAY_CAP * s1 / s2) if s2 > 0 else a
-
-        def _RZ(j, rho):
-            x2 = so.X20[j] + so.X2c[j] * cos_2th + so.X2s[j] * sin_2th
-            y2 = so.Y20[j] + so.Y2c[j] * cos_2th + so.Y2s[j] * sin_2th
-            z2 = so.Z20[j] + so.Z2c[j] * cos_2th + so.Z2s[j] * sin_2th
-            r1, r2 = rho * a, rho * r2r[j]   # size from a; wobble bounded
-            X = r1 * na.X1c[j] * cos_th + r2 * r2 * x2
-            Y = r1 * (na.Y1s[j] * sin_th + na.Y1c[j] * cos_th) + r2 * r2 * y2
-            Z = r2 * r2 * z2
-            n_hat, b_hat, t_hat = na.normal[:, j], na.binormal[:, j], na.tangent[:, j]
-            R = na.R0_arr[j] + X * n_hat[0] + Y * b_hat[0] + Z * t_hat[0]
-            Zc = na.Z0_arr[j] + X * n_hat[2] + Y * b_hat[2] + Z * t_hat[2]
-            return R, Zc
-        a_disp = min(r2r.values())
+        a_disp = min(rz.r2r(float(na.phi[j])) for j in cut_j)
     else:
         a_disp = a
-        _RZ = _first_order_RZ
+
+    def _RZ(j, rho):
+        return rz(float(na.phi[j]), rho)
 
     for (frac, label), j in zip(cuts, cut_j):
         surfaces = []
@@ -632,14 +693,18 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     geom = stellarator_geometry_metrics(R0, A, N_fp, axis_rc, axis_zs, etabar, g)
     L_ax = geom["L_ax"]; iota_geom = geom["iota_geom"]
     helicity = geom["helicity"]; kappa_eff = geom["kappa_eff"]; elong_max = geom["elong_max"]
-    # geometric volume/wall: when an explicit Fourier ``shape`` is given (real
-    # machines / custom boundaries), integrate that EXACT boundary — the same one
-    # the UI draws — so frontend shape and backend power geometry are identical.
-    # Otherwise use the near-axis estimate (concepts: pi a^2 * L_ax).
-    Vp_geom = geom["Vp_geom"]; Sw_geom = geom["Sw_geom"]
+    # geometric volume/wall: ALWAYS the exact integral of the EXACT boundary the
+    # UI draws, so frontend shape and backend power geometry are identical.  Real
+    # machines / custom boundaries integrate the explicit Fourier ``shape``;
+    # concepts integrate the near-axis capped-r2 boundary (the same drawn bean).
+    # (The near-axis Pappus estimate geom["Vp_geom"]=pi a^2 L_ax is kept only as
+    # the analytic A_flux diagnostic, no longer the power-account volume.)
     if shape is not None:
         _bfn, _nfp = _shape_boundary_fn(R0, a, shape)
-        Vp_geom, Sw_geom = boundary_metrics(_bfn, _nfp, g)
+    else:
+        _bfn, _nfp = _nearaxis_boundary_fn(R0, A, N_fp, delta_h, etabar,
+                                           rc=rc, zs=zs)
+    Vp_geom, Sw_geom = boundary_metrics(_bfn, _nfp, g)
     Vp = Vp_override if (Vp_override and Vp_override > 0) else Vp_geom
     Sp = geom["Sp_geom"]
     Sw = Sw_override if (Sw_override and Sw_override > 0) else Sw_geom

@@ -18,7 +18,8 @@ validation that survives the API change:
    (Landreman-Sengupta r1 section 5.1 scaled to R0=18 m) iota_geom must equal
    the published 0.418306910215178 and the max elongation 2.41373705531443, the
    helical-axis TORSION contributes to iota (delta_h matters), and the volume
-   follows Pappus with the flux-conserving section area.
+   is the EXACT integral of the drawn near-axis boundary (a few % below the
+   analytic Pappus estimate; Scheme D Task 1).
 5. SECTION OUTLINES for the shape view: near-axis mode, elongation varying along
    the period, each section carrying nested flux surfaces and a wall layer.
 """
@@ -33,7 +34,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from polyfusion.configs import solve_stellarator  # noqa: E402
 from polyfusion.configs.stellarator import (axis_length,  # noqa: E402
                                             section_outlines,
-                                            stellarator_geometry_metrics)
+                                            stellarator_geometry_metrics,
+                                            boundary_metrics,
+                                            _nearaxis_boundary_fn)
 from polyfusion.tokamak import funsc  # noqa: E402
 
 PASS = True
@@ -57,11 +60,23 @@ def main():
                            Zimp=10, Rw=0.7, g=0.1, icase=1, iota=1.0)
     tok = funsc(18.0, 10.0, 1.0, 0.0, 0.5, 1.0, 2e20, 15.0, 1.0, 1.0, 0.5,
                 5.0, 10.0, 1.0, 0.04, 0.01, 10, 0.7, 0.1, 1)
-    ok(abs(st.Vp - math.pi * 1.8**2 * 2 * math.pi * 18.0) / st.Vp < 1e-12,
-       f"planar circular axis: Vp = pi*a^2*2*pi*R0 ({st.Vp:.4f})")
-    for q in ("Pfus", "Pbrem", "Eth", "betaT"):
-        sv, tv = getattr(st, q), getattr(tok, q)
-        ok(abs(sv - tv) / abs(tv) < 1e-9, f"circular degeneration: {q} == tokamak ({sv:.6g})")
+    # Vp now comes from the EXACT boundary integral (Scheme D Task 1), not the
+    # analytic pi*a^2*2*pi*R0 — for a planar circular axis the two agree to the
+    # integration tolerance (~2e-4), no longer machine precision.
+    Vp_exact = math.pi * 1.8**2 * 2 * math.pi * 18.0
+    ok(abs(st.Vp - Vp_exact) / Vp_exact < 5e-4,
+       f"planar circular axis: Vp == pi*a^2*2*pi*R0 by exact integral "
+       f"({st.Vp:.4f} vs {Vp_exact:.4f})")
+    # physics parity: given the SAME plasma the 0-D power account is identical to
+    # the tokamak.  betaT is volume-INTENSIVE (exact parity); Pfus/Pbrem/Eth are
+    # extensive (proportional to Vp), so they carry the ~2e-4 volume-integration
+    # offset — compare them PER UNIT VOLUME to isolate the (identical) physics.
+    ok(abs(st.betaT - tok.betaT) / abs(tok.betaT) < 1e-9,
+       f"circular degeneration: betaT == tokamak ({st.betaT:.6g})")
+    for q in ("Pfus", "Pbrem", "Eth"):
+        sv, tv = getattr(st, q) / st.Vp, getattr(tok, q) / tok.Vp
+        ok(abs(sv - tv) / abs(tv) < 1e-9,
+           f"circular degeneration: {q}/Vp == tokamak ({getattr(st, q):.6g})")
 
     # ---- 2. geometry volume anchor (W7-X-scale helical axis) ----
     V_w7x = math.pi * 0.51**2 * axis_length(5.5, 5, 0.25)
@@ -88,14 +103,26 @@ def main():
     ok(abs(na.elong_max - 2.41373705531443) / 2.41373705531443 < 2e-3,
        f"near-axis NAE-QA: max elongation = {na.elong_max:.4f} (published 2.4137)")
     ok(na.helicity == 0.0, "near-axis NAE-QA: helicity 0 (quasi-axisymmetric)")
-    ok(abs(na.Vp - math.pi * 1.8**2 * na.L_ax) / na.Vp < 1e-12,
-       "near-axis volume follows Pappus with flux-conserving section area")
+    # solver Vp is the EXACT integral of the drawn near-axis boundary (Task 1):
+    # it equals boundary_metrics of that boundary, and sits a few % below the
+    # analytic Pappus pi*a^2*L_ax (the bean/curvature correction).
+    _bfn, _nfp = _nearaxis_boundary_fn(R0=18.0, A=10.0, N_fp=3,
+                                       delta_h=0.045 * 18.0, etabar=0.9 / 18.0)
+    V_int, _ = boundary_metrics(_bfn, _nfp, 0.1)
+    ok(abs(na.Vp - V_int) / V_int < 1e-9,
+       f"near-axis volume == exact boundary integral ({na.Vp:.3f} == {V_int:.3f})")
+    pap = math.pi * 1.8**2 * na.L_ax
+    ok(0.9 < na.Vp / pap < 1.0,
+       f"exact volume a few % below Pappus pi*a^2*L_ax ({na.Vp / pap:.4f})")
     gm = stellarator_geometry_metrics(R0=18.0, A=10.0, N_fp=3,
                                       rc=[18.0, 0.045 * 18.0],
                                       zs=[0.0, -0.045 * 18.0],
                                       etabar=0.9 / 18.0, g=0.1)
-    ok(abs(gm["Vp_geom"] - na.Vp) / na.Vp < 1e-12,
-       "geometry metrics volume matches solver Vp")
+    ok(abs(gm["Vp_geom"] - math.pi * 1.8**2 * gm["L_ax"]) < 1e-9,
+       "geometry-metrics Vp_geom is the analytic Pappus estimate (pi*a^2*L_ax)")
+    ok(0.9 < na.Vp / gm["Vp_geom"] < 1.0,
+       f"solver Vp (exact integral) is a few % below the Pappus estimate "
+       f"({na.Vp / gm['Vp_geom']:.4f})")
     ok(abs(np.trapezoid(gm["profile_weight"], gm["profile_rho"]) - 1.0) < 1e-6,
        "geometry metrics profile weight integrates to 1")
     ok(abs(gm["A_flux"] - math.pi * 1.8**2) / gm["A_flux"] < 1e-12,
