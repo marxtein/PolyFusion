@@ -258,7 +258,7 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   opPoint:'Operating Point',saveP:'⬇ Save Params',loadP:'⬆ Load Params',expJson:'⬇ Result JSON',expCsv:'⬇ Scan CSV',
   tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
   help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
-let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false;
+let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_IDX=null;
 const ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override']);  // expert-only inputs
 
 const DENS=new Set(['ni0','n0']);const BOOLS=new Set(['use_tauE','geom_weighted']);const dsc=k=>DENS.has(k)?1e-20:1;  // density display in 10^20 m^-3
@@ -656,26 +656,40 @@ function drawShape(){
     const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.sections)?LASTRUN.shape:null;
     if(sh){
       const cols=['#ff5d73','#e9eef7','#36e2c4'];
-      // phase (toroidal cut) selector: -1 = show all, else only that section
-      const nsec=sh.sections.length;
-      if(SHAPE_PHASE>=nsec)SHAPE_PHASE=-1;
-      const shown=sh.sections.map((s,i)=>i).filter(i=>SHAPE_PHASE<0||i===SHAPE_PHASE);
-      shown.forEach(si=>{const s=sh.sections[si];const surfs=s.surfaces||[{rho:1,R:s.R,Z:s.Z}];
+      const frames=sh.frames||null;
+      const sliderOn=SLIDER_IDX!==null&&frames;
+      const drawCut=(s,col)=>{const surfs=s.surfaces||[{rho:1,R:s.R,Z:s.Z}];
         surfs.forEach((q,qi)=>{const isB=qi===surfs.length-1;
-          add({type:'scatter',mode:'lines',x:q.R,y:q.Z,line:{color:isB?cols[si%cols.length]:'#8fb6c7',width:isB?2.5:1.18},opacity:isB?1:0.68},isB?'boundary':'flux');});
-        // Scheme D: near-axis wall polygon = boundary + gap g, returned per section
-        if(s.wall)add({type:'scatter',mode:'lines',x:s.wall.R,y:s.wall.Z,line:{color:GC('wall'),width:2.0,dash:'dash'},opacity:0.9},'wall');});
-      if(sh.axis)add({type:'scatter',mode:'markers+text',x:shown.map(si=>{const s=sh.sections[si];return s.surfaces?avg(s.surfaces[0].R):avg(s.R);}),
-        y:shown.map(si=>{const s=sh.sections[si];return s.surfaces?avg(s.surfaces[0].Z):avg(s.Z);}),
-        text:shown.map(_=>L('磁轴','axis')),textposition:'bottom center',textfont:{color:'#ff5d8f',size:10},marker:{color:'#ff5d8f',size:6}},'annot');
-      // phase toggle buttons (default: all phases)
-      const phBtn=(ph,lab,on)=>`<button class="phbtn${on?' on':''}" data-ph="${ph}">${lab}</button>`;
-      const btns=phBtn(-1,L('全部相位','all φ'),SHAPE_PHASE<0)+
-        sh.sections.map((s,i)=>phBtn(i,s.label,SHAPE_PHASE===i)).join('');
+          add({type:'scatter',mode:'lines',x:q.R,y:q.Z,line:{color:isB?col:'#8fb6c7',width:isB?2.5:1.18},opacity:isB?1:0.68},isB?'boundary':'flux');});
+        if(s.wall)add({type:'scatter',mode:'lines',x:s.wall.R,y:s.wall.Z,line:{color:GC('wall'),width:2.0,dash:'dash'},opacity:0.9},'wall');};
+      if(sliderOn){
+        // continuous phase scrub: draw the single frame at SLIDER_IDX
+        const idx=Math.max(0,Math.min(frames.length-1,SLIDER_IDX));
+        const s=frames[idx];drawCut(s,cols[0]);
+        if(s.surfaces)add({type:'scatter',mode:'markers+text',x:[avg(s.surfaces[0].R)],y:[avg(s.surfaces[0].Z)],text:[L('磁轴','axis')],textposition:'bottom center',textfont:{color:'#ff5d8f',size:10},marker:{color:'#ff5d8f',size:6}},'annot');
+      }else{
+        // phase (toroidal cut) selector: -1 = show all, else only that section
+        const nsec=sh.sections.length;if(SHAPE_PHASE>=nsec)SHAPE_PHASE=-1;
+        const shown=sh.sections.map((s,i)=>i).filter(i=>SHAPE_PHASE<0||i===SHAPE_PHASE);
+        shown.forEach(si=>drawCut(sh.sections[si],cols[si%cols.length]));
+        if(sh.axis)add({type:'scatter',mode:'markers+text',x:shown.map(si=>{const s=sh.sections[si];return s.surfaces?avg(s.surfaces[0].R):avg(s.R);}),
+          y:shown.map(si=>{const s=sh.sections[si];return s.surfaces?avg(s.surfaces[0].Z):avg(s.Z);}),
+          text:shown.map(_=>L('磁轴','axis')),textposition:'bottom center',textfont:{color:'#ff5d8f',size:10},marker:{color:'#ff5d8f',size:6}},'annot');
+      }
+      // controls: phase buttons OR a continuous slider (toggle between them)
+      let ctrl='';
+      if(frames){const sIdx=sliderOn?Math.max(0,Math.min(frames.length-1,SLIDER_IDX)):0;
+        ctrl=`<button class="phbtn${sliderOn?' on':''}" id="sliderTog">${L('相位滑块','φ slider')}</button>`+
+          (sliderOn?`<input type="range" id="phSlider" min="0" max="${frames.length-1}" value="${sIdx}" style="vertical-align:middle;width:120px">`+
+            `<span class="u">φ=${(frames[sIdx].frac).toFixed(2)}T</span>`:'');}
+      if(!sliderOn){const phBtn=(ph,lab,on)=>`<button class="phbtn${on?' on':''}" data-ph="${ph}">${lab}</button>`;
+        ctrl+=phBtn(-1,L('全部相位','all φ'),SHAPE_PHASE<0)+sh.sections.map((s,i)=>phBtn(i,s.label,SHAPE_PHASE===i)).join('');}
       document.getElementById('plotMeta').innerHTML=
         `<span>${L('后端解析磁面：','backend flux surfaces: ')}${sh.mode} · ${L('壁面 = 边界 + g','wall = boundary + g')}</span>`+
-        `<span class="phsel">${L('相位 φ：','phase φ: ')}${btns}</span>`;
-      document.querySelectorAll('#plotMeta .phbtn').forEach(b=>b.onclick=()=>{SHAPE_PHASE=+b.dataset.ph;drawShape();});
+        `<span class="phsel">${L('相位 φ：','phase φ: ')}${ctrl}</span>`;
+      document.querySelectorAll('#plotMeta .phbtn[data-ph]').forEach(b=>b.onclick=()=>{SHAPE_PHASE=+b.dataset.ph;drawShape();});
+      const stog=document.getElementById('sliderTog');if(stog)stog.onclick=()=>{SLIDER_IDX=(SLIDER_IDX===null)?Math.floor((frames.length-1)/2):null;drawShape();};
+      const sl=document.getElementById('phSlider');if(sl)sl.oninput=()=>{SLIDER_IDX=+sl.value;drawShape();};
     }else document.getElementById('plotMeta').innerHTML=`<span>${L('等待后端解析磁面','waiting for backend flux surfaces')}</span>`;
   }else if(CUR==='mirror'){
     const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;

@@ -55,6 +55,7 @@ _KEV_J = 1e3 * QE
 _BETA_SOFT_LIMIT = 0.05   # ~5% soft stellarator beta limit (Mercier; can be exceeded)
 _IOTA_MIN = 1e-6          # below this the configuration has no effective transform
 _R2_DISPLAY_CAP = 0.5     # shape view: cap r^2 displacement at this fraction of r^1
+_N_PHASE_FRAMES = 24      # fine toroidal cuts over one period for the phase slider
 
 
 def axis_length(R0: float, N_fp: float, delta_h: float, n: int = 720) -> float:
@@ -200,8 +201,7 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
             Zh += c * rho ** abs(m) * cos_m[m] * Bn
         return R0 + a * Rh, a * Zh
 
-    sections = []
-    for frac, label in cuts:
+    def _build_cut(frac, label):
         phi = frac * 2 * math.pi / nfp
         Rb, Zb = _shape_RZ(phi, 1.0)              # boundary at this cut
         surfaces = []
@@ -209,15 +209,18 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
             Rr, Zr = _shape_RZ(phi, rho)
             surfaces.append({"rho": float(rho), "R": Rr.tolist(), "Z": Zr.tolist()})
         elong = float((Zb.max() - Zb.min()) / (Rb.max() - Rb.min()))
-        sec = {"label": label, "elong": elong,
-               "R": Rb.tolist(), "Z": Zb.tolist(), "surfaces": surfaces}
-        # wall = boundary offset outward from its centroid by gap g
         cR = float(Rb.mean()); cZ = float(Zb.mean())
-        rad = np.hypot(Rb - cR, Zb - cZ)
-        scale = 1.0 + g / max(rad.max(), 1e-9)
-        sec["wall"] = {"R": (cR + (Rb - cR) * scale).tolist(),
-                       "Z": (cZ + (Zb - cZ) * scale).tolist()}
-        sections.append(sec)
+        scale = 1.0 + g / max(np.hypot(Rb - cR, Zb - cZ).max(), 1e-9)
+        return {"label": label, "elong": elong, "frac": float(frac),
+                "R": Rb.tolist(), "Z": Zb.tolist(), "surfaces": surfaces,
+                "wall": {"R": (cR + (Rb - cR) * scale).tolist(),
+                         "Z": (cZ + (Zb - cZ) * scale).tolist()}}
+
+    sections = [_build_cut(frac, label) for frac, label in cuts]
+    # fine phi frames over one field period for the phase slider (UI scrub)
+    frames = [_build_cut(k / _N_PHASE_FRAMES,
+                         "φ=%.2fT" % (k / _N_PHASE_FRAMES))
+              for k in range(_N_PHASE_FRAMES)]
 
     # display axis ring (mean major radius; harmonic excursion is small)
     phi_axis = np.linspace(0.0, 2 * math.pi, 60)
@@ -225,8 +228,8 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
     axis = {"R": (R0 + a * R00n + 0.0 * phi_axis).tolist(),
             "Z": (0.0 * phi_axis).tolist()}
     return {"mode": "machine-boundary", "metric_mode": "machine-boundary",
-            "a": a, "a_disp": a, "g": g, "sections": sections, "axis": axis,
-            "shape_source": shape.get("source", "")}
+            "a": a, "a_disp": a, "g": g, "sections": sections, "frames": frames,
+            "axis": axis, "shape_source": shape.get("source", "")}
 
 
 def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
