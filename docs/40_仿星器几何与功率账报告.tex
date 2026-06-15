@@ -88,7 +88,7 @@ e=\frac{p+\sqrt{p^2-4}}{2},\quad p=X_{1c}^2+Y_{1s}^2+Y_{1c}^2,
 随 $\bar\eta$ 减小而增大（量级 $\sim(\kappa/\bar\eta)^2$）。故 $\bar\eta$ 太小给针状截面——真机预设的 $\bar\eta$ 仅为显示挑选，几何由实测覆写决定。
 
 \paragraph{$g,\Vp^{*},\Sw^{*}$。}
-壁层 $=$ 边界沿外法向外扩 $g$；概念堆 $\Sw=\bar C_\mathrm{wall}\Lax$ 即由 $g$ 决定。真机给 $\Vp^{*},\Sw^{*}$（$>0$）后\textbf{直接替换}对应几何量进功率账（见 \S\ref{sec:power}），近轴几何只剩诊断。
+壁层 $=$ 边界沿外法向外扩 $g$；概念堆 $\Sw$ 取该外扩边界的精确环向积分（故由 $g$ 决定）。真机给 $\Vp^{*},\Sw^{*}$（$>0$）后\textbf{直接替换}对应几何量进功率账（见 \S\ref{sec:power}），近轴几何只剩诊断。
 
 \section{功率账几何怎么取（后端）}\label{sec:backend}
 
@@ -100,12 +100,12 @@ a = \frac{R_0}{A},\qquad \Aflux = \pi a^2 ,
 
 体积/壁面按位形类别两条路：
 \begin{itemize}
-\item \textbf{概念堆}（HELIAS、NAE-QA，本就是近轴设计）：用近轴几何
+\item \textbf{概念堆}（HELIAS、NAE-QA，本就是近轴设计）：前端所画的近轴边界（一阶体 $+$ 限幅二阶 bean，见 \S\ref{sec:view}）即后端积分的\textbf{同一条曲线}，$\Vp,\Sw$ 取该边界的精确环向积分
   \begin{equation}
-    \Vp = \Aflux\,\Lax = \pi a^2\,\Lax,\qquad
-    \Sw = \bar{C}_\mathrm{wall}\,\Lax,
+    \Vp=\oint\!\Big[\tfrac12 R^2\,dZ\Big]d\varphi,\qquad
+    \Sw=\oint\!\!\int\big|\partial_\theta P\times\partial_\varphi P\big|\,d\theta\,d\varphi,
   \end{equation}
-  $\Lax$ 为近轴磁轴弧长，$\bar{C}_\mathrm{wall}$ 为弧长加权的壁截面周长（边界 $+g$）。$\iotabar$ 由周期 $\sigma$ 方程自洽解出（含轴扭率贡献）。
+  比解析 Pappus 估计 $\pi a^2\Lax$ 低约 $2$–$6\%$（bean/曲率修正）。$\Lax$ 为近轴磁轴弧长，$\iotabar$ 由周期 $\sigma$ 方程自洽解出（含轴扭率贡献）；$\Aflux=\pi a^2$ 仍为功率密度的一阶通量守恒锚。
 \item \textbf{真机}（W7-X、LHD、HSX、CFQS）：单谐波近轴\textbf{无法}表示，改用\textbf{实测覆写}
   \begin{equation}
     \Vp = \Vp^\mathrm{override},\quad
@@ -157,7 +157,7 @@ Sudo 密度限 & $n_\mathrm{Sudo}=0.25\sqrt{P_L B_0/(a^2R_0)}\cdot10^{20}$ & $a,
 P(\theta)=\text{axis}+X\hat n+Y\hat b+Z\hat t,\quad
 X=rX_{1c}\cos\theta+r^2(X_{20}+X_{2c}\cos2\theta+X_{2s}\sin2\theta),\ \dots
 \]
-一阶体按真实 $a$ 画（尺寸对），二阶 wobble 限幅（$\le$ 一阶的 $50\%$）给出 bean/crescent，互不自交。
+一阶体按真实 $a$ 画（尺寸对），二阶 wobble 限幅（$\le$ 一阶的 $50\%$）给出 bean/crescent，互不自交。此 $\rho{=}1$ 边界即概念堆功率账体积/壁面的积分对象（\S\ref{sec:power}）——前端所画与后端所积为同一条。
 
 \paragraph{真机——真实公开平衡边界谐波。}
 取 DESC 公开平衡（\texttt{desc/examples}：W7-X、HSX、ESTELL；经典 $l{=}2$ heliotron 作 LHD）的边界 Fourier 系数，截断 $|m|,|n|\le2$、归一化（减 $R_{00}$、除原生小半径），按 DESC 双 Fourier 乘积基求值并重缩放到预设 $R_0,a$：
@@ -167,8 +167,12 @@ Z(\theta,\varphi)=a\!\sum_{m,n}\!Z_{mn}A_m(\theta)B_n(\varphi),
 \end{equation}
 $A_m=\cos m\theta\,(m\!\ge\!0)|\sin|m|\theta\,(m\!<\!0)$，$B_n=\cos(n\,n_\mathrm{fp}\varphi)|\sin(\dots)$。这复现真实的 W7-X bean$\to$triangle、LHD 旋转椭圆、HSX/CFQS 形态。
 
-\paragraph{嵌套面与壁层。}
-嵌套磁面与壁层都\textbf{从该切面真实质心}按比例缩放（$n\!\ne\!0$ 谐波会把每个切面挪离 $R_0$，若从 $R_0$ 缩放会把磁面甩到壁外）。保证 磁面 $\subset$ 边界 $\subset$ 壁。UI 提供\textbf{相位开关}（默认全显，亦可单看 $\varphi=0/T4/T2$）。
+\paragraph{嵌套面与壁层（统一画法）。}
+概念堆与真机\textbf{共用一套}嵌套构造：以磁轴（$m{=}0$ 谐波 / 近轴 $r\!\to\!0$ 极限）为芯，
+\[
+S(\rho)=\text{axis}+\rho\,(\text{低阶体})+\rho^{1.5}\,(\text{高阶塑形}),
+\]
+低阶体（$m\!\le\!1$ 椭圆 / 一阶近轴）随尺寸线性缩放，高阶塑形（$m\!\ge\!2$ bean·triangle / 二阶 wobble）按 $\rho^{1.5}$ 衰减——比原始近轴 $\rho^{|m|}$（$=\rho^2$）高一阶，使磁面\textbf{严格嵌套不交叉}（逐点 point-in-polygon 核验，全部预设、全部切面）并向轴平滑圆化；$\rho$ 取均匀采样使径向间距均匀（W7-X $\varphi{=}0$ 间距不均匀度 $1.73\!\to\!1.11$）。原 $\rho^2$ 衰减会让 W7-X $\varphi{=}0$ bean 尖端处 $\rho{=}0.85$ 面\textbf{穿出边界}（$15/121$ 点）。因 $\rho{=}1$ 边界与衰减律无关，\textbf{功率账体积积分不受此显示改动影响}。壁层 $=$ 边界外扩 $g$，保证 磁面 $\subset$ 边界 $\subset$ 壁。UI 提供相位开关（$\varphi=0/T4/T2$）与连续相位滑块；高级输入（自定义轴 $rc/zs$、实测 $\Vp^{*}/\Sw^{*}$）折叠于\textbf{几何参数组末尾}就地展开，普通模式仅露 $R_0/A/n_\mathrm{fp}/\delta_h/\bar\eta/g$。
 
 \section{一致性核查}\label{sec:consistency}
 
@@ -191,7 +195,7 @@ CFQS & 0.25 & 0.196 & 0.196 & 1.00 \\
 
 \begin{itemize}
 \item \textbf{核心一致}：前端 $a,R_0,n_\mathrm{fp}$ $=$ 后端；\textbf{前端截面面积 $=$ 后端 $\Aflux=\pi a^2$（$\le1\%$，全部预设）}。真机谐波按原生小半径归一化使面积恒为 $\pi a^2$。
-\item \textbf{概念堆}：前后端同一近轴模型，体积/壁面一致到 $1$–$5\%$。
+\item \textbf{概念堆}：前端所画近轴边界与后端积分为\textbf{同一条曲线}，体积/壁面\textbf{恒等一致}（数值核对 $<10^{-6}$）；该精确积分比解析 Pappus 估计 $\pi a^2\Lax$ 低约 $2$–$6\%$（bean/曲率修正）。
 \item \textbf{真机}：功率账用实测 $\Vp/\Sw$；前端真实形状的几何体积/壁面在其 $\sim10$–$25\%$ 内（W7-X $32.7$ vs $30$；$\Sw$ $141$ vs $128$），实测值为准。
 \item 真机近轴诊断（$\iotabar_\mathrm{geom},\kappa_\mathrm{eff},e_\mathrm{max}$）已在 UI 标"$\sim$近轴估"，不进功率数。
 \end{itemize}
@@ -200,7 +204,7 @@ CFQS & 0.25 & 0.196 & 0.196 & 1.00 \\
 \begin{itemize}
 \item 截面视图是 cartoon：真机用 $|m|,|n|\le2$ 截断 + 归一化重缩放，非完整平衡重建；LHD 用通用 $l{=}2$ heliotron 结构、CFQS 用 ESTELL 代理（形态族正确、非逐机精确）。
 \item 真机 $\Vp/\Sw/\iotabar$ 覆写值为公开估计，需对照权威文献核实。
-\item 嵌套面 $\rho$ 线性自相似、壁层比例外扩，均为显示近似。
+\item 嵌套面用 $\rho\,$体 $+\,\rho^{1.5}\,$塑形的统一构造（严格嵌套、均匀间距），壁层按 $g$ 外扩；均为显示近似，但 $\rho{=}1$ 边界即功率账积分边界。
 \end{itemize}
 
 \paragraph{来源。}DESC \texttt{desc/examples}（github.com/PlasmaControl/DESC）；ISS04：Yamada NF 45 (2005) 1684；Sudo NF 30 (1990)；近轴：Landreman–Sengupta–Plunk JPP 85 (2019)。代码细节见 \texttt{polyfusion/configs/stellarator.py}、\texttt{polyfusion/nearaxis.py}、\texttt{presets/stellarator.json}，过程见 \texttt{docs/39}。
