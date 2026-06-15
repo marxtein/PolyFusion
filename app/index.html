@@ -59,6 +59,10 @@
   .grp-h .a0{color:var(--amber);font-family:"JetBrains Mono";text-transform:none;font-size:11.5px}
   .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px 9px}
   .fld{display:flex;flex-direction:column;min-width:0}
+  .advfld{display:none}.show-adv .advfld{display:flex}
+  .advbar{margin-bottom:8px}
+  .advbtn{width:100%;text-align:left;font-size:11px;color:var(--mut);background:var(--ink2);border:1px dashed var(--line2);border-radius:6px;padding:5px 9px;cursor:pointer}
+  .advbtn:hover{border-color:var(--teal);color:var(--fg)}.advbtn.on{border-style:solid;border-color:var(--teal);color:var(--teal)}
   .fld label{font-size:12px;color:var(--mut);margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help;display:flex;align-items:baseline;gap:6px}
   .fld label .nm{font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
   .fld label .u{color:var(--dim);font-size:10.5px;flex:0 0 auto}.fld.full{grid-column:1/-1}
@@ -254,7 +258,8 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   opPoint:'Operating Point',saveP:'⬇ Save Params',loadP:'⬆ Load Params',expJson:'⬇ Result JSON',expCsv:'⬇ Scan CSV',
   tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
   help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
-let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1;
+let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false;
+const ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override']);  // expert-only inputs
 
 const DENS=new Set(['ni0','n0']);const BOOLS=new Set(['use_tauE','geom_weighted']);const dsc=k=>DENS.has(k)?1e-20:1;  // density display in 10^20 m^-3
 const SELF_LOSS_PARAMS={
@@ -384,6 +389,8 @@ async function loadPreset(){
   }
   const r=await jpost('/api/run',{config:CUR,preset:pv});
   VALS=Object.assign({},r.inputs);
+  // auto-reveal advanced inputs if this preset carries any (measured machines)
+  ADVANCED=(VALS.Vp_override>0)||(VALS.Sw_override>0)||Array.isArray(VALS.rc)||Array.isArray(VALS.zs);
   buildParams();buildThresh();buildPlotOpts();applyRun(r);fitScanRanges();setView(VIEW);
 }
 function savePreset(){
@@ -421,7 +428,8 @@ function fitAxis(key,minEl,maxEl){
 function fitScanRanges(){fitAxis(xkey.value,xmin,xmax);fitAxis(ykey.value,ymin,ymax);}
 function buildParams(){
   const groups={};for(const p of CONFIGS[CUR].params){
-    const m=META[p]||[p,p,'','conf'];(groups[m[3]]=groups[m[3]]||[]).push(p);}
+    const m=META[p];if(!m)continue;  // skip backend-only params (e.g. 'shape')
+    (groups[m[3]]=groups[m[3]]||[]).push(p);}
   let html='';
   for(const[gk,gz,ge]of GROUPS){if(!groups[gk])continue;
     let a0='';if(gk==='geo'&&'R0'in VALS&&'A'in VALS)a0=`<span class="a0"><i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m</span>`;
@@ -441,6 +449,19 @@ function buildParams(){
         html+=`<div class="fld"><label title="${tip}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span>${u}</label><input type="number" step="any" data-p="${p}" ${dn?'data-sc="1e20"':''} value="${fmtIn(dn?VALS[p]*1e-20:VALS[p])}"></div>`;}
     }html+='</div>';}
   const box=document.getElementById('params');box.innerHTML=html;
+  // ADVANCED (expert) inputs: custom Fourier axis + measured Vp/Sw overrides.
+  // Normal mode shows only R0/A/N_fp/delta_h/etabar/g and computes volume/area
+  // self-consistently from the geometry; advanced mode reveals the overrides.
+  box.querySelectorAll('[data-p]').forEach(el=>{const f=el.closest('.fld');
+    if(f&&ADV_PARAMS.has(el.dataset.p))f.classList.add('advfld');});
+  box.classList.toggle('show-adv',!!ADVANCED);
+  if(CONFIGS[CUR].params.some(p=>ADV_PARAMS.has(p))){
+    const bar=document.createElement('div');bar.className='advbar';
+    bar.innerHTML=`<button id="advBtn" class="advbtn${ADVANCED?' on':''}">`+
+      `${ADVANCED?'▾ ':'▸ '}${L('高级输入（自定义轴 / 实测体积·面积覆写）','Advanced (custom axis / measured Vp·Sw)')}</button>`;
+    box.prepend(bar);
+    document.getElementById('advBtn').onclick=()=>{ADVANCED=!ADVANCED;buildParams();};
+  }
   // selecting a line-radiation species auto-fills Zimp with its nuclear
   // charge (full-stripping approx; edit manually for <Z>(Te) of Kr/Xe/W —
   // coronal <Z> self-consistency is queued as a later physics batch)
