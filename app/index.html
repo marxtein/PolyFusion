@@ -662,6 +662,13 @@ function drawShape(){
       const cols=['#ff5d73','#e9eef7','#36e2c4'];
       const frames=sh.frames||null;
       const sliderOn=SLIDER_IDX!==null&&frames;
+      // stable equal-aspect view: fix the range to the union envelope of all
+      // cuts+frames (and walls) so scrubbing phi morphs the section IN PLACE
+      // instead of the axes rescaling every frame (the "not smooth" slider).
+      {let xb=1e30,Xb=-1e30,yb=1e30,Yb=-1e30;
+       const acc=(R,Z)=>{for(const x of R){if(x<xb)xb=x;if(x>Xb)Xb=x;}for(const y of Z){if(y<yb)yb=y;if(y>Yb)Yb=y;}};
+       [...sh.sections,...(frames||[])].forEach(s=>{acc(s.R,s.Z);if(s.wall)acc(s.wall.R,s.wall.Z);});
+       if(Xb>xb&&Yb>yb)lay.__fixbox={xmn:xb,xmx:Xb,ymn:yb,ymx:Yb};}
       const drawCut=(s,col)=>{const surfs=s.surfaces||[{rho:1,R:s.R,Z:s.Z}];
         surfs.forEach((q,qi)=>{const isB=qi===surfs.length-1;
           add({type:'scatter',mode:'lines',x:q.R,y:q.Z,line:{color:isB?col:'#8fb6c7',width:isB?2.5:1.18},opacity:isB?1:0.68},isB?'boundary':'flux');});
@@ -764,7 +771,8 @@ function drawShape(){
     // so a transient bad read can't blow the range up to +/-200
     const ar=(w>50&&h>50)?w/h:1.1;
     let xmn=1e30,xmx=-1e30,ymn=1e30,ymx=-1e30;
-    tr.forEach(t=>{(t.x||[]).forEach(x=>{if(x!=null&&isFinite(x)){if(x<xmn)xmn=x;if(x>xmx)xmx=x;}});
+    if(lay.__fixbox){({xmn,xmx,ymn,ymx}=lay.__fixbox);}  // stable phi-scrub view
+    else tr.forEach(t=>{(t.x||[]).forEach(x=>{if(x!=null&&isFinite(x)){if(x<xmn)xmn=x;if(x>xmx)xmx=x;}});
                    (t.y||[]).forEach(y=>{if(y!=null&&isFinite(y)){if(y<ymn)ymn=y;if(y>ymx)ymx=y;}});});
     if(xmx>xmn&&ymx>ymn){
       const cx=(xmn+xmx)/2,cy=(ymn+ymx)/2;let hx=(xmx-xmn)/2*1.12,hy=(ymx-ymn)/2*1.12;

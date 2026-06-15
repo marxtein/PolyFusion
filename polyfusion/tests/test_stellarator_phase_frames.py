@@ -21,22 +21,37 @@ def ok(cond, msg):
     PASS = PASS and cond
 
 
-def main():
-    presets, _ = load_presets("stellarator")
-    sh = section_outlines(**presets["W7-X"])
-    ok("frames" in sh, "machine shape has phase frames")
+def _check_frames(name):
+    """Both machines AND concepts must expose well-formed, nested phase frames
+    so the continuous phase slider works on every preset (concepts used to have
+    no frames -> no slider)."""
+    sh = section_outlines(**load_presets("stellarator")[0][name])
+    ok("frames" in sh and sh["frames"], f"{name}: shape has phase frames")
     frames = sh["frames"]
-    ok(len(frames) >= 12, f"enough frames for a smooth slider ({len(frames)})")
-    for fr in frames[:3]:
+    ok(len(frames) >= 12, f"{name}: enough frames for a smooth slider ({len(frames)})")
+    for fr in frames[:2]:
         for k in ("frac", "R", "Z", "surfaces", "wall"):
-            ok(k in fr, f"frame has key '{k}'")
+            ok(k in fr, f"{name}: frame has key '{k}'")
     fracs = [fr["frac"] for fr in frames]
     ok(all(fracs[i] < fracs[i+1] for i in range(len(fracs)-1)),
-       "frame fracs increase monotonically over the period")
-    # frames at different phi are genuinely different cross-sections
+       f"{name}: frame fracs increase monotonically over the period")
     f0, fm = frames[0], frames[len(frames)//2]
     d = float(np.max(np.abs(np.array(f0["R"]) - np.array(fm["R"]))))
-    ok(d > 0.02 * sh["a"], f"frames vary with phi (max dR {d:.3f})")
+    ok(d > 0.02 * sh["a"], f"{name}: frames vary with phi (max dR {d:.3f})")
+    # frames must nest strictly too (the slider draws them)
+    from matplotlib.path import Path
+    for fr in (frames[0], frames[len(frames)//3], frames[len(frames)//2]):
+        s = fr["surfaces"]
+        for i in range(len(s) - 1):
+            poly = Path(np.column_stack([s[i+1]["R"], s[i+1]["Z"]]))
+            out = int((~poly.contains_points(
+                np.column_stack([s[i]["R"], s[i]["Z"]]))).sum())
+            ok(out == 0, f"{name}: frame phi={fr['frac']:.2f} surface {i} nested")
+
+
+def main():
+    for name in ("W7-X", "LHD", "HSX", "CFQS", "HELIAS", "NAE-QA"):
+        _check_frames(name)
 
     print("\nRESULT:", "PHASE FRAMES PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1

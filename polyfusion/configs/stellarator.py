@@ -271,61 +271,69 @@ def _nearaxis_reconstruct(na, nfp, a, th):
     cos_2th, sin_2th = np.cos(2 * th), np.sin(2 * th)
     so = na.second_order
 
-    def _P(arr, phi):
-        xp = np.append(na.phi, na.phi[0] + period)
-        fp = np.append(arr, arr[0])
-        return float(np.interp(math.fmod(phi, period), xp, fp))
+    # pre-append the wrap point ONCE per array (periodic interp) so per-phi
+    # evaluation is a bare np.interp — the frames/sections rho-loops would
+    # otherwise re-append and re-interpolate every call (the slow path).
+    xp = np.append(na.phi, na.phi[0] + period)
 
-    def _frame(phi):
-        n_hat = [_P(na.normal[k], phi) for k in range(3)]
-        b_hat = [_P(na.binormal[k], phi) for k in range(3)]
-        t_hat = [_P(na.tangent[k], phi) for k in range(3)]
-        return n_hat, b_hat, t_hat
+    def _mk(arr):
+        return np.append(arr, arr[0])
 
-    def _second(phi):
-        x2 = _P(so.X20, phi) + _P(so.X2c, phi) * cos_2th + _P(so.X2s, phi) * sin_2th
-        y2 = _P(so.Y20, phi) + _P(so.Y2c, phi) * cos_2th + _P(so.Y2s, phi) * sin_2th
-        z2 = _P(so.Z20, phi) + _P(so.Z2c, phi) * cos_2th + _P(so.Z2s, phi) * sin_2th
-        return x2, y2, z2
+    nR, nZ = _mk(na.normal[0]), _mk(na.normal[2])
+    bR, bZ = _mk(na.binormal[0]), _mk(na.binormal[2])
+    tR, tZ = _mk(na.tangent[0]), _mk(na.tangent[2])
+    X1cA, Y1sA, Y1cA = _mk(na.X1c), _mk(na.Y1s), _mk(na.Y1c)
+    R0A, Z0A = _mk(na.R0_arr), _mk(na.Z0_arr)
+    if so is not None:
+        X20A, X2cA, X2sA = _mk(so.X20), _mk(so.X2c), _mk(so.X2s)
+        Y20A, Y2cA, Y2sA = _mk(so.Y20), _mk(so.Y2c), _mk(so.Y2s)
+        Z20A, Z2cA, Z2sA = _mk(so.Z20), _mk(so.Z2c), _mk(so.Z2s)
 
-    def r2r(phi):
+    def cut(phi):
+        """Precompute everything phi-dependent ONCE, return ``surf(rho)`` and a
+        ``.cap`` attribute (the per-phi r^2 display radius)."""
+        p = math.fmod(phi, period)
+
+        def iv(fp):
+            return float(np.interp(p, xp, fp))
+
+        nh0, nh2 = iv(nR), iv(nZ)
+        bh0, bh2 = iv(bR), iv(bZ)
+        X1c, Y1s, Y1c = iv(X1cA), iv(Y1sA), iv(Y1cA)
+        R0p, Z0p = iv(R0A), iv(Z0A)
+        body_R = X1c * cos_th * nh0 + (Y1s * sin_th + Y1c * cos_th) * bh0
+        body_Z = X1c * cos_th * nh2 + (Y1s * sin_th + Y1c * cos_th) * bh2
         if so is None:
-            return a
-        n_hat, b_hat, t_hat = _frame(phi)
-        X1c, Y1s, Y1c = _P(na.X1c, phi), _P(na.Y1s, phi), _P(na.Y1c, phi)
-        v1R = X1c * cos_th * n_hat[0] + (Y1s * sin_th + Y1c * cos_th) * b_hat[0]
-        v1Z = X1c * cos_th * n_hat[2] + (Y1s * sin_th + Y1c * cos_th) * b_hat[2]
-        x2, y2, z2 = _second(phi)
-        v2R = x2 * n_hat[0] + y2 * b_hat[0] + z2 * t_hat[0]
-        v2Z = x2 * n_hat[2] + y2 * b_hat[2] + z2 * t_hat[2]
-        s1 = float(np.max(np.hypot(v1R, v1Z)))
-        s2 = float(np.max(np.hypot(v2R, v2Z)))
-        return min(a, _R2_DISPLAY_CAP * s1 / s2) if s2 > 0 else a
+            def surf(rho):
+                return (R0p + rho * a * body_R, Z0p + rho * a * body_Z)
+            surf.cap = a
+            return surf
+        th0, th2 = iv(tR), iv(tZ)
+        x2 = iv(X20A) + iv(X2cA) * cos_2th + iv(X2sA) * sin_2th
+        y2 = iv(Y20A) + iv(Y2cA) * cos_2th + iv(Y2sA) * sin_2th
+        z2 = iv(Z20A) + iv(Z2cA) * cos_2th + iv(Z2sA) * sin_2th
+        wob_R = x2 * nh0 + y2 * bh0 + z2 * th0
+        wob_Z = x2 * nh2 + y2 * bh2 + z2 * th2
+        s1 = float(np.max(np.hypot(body_R, body_Z)))
+        s2 = float(np.max(np.hypot(wob_R, wob_Z)))
+        cap = min(a, _R2_DISPLAY_CAP * s1 / s2) if s2 > 0 else a
+
+        def surf(rho):
+            # body (r1 ellipse) scales with size (rho); bean wobble (r2) is
+            # bounded by cap and fades as rho^_SHAPE_FADE for strictly-nested,
+            # evenly rounding surfaces (rho=1 -> cap^2, the unchanged boundary).
+            wob = (rho ** _SHAPE_FADE) * cap * cap
+            R = R0p + rho * a * body_R + wob * wob_R
+            Z = Z0p + rho * a * body_Z + wob * wob_Z
+            return R, Z
+        surf.cap = cap
+        return surf
 
     def rz(phi, rho):
-        n_hat, b_hat, t_hat = _frame(phi)
-        X1c, Y1s, Y1c = _P(na.X1c, phi), _P(na.Y1s, phi), _P(na.Y1c, phi)
-        R0p, Z0p = _P(na.R0_arr, phi), _P(na.Z0_arr, phi)
-        if so is None:
-            r = rho * a
-            X = r * X1c * cos_th
-            Y = r * (Y1s * sin_th + Y1c * cos_th)
-            return R0p + X * n_hat[0] + Y * b_hat[0], Z0p + X * n_hat[2] + Y * b_hat[2]
-        x2, y2, z2 = _second(phi)
-        # body (r1 ellipse) scales with size (rho); bean wobble (r2) is bounded
-        # by the cap r2r and fades as rho^_SHAPE_FADE for strictly-nested, evenly
-        # rounding surfaces (rho=1 -> cap^2, the unchanged boundary).
-        cap = r2r(phi)
-        r1 = rho * a
-        wob = (rho ** _SHAPE_FADE) * cap * cap
-        X = r1 * X1c * cos_th + wob * x2
-        Y = r1 * (Y1s * sin_th + Y1c * cos_th) + wob * y2
-        Z = wob * z2
-        R = R0p + X * n_hat[0] + Y * b_hat[0] + Z * t_hat[0]
-        Zc = Z0p + X * n_hat[2] + Y * b_hat[2] + Z * t_hat[2]
-        return R, Zc
+        return cut(phi)(rho)
 
-    rz.r2r = r2r
+    rz.cut = cut
+    rz.r2r = lambda phi: cut(phi).cap
     return rz
 
 
@@ -467,23 +475,48 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
     else:
         a_disp = a
 
-    def _RZ(j, rho):
-        return rz(float(na.phi[j]), rho)
+    def _cut_surfaces(surf):
+        out = []
+        for rho in rhos:
+            Rr, Zr = surf(rho)
+            out.append({"rho": float(rho), "R": Rr.tolist(), "Z": Zr.tolist()})
+        return out
 
     for (frac, label), j in zip(cuts, cut_j):
-        surfaces = []
-        for rho in rhos:
-            Rr, Zr = _RZ(j, rho)
-            surfaces.append({"rho": float(rho), "R": Rr.tolist(), "Z": Zr.tolist()})
+        surf = rz.cut(float(na.phi[j]))      # ONE precompute, reused per rho
+        surfaces = _cut_surfaces(surf)
         Rsec, Zsec = surfaces[-1]["R"], surfaces[-1]["Z"]
         sec = {"label": label, "elong": float(na.elongation[j]),
                "R": Rsec, "Z": Zsec, "surfaces": surfaces}
         sec["wall"] = _wall_offset(Rsec, Zsec, na.R0_arr[j], na.Z0_arr[j], g)
         sections.append(sec)
+
+    # fine phi frames over one field period for the continuous phase slider (UI
+    # scrub) — same reconstructor, evaluated at EXACT phi for a smooth sweep, so
+    # concepts get the slider too (previously only the machine path had frames).
+    xp_ax = np.append(na.phi, na.phi[0] + period)
+    R0_ax, Z0_ax = np.append(na.R0_arr, na.R0_arr[0]), np.append(na.Z0_arr, na.Z0_arr[0])
+
+    def _axis_at(phi):
+        return (float(np.interp(phi % period, xp_ax, R0_ax)),
+                float(np.interp(phi % period, xp_ax, Z0_ax)))
+
+    frames = []
+    for k in range(_N_PHASE_FRAMES):
+        frac = k / _N_PHASE_FRAMES
+        phi = frac * period
+        surfs = _cut_surfaces(rz.cut(phi))   # ONE precompute, reused per rho
+        Rb, Zb = surfs[-1]["R"], surfs[-1]["Z"]
+        aR, aZ = _axis_at(phi)
+        elong = float((np.max(Zb) - np.min(Zb)) / (np.max(Rb) - np.min(Rb)))
+        frames.append({"label": "φ=%.2fT" % frac, "frac": float(frac),
+                       "elong": elong, "R": Rb, "Z": Zb, "surfaces": surfs,
+                       "wall": _wall_offset(Rb, Zb, aR, aZ, g)})
+
     axis = {"R": na.R0_arr[::6].tolist(), "Z": na.Z0_arr[::6].tolist()}
     return {"mode": "near-axis", "metric_mode": metric_mode,
             "a": a, "a_disp": float(a_disp), "g": g,
-            "sections": sections, "axis": axis}
+            "sections": sections, "frames": frames, "axis": axis}
 
 
 def _ellipse_perimeter(amaj, amin):
