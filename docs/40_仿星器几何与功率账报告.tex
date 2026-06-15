@@ -172,11 +172,11 @@ $A_m=\cos m\theta\,(m\!\ge\!0)|\sin|m|\theta\,(m\!<\!0)$，$B_n=\cos(n\,n_\mathr
 \[
 S(\rho)=\text{axis}+\rho\,(\text{低阶体})+\rho^{1.5}\,(\text{高阶塑形}),
 \]
-低阶体（$m\!\le\!1$ 椭圆 / 一阶近轴）随尺寸线性缩放，高阶塑形（$m\!\ge\!2$ bean·triangle / 二阶 wobble）按 $\rho^{1.5}$ 衰减——比原始近轴 $\rho^{|m|}$（$=\rho^2$）高一阶，使磁面\textbf{严格嵌套不交叉}（逐点 point-in-polygon 核验，全部预设、全部切面）并向轴平滑圆化；$\rho$ 取均匀采样使径向间距均匀（W7-X $\varphi{=}0$ 间距不均匀度 $1.73\!\to\!1.11$）。原 $\rho^2$ 衰减会让 W7-X $\varphi{=}0$ bean 尖端处 $\rho{=}0.85$ 面\textbf{穿出边界}（$15/121$ 点）。因 $\rho{=}1$ 边界与衰减律无关，\textbf{功率账体积积分不受此显示改动影响}。壁层 $=$ 边界外扩 $g$，保证 磁面 $\subset$ 边界 $\subset$ 壁。UI 提供相位开关（$\varphi=0/T4/T2$）与连续相位滑块；高级输入（自定义轴 $rc/zs$、实测 $\Vp^{*}/\Sw^{*}$）折叠于\textbf{几何参数组末尾}就地展开，普通模式仅露 $R_0/A/n_\mathrm{fp}/\delta_h/\bar\eta/g$。
+低阶体（$m\!\le\!1$ 椭圆 / 一阶近轴）随尺寸线性缩放，高阶塑形（$m\!\ge\!2$ bean·triangle / 二阶 wobble）按 $\rho^{1.5}$ 衰减——比原始近轴 $\rho^{|m|}$（$=\rho^2$）高一阶，使磁面\textbf{严格嵌套不交叉}（逐点 point-in-polygon 核验，全部预设、全部切面）并向轴平滑圆化；$\rho$ 取均匀采样使径向间距均匀（W7-X $\varphi{=}0$ 间距不均匀度 $1.73\!\to\!1.11$）。原 $\rho^2$ 衰减会让 W7-X $\varphi{=}0$ bean 尖端处 $\rho{=}0.85$ 面\textbf{穿出边界}（$15/121$ 点）。因 $\rho{=}1$ 边界与衰减律无关，\textbf{功率账体积积分不受此显示改动影响}。壁层 $=$ 边界外扩 $g$，保证 磁面 $\subset$ 边界 $\subset$ 壁。UI 提供相位开关（$\varphi=0/T4/T2$）与连续相位滑块（真机与概念堆\textbf{统一}支持——近轴路径亦输出一周期 $24$ 帧；视窗固定到全帧并集使相位扫描平滑、不抖动）；高级输入（自定义轴 $rc/zs$、实测 $\Vp^{*}/\Sw^{*}$）折叠于\textbf{几何参数组末尾}就地展开，普通模式仅露 $R_0/A/n_\mathrm{fp}/\delta_h/\bar\eta/g$。
 
 \section{一致性核查}\label{sec:consistency}
 
-对全部 6 预设数值核对（前端截面面积 vs 后端 $\Aflux$；前端隐含体积/壁面 vs 后端 $\Vp/\Sw$）：
+对全部 9 预设（6 个原预设 + 3 个新增近轴 QS 预设 precise-QA/precise-QH/QH-nfp3）数值核对（前端截面面积 vs 后端 $\Aflux$；前端隐含体积/壁面 vs 后端 $\Vp/\Sw$）：
 
 \begin{center}
 \renewcommand{\arraystretch}{1.25}
@@ -196,6 +196,7 @@ CFQS & 0.25 & 0.196 & 0.196 & 1.00 \\
 \begin{itemize}
 \item \textbf{核心一致}：前端 $a,R_0,n_\mathrm{fp}$ $=$ 后端；\textbf{前端截面面积 $=$ 后端 $\Aflux=\pi a^2$（$\le1\%$，全部预设）}。真机谐波按原生小半径归一化使面积恒为 $\pi a^2$。
 \item \textbf{概念堆}：前端所画近轴边界与后端积分为\textbf{同一条曲线}，体积/壁面\textbf{恒等一致}（数值核对 $<10^{-6}$）；该精确积分比解析 Pappus 估计 $\pi a^2\Lax$ 低约 $2$–$6\%$（bean/曲率修正）。
+\item \textbf{新增近轴 QS 预设}（precise-QA/precise-QH/QH-nfp3）：取自公开近轴准对称库（pyQSC / Landreman--Paul 2022），由近轴展开\textbf{定义}，故本求解器\textbf{原生精确}复现其发表的轴上旋转变换（$\iota$：QA $0.42$、QH $1.24$、QH-nfp3 $1.25$），非代理。作为概念堆存储（显式 $rc/zs$ 缩放到 $R_0$、$\bar\eta=|\bar\eta_\mathrm{pub}|/R_0$，无覆写）。真机则需 DESC 双 Fourier 边界谐波（离线 DESC 管线），本环境不可复现，故未新增真机预设。
 \item \textbf{真机}：功率账用实测 $\Vp/\Sw$；前端真实形状的几何体积/壁面在其 $\sim10$–$25\%$ 内（W7-X $32.7$ vs $30$；$\Sw$ $141$ vs $128$），实测值为准。
 \item 真机近轴诊断（$\iotabar_\mathrm{geom},\kappa_\mathrm{eff},e_\mathrm{max}$）已在 UI 标"$\sim$近轴估"，不进功率数。
 \end{itemize}
