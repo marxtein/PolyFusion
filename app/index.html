@@ -532,7 +532,11 @@ function applyRun(r){
     const u=uu?` <span class="u">${uu}</span>`:'';
     // audit P1: Q=1000 cap must read as ignition/self-sustain, not a number
     if(k==='Qfus'&&o.ignited===1)return `<div class="kv hot"><span class="k">${pk(k)}</span><span class="v">∞ ⚡${L('点火','ignited')}</span></div>`;
-    return `<div class="kv ${cls}"><span class="k">${pk(k)}</span><span class="v">${fmt(val)}${u}</span></div>`;}).join('');
+    // measured-machine geometry: near-axis iota_geom/kappa_eff/elong_max are
+    // ESTIMATES only (the real geometry is the measured Vp/Sw override), flag them
+    const estK=(CUR==='stellarator'&&o.geom_is_measured===1&&(k==='iota_geom'||k==='kappa_eff'||k==='elong_max'));
+    const est=estK?` <span class="u" title="${L('单谐波近轴估计；真机几何由实测 Vp/Sw 覆写决定','single-harmonic near-axis estimate; real geometry set by measured Vp/Sw override')}">~${L('近轴估','est')}</span>`:'';
+    return `<div class="kv ${cls}"><span class="k">${pk(k)}</span><span class="v">${fmt(val)}${u}${est}</span></div>`;}).join('');
     if(rows)html+=`<div class="grp"><div class="grp-t">${g}</div>${rows}</div>`;}
   box.innerHTML=html;
   if(VIEW==='popcon')document.getElementById('plotMeta').innerHTML=`<span>P_fus <b>${fmt(o.Pfus)}</b> MW</span><span>Q <b>${fmt(o.Qfus)}</b></span>`;
