@@ -63,7 +63,7 @@
       "A": 10.0,
       "N_fp": 5,
       "delta_h": 0.25,
-      "etabar": 0.05,
+      "etabar": 0.119,
       "iota": 0.88,
       "Vp_override": 30.0,
       "Sn": 0.5,
@@ -92,7 +92,7 @@
       "A": 6.0,
       "N_fp": 10,
       "delta_h": 0.0,
-      "etabar": 0.04,
+      "etabar": 0.405,
       "iota": 0.4,
       "Vp_override": 30.0,
       "Sn": 0.5,
@@ -121,7 +121,7 @@
       "A": 8.0,
       "N_fp": 4,
       "delta_h": 0.1,
-      "etabar": 0.08,
+      "etabar": 0.948,
       "iota": 1.05,
       "Vp_override": 0.4,
       "Sn": 0.5,
@@ -150,7 +150,7 @@
       "A": 4.0,
       "N_fp": 2,
       "delta_h": 0.05,
-      "etabar": 0.06,
+      "etabar": 0.711,
       "iota": 0.45,
       "Vp_override": 1.0,
       "Sn": 0.5,
@@ -176,7 +176,8 @@
     }
   },
   "_notes": {
-    "Sw_override": "Plasma-facing surface area [m^2] for real machines (APPROX, confirm vs published). W7-X ~128 and LHD ~120 from published plasma-surface estimates; HSX 9.1 and CFQS 12.6 estimated from 2*pi*R0 * 2*pi*a * sqrt((1+kappa^2)/2) with kappa~1.5. Anchors Pwall=(Pfus+Pheat)/Sw instead of the extreme near-axis elongation profile (e.g. HSX elongation ~384). Concept reactors (HELIAS, NAE-QA) keep Sw_override=0 (pure near-axis). See docs/39."
+    "Sw_override": "Plasma-facing surface area [m^2] for real machines (APPROX, confirm vs published). W7-X ~128 and LHD ~120 from published plasma-surface estimates; HSX 9.1 and CFQS 12.6 estimated from 2*pi*R0 * 2*pi*a * sqrt((1+kappa^2)/2) with kappa~1.5. Anchors Pwall=(Pfus+Pheat)/Sw instead of the extreme near-axis elongation profile (e.g. HSX elongation ~384). Concept reactors (HELIAS, NAE-QA) keep Sw_override=0 (pure near-axis). See docs/39.",
+    "etabar": "For measured machines (W7-X/LHD/HSX/CFQS) etabar is chosen for a REPRESENTATIVE near-axis cross-section only (modest elongation); the transform/volume/wall come from measured iota/Vp_override/Sw_override, so etabar does not affect their power account. Single-harmonic near-axis cannot truly represent these devices."
   },
   "groups": {
     "实验装置 Experiments": [

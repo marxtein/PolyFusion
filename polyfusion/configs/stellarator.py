@@ -169,7 +169,8 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
 
     cut_j = [int(np.argmin(np.abs(na.phi - frac * period))) for frac, _ in cuts]
 
-    def _first_order_RZ(j, r):
+    def _first_order_RZ(j, rho):
+        r = rho * a
         X1 = r * na.X1c[j] * cos_th
         Y1 = r * (na.Y1s[j] * sin_th + na.Y1c[j] * cos_th)
         n_hat, b_hat = na.normal[:, j], na.binormal[:, j]
@@ -179,9 +180,13 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
 
     if metric_mode == "near-axis-r2":
         so = na.second_order
-        # display radius: keep the r^2 term a sub-dominant correction so the
-        # cartoon never self-intersects (cosmetic; power account untouched)
-        a_disp = a
+        # The first-order body is drawn at the REAL minor radius a (correct
+        # SIZE); only the second-order *wobble* is drawn at a bounded radius
+        # r2r[j] <= a, chosen per cut so the r^2 displacement never exceeds
+        # _R2_DISPLAY_CAP of the r^1 one.  This is what gives the bean/crescent
+        # character without ever shrinking the plasma to a speck or self-
+        # intersecting — purely cosmetic; the 0-D power account is untouched.
+        r2r = {}
         for j in cut_j:
             n_hat, b_hat, t_hat = na.normal[:, j], na.binormal[:, j], na.tangent[:, j]
             v1R = na.X1c[j] * cos_th * n_hat[0] + (na.Y1s[j] * sin_th + na.Y1c[j] * cos_th) * b_hat[0]
@@ -193,20 +198,21 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
             v2Z = x2 * n_hat[2] + y2 * b_hat[2] + z2 * t_hat[2]
             s1 = float(np.max(np.hypot(v1R, v1Z)))
             s2 = float(np.max(np.hypot(v2R, v2Z)))
-            if s2 > 0:
-                a_disp = min(a_disp, _R2_DISPLAY_CAP * s1 / s2)
+            r2r[j] = min(a, _R2_DISPLAY_CAP * s1 / s2) if s2 > 0 else a
 
-        def _RZ(j, r):
+        def _RZ(j, rho):
             x2 = so.X20[j] + so.X2c[j] * cos_2th + so.X2s[j] * sin_2th
             y2 = so.Y20[j] + so.Y2c[j] * cos_2th + so.Y2s[j] * sin_2th
             z2 = so.Z20[j] + so.Z2c[j] * cos_2th + so.Z2s[j] * sin_2th
-            X = r * na.X1c[j] * cos_th + r * r * x2
-            Y = r * (na.Y1s[j] * sin_th + na.Y1c[j] * cos_th) + r * r * y2
-            Z = r * r * z2
+            r1, r2 = rho * a, rho * r2r[j]   # size from a; wobble bounded
+            X = r1 * na.X1c[j] * cos_th + r2 * r2 * x2
+            Y = r1 * (na.Y1s[j] * sin_th + na.Y1c[j] * cos_th) + r2 * r2 * y2
+            Z = r2 * r2 * z2
             n_hat, b_hat, t_hat = na.normal[:, j], na.binormal[:, j], na.tangent[:, j]
             R = na.R0_arr[j] + X * n_hat[0] + Y * b_hat[0] + Z * t_hat[0]
             Zc = na.Z0_arr[j] + X * n_hat[2] + Y * b_hat[2] + Z * t_hat[2]
             return R, Zc
+        a_disp = min(r2r.values())
     else:
         a_disp = a
         _RZ = _first_order_RZ
@@ -214,7 +220,7 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
     for (frac, label), j in zip(cuts, cut_j):
         surfaces = []
         for rho in rhos:
-            Rr, Zr = _RZ(j, rho * a_disp)
+            Rr, Zr = _RZ(j, rho)
             surfaces.append({"rho": float(rho), "R": Rr.tolist(), "Z": Zr.tolist()})
         Rsec, Zsec = surfaces[-1]["R"], surfaces[-1]["Z"]
         sec = {"label": label, "elong": float(na.elongation[j]),
