@@ -70,71 +70,73 @@ def axis_length(R0: float, N_fp: float, delta_h: float, n: int = 720) -> float:
 
 
 def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
-    """Literature-calibrated explicit boundary for a real machine (SHAPE VIEW).
+    """Explicit Fourier boundary for a real machine (SHAPE VIEW), from a public
+    equilibrium.
 
     Single-harmonic near-axis cannot represent W7-X (bean->triangle), LHD (l=2
-    heliotron rotating ellipse), HSX (QHS bean) or CFQS (QA D-shape).  This draws
-    a *representative* boundary calibrated to each machine's PUBLISHED shape
-    parameters (elongation, triangularity, bean indentation, helical rotation) —
-    NOT an exact VMEC reconstruction.  Purely cosmetic: the 0-D power account
-    uses the measured iota/Vp_override/Sw_override, never this outline.
+    heliotron rotating ellipse), HSX (QHS) or CFQS/ESTELL (QA D-shape).  The
+    ``shape`` descriptor carries truncated, NORMALIZED boundary Fourier harmonics
+    taken from a public DESC equilibrium (R00 removed, divided by the native
+    minor radius), evaluated here in DESC's double-Fourier product basis and
+    rescaled to this preset's R0 and a = R0/A:
 
-    The cross-section at toroidal cut ``phi`` (phase ``psi = N_fp*phi`` within one
-    field period; ``t = psi/pi`` morphs over the half period) is, in the local
-    (radial, vertical) plane,
+        R(theta, phi) = R0 + a * sum_{m,n} Rmn * A_m(theta) * B_n(phi)
+        Z(theta, phi) =      a * sum_{m,n} Zmn * A_m(theta) * B_n(phi)
+        A_m(theta) = cos(m theta)      (m >= 0)   or  sin(|m| theta)   (m < 0)
+        B_n(phi)   = cos(n*nfp*phi)    (n >= 0)   or  sin(|n|*nfp*phi)  (n < 0)
 
-        x0(theta) = cos(theta) + bean(t)*cos(2 theta)              # bean/kidney
-        y0(theta) = kappa(t)*sin(theta + tri(t)*sin(theta))        # elong + tri
-
-    rotated by ``rot*psi`` (heliotron poloidal rotation), scaled by the minor
-    radius ``a`` and placed on the axis (R0 + delta_h*cos psi, delta_h*0).  Each
-    of ``kappa``/``tri``/``bean`` is a [phi=0, half-period] pair, linearly
-    interpolated by ``t``; ``rot`` is the poloidal turns per field period.
+    Truncated to |m|,|n| <= 2 so it stays a light, recognizable cartoon — NOT a
+    full equilibrium.  Purely cosmetic: the 0-D power account uses the measured
+    iota/Vp_override/Sw_override, never this outline.  ``delta_h`` is unused here
+    (the axis excursion is already encoded in the n!=0 R harmonics).
     """
+    nfp = int(shape.get("nfp", round(N_fp)))
+    R_modes = [(int(m), int(n), float(c)) for m, n, c in shape["R"]]
+    Z_modes = [(int(m), int(n), float(c)) for m, n, c in shape["Z"]]
     th = np.linspace(0.0, 2 * math.pi, n_theta)
+    cos_m = {}; sin_m = {}
+    for m, _, _ in R_modes + Z_modes:
+        if m not in cos_m:
+            cos_m[m] = np.cos(m * th) if m >= 0 else np.sin(-m * th)
     rhos = (0.25, 0.4, 0.55, 0.7, 0.85, 1.0)
     cuts = [(0.0, "φ=0"), (0.25, "φ=T/4"), (0.5, "φ=T/2")]
-    kap, tri, bean = shape["kappa"], shape["tri"], shape["bean"]
-    rot = float(shape.get("rot", 0.0))
 
-    def _lerp(pair, t):
-        return float(pair[0]) + (float(pair[1]) - float(pair[0])) * t
+    def _shape_RZ(phi):
+        Rh = np.zeros_like(th); Zh = np.zeros_like(th)
+        for m, n, c in R_modes:
+            Bn = math.cos(n * nfp * phi) if n >= 0 else math.sin(-n * nfp * phi)
+            Rh += c * cos_m[m] * Bn
+        for m, n, c in Z_modes:
+            Bn = math.cos(n * nfp * phi) if n >= 0 else math.sin(-n * nfp * phi)
+            Zh += c * cos_m[m] * Bn
+        return Rh, Zh
 
-    def _outline(psi, rho):
-        t = min(psi / math.pi, 1.0)          # morph over the half period
-        k, d, b = _lerp(kap, t), _lerp(tri, t), _lerp(bean, t)
-        x0 = np.cos(th) + b * np.cos(2 * th)
-        y0 = k * np.sin(th + d * np.sin(th))
-        al = rot * psi
-        xr = x0 * math.cos(al) - y0 * math.sin(al)
-        yr = x0 * math.sin(al) + y0 * math.cos(al)
-        cR = R0 + delta_h * math.cos(psi)    # axis helical excursion (display)
-        R = cR + rho * a * xr
-        Z = rho * a * yr
-        return R, Z, cR, 0.0
-
-    sections, axis_R, axis_Z = [], [], []
+    sections = []
     for frac, label in cuts:
-        psi = frac * 2 * math.pi
+        phi = frac * 2 * math.pi / nfp
+        Rh, Zh = _shape_RZ(phi)
+        cR = R0                                  # axis already in the harmonics
         surfaces = []
         for rho in rhos:
-            R, Z, cR, cZ = _outline(psi, rho)
+            R = R0 + rho * a * Rh
+            Z = rho * a * Zh
             surfaces.append({"rho": float(rho), "R": R.tolist(), "Z": Z.tolist()})
-        Rb, Zb, cR, cZ = _outline(psi, 1.0)
-        # box elongation as the displayed elongation diagnostic for this cut
+        Rb = np.asarray(surfaces[-1]["R"]); Zb = np.asarray(surfaces[-1]["Z"])
+        cZ = float(Zb.mean())
         elong = float((Zb.max() - Zb.min()) / (Rb.max() - Rb.min()))
         sec = {"label": label, "elong": elong,
                "R": Rb.tolist(), "Z": Zb.tolist(), "surfaces": surfaces}
-        wR = (cR + (Rb - cR) * (1.0 + g / max(np.hypot(Rb - cR, Zb - cZ).max(), 1e-9)))
-        wZ = (cZ + (Zb - cZ) * (1.0 + g / max(np.hypot(Rb - cR, Zb - cZ).max(), 1e-9)))
-        sec["wall"] = {"R": wR.tolist(), "Z": wZ.tolist()}
+        rad = np.hypot(Rb - cR, Zb - cZ)
+        scale = 1.0 + g / max(rad.max(), 1e-9)
+        sec["wall"] = {"R": (cR + (Rb - cR) * scale).tolist(),
+                       "Z": (cZ + (Zb - cZ) * scale).tolist()}
         sections.append(sec)
-        axis_R.append(cR); axis_Z.append(cZ)
 
-    # smooth axis ring over a full field period for the display
+    # display axis ring (mean major radius; harmonic excursion is small)
     phi_axis = np.linspace(0.0, 2 * math.pi, 60)
-    axis = {"R": (R0 + delta_h * np.cos(phi_axis)).tolist(),
-            "Z": (delta_h * 0.0 * phi_axis).tolist()}
+    R00n = next((c for m, n, c in R_modes if m == 0 and n == 0), 0.0)
+    axis = {"R": (R0 + a * R00n + 0.0 * phi_axis).tolist(),
+            "Z": (0.0 * phi_axis).tolist()}
     return {"mode": "machine-boundary", "metric_mode": "machine-boundary",
             "a": a, "a_disp": a, "g": g, "sections": sections, "axis": axis,
             "shape_source": shape.get("source", "")}

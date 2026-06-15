@@ -5,19 +5,21 @@ heliotron rotating ellipse), HSX (QHS bean) or CFQS (QA D-shape) — it gave
 needle/microscopic ellipses, and for LHD's planar axis all three toroidal cuts
 collapsed onto each other ("only one cross-section drawn").
 
-These presets now carry an explicit ``shape`` descriptor (a rotating shaped
-boundary calibrated to published parameters), so section_outlines draws their
-real character: three DISTINCT, simple, sane-sized cross-sections.  Power
-account is untouched (machines override iota/Vp/Sw).
+These presets now carry an explicit ``shape`` descriptor: truncated (|m|,|n|<=2),
+normalized boundary Fourier harmonics taken from PUBLIC DESC equilibria
+(desc/examples), evaluated in DESC's double-Fourier product basis and rescaled to
+the preset R0/a.  section_outlines draws their real character: three DISTINCT,
+simple, sane-sized cross-sections.  Power account is untouched (machines override
+iota/Vp/Sw).
 
-Literature anchors (see docs):
-  * W7-X: cross-section morphs bean (phi=0) -> triangular (half period),
-    elongation up to ~3.6 at the pentagon corners; 5 field periods.
-  * LHD: l=2/m=10 heliotron, R0=3.9 m a~0.6 m, elliptical cross-section that
-    rotates poloidally with toroidal angle.
-  * CFQS: 2 field periods, aspect ratio ~4, quasi-axisymmetric (tokamak-like
-    D-shape).
-  * HSX: 4 field periods, quasi-helically symmetric bean.
+Equilibrium sources:
+  * W7-X (DESC desc/examples/W7-X, 5 periods): cross-section morphs bean
+    (phi=0, tall) -> wide triangle (half period).  Verified against the real
+    boundary (offline reconstruction).
+  * LHD: canonical l=2 rotating-ellipse heliotron (DESC HELIOTRON structure) at
+    N_fp=10 — elliptical cross-section rotating poloidally with toroidal angle.
+  * CFQS: DESC desc/examples/ESTELL (2-field-period quasi-axisymmetric) proxy.
+  * HSX (DESC desc/examples/HSX, 4 periods): quasi-helically symmetric.
 
 Run: python polyfusion/tests/test_stellarator_machine_boundary.py
 """

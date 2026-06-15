@@ -87,21 +87,138 @@
       "H_fac": 1.0,
       "Sw_override": 128.0,
       "shape": {
-        "kind": "rotating-shaped",
-        "kappa": [
-          1.1,
-          2.6
+        "kind": "fourier",
+        "nfp": 5,
+        "R": [
+          [
+            0,
+            0,
+            0.0
+          ],
+          [
+            0,
+            1,
+            0.54886
+          ],
+          [
+            0,
+            2,
+            -0.013618
+          ],
+          [
+            1,
+            0,
+            0.965385
+          ],
+          [
+            1,
+            1,
+            -0.372217
+          ],
+          [
+            1,
+            2,
+            -0.031371
+          ],
+          [
+            2,
+            0,
+            0.0751
+          ],
+          [
+            2,
+            1,
+            0.110686
+          ],
+          [
+            2,
+            2,
+            0.138008
+          ],
+          [
+            -1,
+            -1,
+            0.46948
+          ],
+          [
+            -1,
+            -2,
+            0.040476
+          ],
+          [
+            -2,
+            -1,
+            -0.065377
+          ],
+          [
+            -2,
+            -2,
+            -0.1294
+          ]
         ],
-        "tri": [
-          0.0,
-          0.55
+        "Z": [
+          [
+            0,
+            -1,
+            0.464941
+          ],
+          [
+            0,
+            -2,
+            -0.005303
+          ],
+          [
+            1,
+            -1,
+            -0.365661
+          ],
+          [
+            1,
+            -2,
+            -0.009966
+          ],
+          [
+            2,
+            -1,
+            -0.022802
+          ],
+          [
+            2,
+            -2,
+            0.099762
+          ],
+          [
+            -1,
+            0,
+            -1.234827
+          ],
+          [
+            -1,
+            1,
+            -0.456171
+          ],
+          [
+            -1,
+            2,
+            -0.04146
+          ],
+          [
+            -2,
+            0,
+            0.008349
+          ],
+          [
+            -2,
+            1,
+            -0.054954
+          ],
+          [
+            -2,
+            2,
+            0.099665
+          ]
         ],
-        "bean": [
-          0.55,
-          0.0
-        ],
-        "rot": 0.0,
-        "source": "5-period optimized stellarator; cross-section morphs bean(phi=0)->triangular(half period), elongation up to ~3.6 at pentagon corners. Representative, calibrated to published shape; not exact VMEC."
+        "source": "DESC public equilibrium desc/examples/W7-X (5 field periods), boundary Fourier harmonics truncated to |m|,|n|<=2, normalized (R00 removed, /native minor radius). Bean(phi=0)->triangle(half period)."
       }
     },
     "LHD": {
@@ -133,21 +250,48 @@
       "H_fac": 1.0,
       "Sw_override": 120.0,
       "shape": {
-        "kind": "rotating-shaped",
-        "kappa": [
-          1.6,
-          1.6
+        "kind": "fourier",
+        "nfp": 10,
+        "R": [
+          [
+            0,
+            0,
+            0.0
+          ],
+          [
+            1,
+            0,
+            -1.048371
+          ],
+          [
+            1,
+            1,
+            -0.314511
+          ],
+          [
+            -1,
+            -1,
+            0.314511
+          ]
         ],
-        "tri": [
-          0.0,
-          0.0
+        "Z": [
+          [
+            -1,
+            0,
+            1.048371
+          ],
+          [
+            -1,
+            1,
+            -0.314511
+          ],
+          [
+            1,
+            -1,
+            -0.314511
+          ]
         ],
-        "bean": [
-          0.0,
-          0.0
-        ],
-        "rot": 0.5,
-        "source": "l=2/m=10 heliotron; elliptical cross-section rotating poloidally with toroidal angle (pi per field period). Representative; not exact VMEC."
+        "source": "Canonical l=2 rotating-ellipse heliotron (DESC HELIOTRON structure) at LHD N_fp=10, normalized & rescaled to LHD R0/a. Real LHD is l=2/m=10 heliotron; cross-section ellipse rotates with toroidal angle."
       }
     },
     "HSX": {
@@ -179,21 +323,138 @@
       "H_fac": 1.0,
       "Sw_override": 9.1,
       "shape": {
-        "kind": "rotating-shaped",
-        "kappa": [
-          1.3,
-          1.5
+        "kind": "fourier",
+        "nfp": 4,
+        "R": [
+          [
+            -2,
+            -2,
+            -0.138015
+          ],
+          [
+            -2,
+            -1,
+            -0.05462
+          ],
+          [
+            -1,
+            -2,
+            0.13899
+          ],
+          [
+            -1,
+            -1,
+            0.495501
+          ],
+          [
+            0,
+            0,
+            0.0
+          ],
+          [
+            0,
+            1,
+            1.567833
+          ],
+          [
+            0,
+            2,
+            0.160212
+          ],
+          [
+            1,
+            0,
+            1.084399
+          ],
+          [
+            1,
+            1,
+            -0.404597
+          ],
+          [
+            1,
+            2,
+            -0.1547
+          ],
+          [
+            2,
+            0,
+            -0.002902
+          ],
+          [
+            2,
+            1,
+            0.071412
+          ],
+          [
+            2,
+            2,
+            0.13256
+          ]
         ],
-        "tri": [
-          0.1,
-          0.2
+        "Z": [
+          [
+            -2,
+            0,
+            -0.025091
+          ],
+          [
+            -2,
+            1,
+            -0.079591
+          ],
+          [
+            -2,
+            2,
+            0.132897
+          ],
+          [
+            -1,
+            0,
+            -1.18494
+          ],
+          [
+            -1,
+            1,
+            -0.577231
+          ],
+          [
+            -1,
+            2,
+            -0.124208
+          ],
+          [
+            0,
+            -2,
+            0.143748
+          ],
+          [
+            0,
+            -1,
+            1.204964
+          ],
+          [
+            1,
+            -2,
+            -0.13899
+          ],
+          [
+            1,
+            -1,
+            -0.495501
+          ],
+          [
+            2,
+            -2,
+            0.128446
+          ],
+          [
+            2,
+            -1,
+            -0.069766
+          ]
         ],
-        "bean": [
-          0.25,
-          0.05
-        ],
-        "rot": 0.25,
-        "source": "4-period quasi-helically-symmetric bean, modestly rotating. Representative; not exact VMEC."
+        "source": "DESC public equilibrium desc/examples/HSX (4 field periods), |m|,|n|<=2 normalized harmonics. Quasi-helically symmetric."
       }
     },
     "CFQS": {
@@ -225,28 +486,145 @@
       "H_fac": 1.0,
       "Sw_override": 12.6,
       "shape": {
-        "kind": "rotating-shaped",
-        "kappa": [
-          1.6,
-          1.9
+        "kind": "fourier",
+        "nfp": 2,
+        "R": [
+          [
+            -2,
+            -2,
+            -0.046492
+          ],
+          [
+            -2,
+            -1,
+            0.108192
+          ],
+          [
+            -1,
+            -2,
+            0.015445
+          ],
+          [
+            -1,
+            -1,
+            -0.415471
+          ],
+          [
+            0,
+            0,
+            0.0
+          ],
+          [
+            0,
+            1,
+            -0.478361
+          ],
+          [
+            0,
+            2,
+            0.031761
+          ],
+          [
+            1,
+            0,
+            0.995143
+          ],
+          [
+            1,
+            1,
+            0.339176
+          ],
+          [
+            1,
+            2,
+            -0.016066
+          ],
+          [
+            2,
+            0,
+            0.041733
+          ],
+          [
+            2,
+            1,
+            -0.057684
+          ],
+          [
+            2,
+            2,
+            0.027232
+          ]
         ],
-        "tri": [
-          0.3,
-          0.4
+        "Z": [
+          [
+            -2,
+            0,
+            0.011829
+          ],
+          [
+            -2,
+            1,
+            0.03279
+          ],
+          [
+            -2,
+            2,
+            0.047562
+          ],
+          [
+            -1,
+            0,
+            -1.13995
+          ],
+          [
+            -1,
+            1,
+            0.395685
+          ],
+          [
+            -1,
+            2,
+            -0.013832
+          ],
+          [
+            0,
+            -2,
+            0.004985
+          ],
+          [
+            0,
+            -1,
+            -0.360597
+          ],
+          [
+            1,
+            -2,
+            -0.01363
+          ],
+          [
+            1,
+            -1,
+            0.362207
+          ],
+          [
+            2,
+            -2,
+            0.01788
+          ],
+          [
+            2,
+            -1,
+            0.088179
+          ]
         ],
-        "bean": [
-          0.0,
-          0.0
-        ],
-        "rot": 0.0,
-        "source": "2-period quasi-axisymmetric (tokamak-like) D-shape, mild toroidal variation. Representative; not exact VMEC."
+        "source": "DESC public equilibrium desc/examples/ESTELL (2-field-period quasi-axisymmetric) as CFQS proxy (CFQS is a low-aspect N_fp=2 QA), |m|,|n|<=2 normalized harmonics."
       }
     }
   },
   "_notes": {
     "Sw_override": "Plasma-facing surface area [m^2] for real machines (APPROX, confirm vs published). W7-X ~128 and LHD ~120 from published plasma-surface estimates; HSX 9.1 and CFQS 12.6 estimated from 2*pi*R0 * 2*pi*a * sqrt((1+kappa^2)/2) with kappa~1.5. Anchors Pwall=(Pfus+Pheat)/Sw instead of the extreme near-axis elongation profile (e.g. HSX elongation ~384). Concept reactors (HELIAS, NAE-QA) keep Sw_override=0 (pure near-axis). See docs/39.",
     "etabar": "For measured machines (W7-X/LHD/HSX/CFQS) etabar is chosen for a REPRESENTATIVE near-axis cross-section only (modest elongation); the transform/volume/wall come from measured iota/Vp_override/Sw_override, so etabar does not affect their power account. Single-harmonic near-axis cannot truly represent these devices.",
-    "shape": "Real machines carry an explicit 'shape' descriptor (rotating shaped boundary) for the cross-section VIEW only, because single-harmonic near-axis cannot represent bean/heliotron/QA shapes. kappa/tri/bean are [phi=0, half-period] pairs; rot = poloidal turns per field period; a=R0/A and axis excursion=delta_h. Calibrated to published shape parameters, NOT exact VMEC reconstructions. Does not affect the power account (iota/Vp/Sw are measured)."
+    "shape": "Real machines carry an explicit 'shape' = truncated (|m|,|n|<=2), normalized boundary Fourier harmonics from a PUBLIC equilibrium (DESC desc/examples: W7-X, HSX, ESTELL; canonical l=2 heliotron for LHD), evaluated in DESC double-Fourier product basis and rescaled to preset R0 and a=R0/A. Cross-section VIEW only; near-axis cannot represent bean/heliotron/QA. Does NOT affect power account (iota/Vp/Sw measured). Truncated cartoon, not a full equilibrium."
   },
   "groups": {
     "实验装置 Experiments": [
