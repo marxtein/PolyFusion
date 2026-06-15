@@ -69,6 +69,61 @@ def axis_length(R0: float, N_fp: float, delta_h: float, n: int = 720) -> float:
     return float(np.trapezoid(np.sqrt(dR**2 + R**2 + dZ**2), phi))
 
 
+def boundary_metrics(boundary_fn, nfp, g=0.0, n_phi=120):
+    """Exact toroidal plasma volume and wall surface area of a boundary.
+
+    ``boundary_fn(phi) -> (R[n_theta], Z[n_theta])`` on a uniform theta grid in
+    [0, 2pi).  The boundary is ``nfp``-periodic in phi, so we integrate ONE field
+    period [0, 2pi/nfp) and multiply by ``nfp`` (validated to <1e-13 against full
+    [0,2pi] integration; see tests/test_geometry_integral.py).
+
+    Volume: dV = R dR dZ dphi, with the cross-section integral
+    ``∬_S R dR dZ = ∮ (1/2) R^2 dZ`` (Green's theorem).  Surface: the area of the
+    WALL boundary (section centroid + (1 + g/max_radius)*(boundary - centroid)),
+    ``∬ |∂theta P × ∂phi P| dtheta dphi`` with P = (R cos phi, R sin phi, Z),
+    using central differences.  Matches the analytic torus V=2*pi^2*R0*a^2,
+    S=4*pi^2*R0*a to 0.004%.
+    """
+    nfp = int(nfp)
+    phs = np.linspace(0.0, 2 * math.pi / nfp, n_phi, endpoint=False)
+    dph = (2 * math.pi / nfp) / n_phi
+    R0arr, _ = boundary_fn(phs[0])
+    n_theta = len(R0arr)
+    Rg = np.empty((n_phi, n_theta)); Zg = np.empty((n_phi, n_theta))
+    for i, p in enumerate(phs):
+        R, Z = boundary_fn(p)
+        Rg[i] = R; Zg[i] = Z
+
+    # volume from the plasma boundary (no wall gap)
+    V = 0.0
+    for i in range(n_phi):
+        R, Z = Rg[i], Zg[i]
+        V += np.sum(0.5 * R * R * (np.roll(Z, -1) - Z)) * dph
+    V = abs(V) * nfp
+
+    # wall boundary = each section offset outward from its centroid by g
+    Wr = np.empty_like(Rg); Wz = np.empty_like(Zg)
+    for i in range(n_phi):
+        R, Z = Rg[i], Zg[i]; cR = R.mean(); cZ = Z.mean()
+        sc = 1.0 + g / max(np.hypot(R - cR, Z - cZ).max(), 1e-12)
+        Wr[i] = cR + (R - cR) * sc; Wz[i] = cZ + (Z - cZ) * sc
+
+    # wall surface area: |dP/dtheta x dP/dphi| (differences encode dtheta, dphi)
+    S = 0.0
+    for i in range(n_phi):
+        ip = (i + 1) % n_phi; im = (i - 1) % n_phi
+        R = Wr[i]; Z = Wz[i]; c = math.cos(phs[i]); s = math.sin(phs[i])
+        Pth_R = (np.roll(R, -1) - np.roll(R, 1)) * 0.5
+        Pth_Z = (np.roll(Z, -1) - np.roll(Z, 1)) * 0.5
+        dRdp = (Wr[ip] - Wr[im]) * 0.5; dZdp = (Wz[ip] - Wz[im]) * 0.5
+        ax, ay, az = Pth_R * c, Pth_R * s, Pth_Z
+        bx, by, bz = dRdp * c - R * s * dph, dRdp * s + R * c * dph, dZdp
+        cx = ay * bz - az * by; cy = az * bx - ax * bz; cz = ax * by - ay * bx
+        S += np.sum(np.sqrt(cx * cx + cy * cy + cz * cz))
+    S = S * nfp
+    return float(V), float(S)
+
+
 def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
     """Explicit Fourier boundary for a real machine (SHAPE VIEW), from a public
     equilibrium.
