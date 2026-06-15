@@ -85,7 +85,24 @@
       "use_tauE": 1.0,
       "f_aux_e": 0.5,
       "H_fac": 1.0,
-      "Sw_override": 128.0
+      "Sw_override": 128.0,
+      "shape": {
+        "kind": "rotating-shaped",
+        "kappa": [
+          1.1,
+          2.6
+        ],
+        "tri": [
+          0.0,
+          0.55
+        ],
+        "bean": [
+          0.55,
+          0.0
+        ],
+        "rot": 0.0,
+        "source": "5-period optimized stellarator; cross-section morphs bean(phi=0)->triangular(half period), elongation up to ~3.6 at pentagon corners. Representative, calibrated to published shape; not exact VMEC."
+      }
     },
     "LHD": {
       "R0": 3.9,
@@ -114,7 +131,24 @@
       "use_tauE": 1.0,
       "f_aux_e": 0.5,
       "H_fac": 1.0,
-      "Sw_override": 120.0
+      "Sw_override": 120.0,
+      "shape": {
+        "kind": "rotating-shaped",
+        "kappa": [
+          1.6,
+          1.6
+        ],
+        "tri": [
+          0.0,
+          0.0
+        ],
+        "bean": [
+          0.0,
+          0.0
+        ],
+        "rot": 0.5,
+        "source": "l=2/m=10 heliotron; elliptical cross-section rotating poloidally with toroidal angle (pi per field period). Representative; not exact VMEC."
+      }
     },
     "HSX": {
       "R0": 1.2,
@@ -143,7 +177,24 @@
       "use_tauE": 1.0,
       "f_aux_e": 0.5,
       "H_fac": 1.0,
-      "Sw_override": 9.1
+      "Sw_override": 9.1,
+      "shape": {
+        "kind": "rotating-shaped",
+        "kappa": [
+          1.3,
+          1.5
+        ],
+        "tri": [
+          0.1,
+          0.2
+        ],
+        "bean": [
+          0.25,
+          0.05
+        ],
+        "rot": 0.25,
+        "source": "4-period quasi-helically-symmetric bean, modestly rotating. Representative; not exact VMEC."
+      }
     },
     "CFQS": {
       "R0": 1.0,
@@ -172,12 +223,30 @@
       "use_tauE": 1.0,
       "f_aux_e": 0.5,
       "H_fac": 1.0,
-      "Sw_override": 12.6
+      "Sw_override": 12.6,
+      "shape": {
+        "kind": "rotating-shaped",
+        "kappa": [
+          1.6,
+          1.9
+        ],
+        "tri": [
+          0.3,
+          0.4
+        ],
+        "bean": [
+          0.0,
+          0.0
+        ],
+        "rot": 0.0,
+        "source": "2-period quasi-axisymmetric (tokamak-like) D-shape, mild toroidal variation. Representative; not exact VMEC."
+      }
     }
   },
   "_notes": {
     "Sw_override": "Plasma-facing surface area [m^2] for real machines (APPROX, confirm vs published). W7-X ~128 and LHD ~120 from published plasma-surface estimates; HSX 9.1 and CFQS 12.6 estimated from 2*pi*R0 * 2*pi*a * sqrt((1+kappa^2)/2) with kappa~1.5. Anchors Pwall=(Pfus+Pheat)/Sw instead of the extreme near-axis elongation profile (e.g. HSX elongation ~384). Concept reactors (HELIAS, NAE-QA) keep Sw_override=0 (pure near-axis). See docs/39.",
-    "etabar": "For measured machines (W7-X/LHD/HSX/CFQS) etabar is chosen for a REPRESENTATIVE near-axis cross-section only (modest elongation); the transform/volume/wall come from measured iota/Vp_override/Sw_override, so etabar does not affect their power account. Single-harmonic near-axis cannot truly represent these devices."
+    "etabar": "For measured machines (W7-X/LHD/HSX/CFQS) etabar is chosen for a REPRESENTATIVE near-axis cross-section only (modest elongation); the transform/volume/wall come from measured iota/Vp_override/Sw_override, so etabar does not affect their power account. Single-harmonic near-axis cannot truly represent these devices.",
+    "shape": "Real machines carry an explicit 'shape' descriptor (rotating shaped boundary) for the cross-section VIEW only, because single-harmonic near-axis cannot represent bean/heliotron/QA shapes. kappa/tri/bean are [phi=0, half-period] pairs; rot = poloidal turns per field period; a=R0/A and axis excursion=delta_h. Calibrated to published shape parameters, NOT exact VMEC reconstructions. Does not affect the power account (iota/Vp/Sw are measured)."
   },
   "groups": {
     "实验装置 Experiments": [

@@ -69,8 +69,80 @@ def axis_length(R0: float, N_fp: float, delta_h: float, n: int = 720) -> float:
     return float(np.trapezoid(np.sqrt(dR**2 + R**2 + dZ**2), phi))
 
 
+def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
+    """Literature-calibrated explicit boundary for a real machine (SHAPE VIEW).
+
+    Single-harmonic near-axis cannot represent W7-X (bean->triangle), LHD (l=2
+    heliotron rotating ellipse), HSX (QHS bean) or CFQS (QA D-shape).  This draws
+    a *representative* boundary calibrated to each machine's PUBLISHED shape
+    parameters (elongation, triangularity, bean indentation, helical rotation) —
+    NOT an exact VMEC reconstruction.  Purely cosmetic: the 0-D power account
+    uses the measured iota/Vp_override/Sw_override, never this outline.
+
+    The cross-section at toroidal cut ``phi`` (phase ``psi = N_fp*phi`` within one
+    field period; ``t = psi/pi`` morphs over the half period) is, in the local
+    (radial, vertical) plane,
+
+        x0(theta) = cos(theta) + bean(t)*cos(2 theta)              # bean/kidney
+        y0(theta) = kappa(t)*sin(theta + tri(t)*sin(theta))        # elong + tri
+
+    rotated by ``rot*psi`` (heliotron poloidal rotation), scaled by the minor
+    radius ``a`` and placed on the axis (R0 + delta_h*cos psi, delta_h*0).  Each
+    of ``kappa``/``tri``/``bean`` is a [phi=0, half-period] pair, linearly
+    interpolated by ``t``; ``rot`` is the poloidal turns per field period.
+    """
+    th = np.linspace(0.0, 2 * math.pi, n_theta)
+    rhos = (0.25, 0.4, 0.55, 0.7, 0.85, 1.0)
+    cuts = [(0.0, "φ=0"), (0.25, "φ=T/4"), (0.5, "φ=T/2")]
+    kap, tri, bean = shape["kappa"], shape["tri"], shape["bean"]
+    rot = float(shape.get("rot", 0.0))
+
+    def _lerp(pair, t):
+        return float(pair[0]) + (float(pair[1]) - float(pair[0])) * t
+
+    def _outline(psi, rho):
+        t = min(psi / math.pi, 1.0)          # morph over the half period
+        k, d, b = _lerp(kap, t), _lerp(tri, t), _lerp(bean, t)
+        x0 = np.cos(th) + b * np.cos(2 * th)
+        y0 = k * np.sin(th + d * np.sin(th))
+        al = rot * psi
+        xr = x0 * math.cos(al) - y0 * math.sin(al)
+        yr = x0 * math.sin(al) + y0 * math.cos(al)
+        cR = R0 + delta_h * math.cos(psi)    # axis helical excursion (display)
+        R = cR + rho * a * xr
+        Z = rho * a * yr
+        return R, Z, cR, 0.0
+
+    sections, axis_R, axis_Z = [], [], []
+    for frac, label in cuts:
+        psi = frac * 2 * math.pi
+        surfaces = []
+        for rho in rhos:
+            R, Z, cR, cZ = _outline(psi, rho)
+            surfaces.append({"rho": float(rho), "R": R.tolist(), "Z": Z.tolist()})
+        Rb, Zb, cR, cZ = _outline(psi, 1.0)
+        # box elongation as the displayed elongation diagnostic for this cut
+        elong = float((Zb.max() - Zb.min()) / (Rb.max() - Rb.min()))
+        sec = {"label": label, "elong": elong,
+               "R": Rb.tolist(), "Z": Zb.tolist(), "surfaces": surfaces}
+        wR = (cR + (Rb - cR) * (1.0 + g / max(np.hypot(Rb - cR, Zb - cZ).max(), 1e-9)))
+        wZ = (cZ + (Zb - cZ) * (1.0 + g / max(np.hypot(Rb - cR, Zb - cZ).max(), 1e-9)))
+        sec["wall"] = {"R": wR.tolist(), "Z": wZ.tolist()}
+        sections.append(sec)
+        axis_R.append(cR); axis_Z.append(cZ)
+
+    # smooth axis ring over a full field period for the display
+    phi_axis = np.linspace(0.0, 2 * math.pi, 60)
+    axis = {"R": (R0 + delta_h * np.cos(phi_axis)).tolist(),
+            "Z": (delta_h * 0.0 * phi_axis).tolist()}
+    return {"mode": "machine-boundary", "metric_mode": "machine-boundary",
+            "a": a, "a_disp": a, "g": g, "sections": sections, "axis": axis,
+            "shape_source": shape.get("source", "")}
+
+
 def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
-                     rc=None, zs=None, n_theta=121, B2c=0.0, **_ignored) -> dict:
+                     rc=None, zs=None, n_theta=121, B2c=0.0, shape=None,
+                     **_ignored) -> dict:
     """Flux-surface cross-section outlines for the UI shape view (Scheme D + r2).
 
     Single near-axis (Garren-Boozer) geometry — the same analytic model the
@@ -110,10 +182,15 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
     Extra keyword arguments (the full parameter dict) are ignored so the caller
     can pass ``**params`` directly.
     """
+    a = R0 / A
+    # real-machine presets carry an explicit literature-calibrated boundary that
+    # single-harmonic near-axis cannot represent (W7-X bean, LHD rotating
+    # ellipse, ...).  Cosmetic only — the power account uses measured overrides.
+    if shape is not None:
+        return _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta)
     if etabar == 0.0:
         raise ValueError("etabar must be != 0 for section outlines "
                          "(legacy mode removed)")
-    a = R0 / A
     th = np.linspace(0.0, 2 * math.pi, n_theta)
     rhos = (0.22, 0.34, 0.46, 0.58, 0.70, 0.82, 0.94, 1.0)
     cuts = [(0.0, "φ=0"), (0.25, "φ=T/4"), (0.5, "φ=T/2")]
