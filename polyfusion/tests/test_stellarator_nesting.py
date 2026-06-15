@@ -13,6 +13,7 @@ import os
 import sys
 
 import numpy as np
+from matplotlib.path import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from polyfusion.presets_io import load_presets  # noqa: E402
@@ -25,6 +26,27 @@ def ok(cond, msg):
     global PASS
     print(("PASS" if cond else "FAIL"), msg)
     PASS = PASS and cond
+
+
+def _pts_outside(inner, outer):
+    """How many vertices of ``inner`` lie outside the ``outer`` polygon."""
+    Ri, Zi = np.asarray(inner["R"]), np.asarray(inner["Z"])
+    poly = Path(np.column_stack([np.asarray(outer["R"]), np.asarray(outer["Z"])]))
+    return int((~poly.contains_points(np.column_stack([Ri, Zi]))).sum())
+
+
+def assert_strictly_nested(name):
+    """Every flux surface must lie fully inside the next one out — at every
+    toroidal cut, for every adjacent pair.  The W7-X phi=0 bean used to fail
+    here (the rho=0.85 surface poked OUTSIDE the boundary near the bean tip)."""
+    sh = section_outlines(**load_presets("stellarator")[0][name])
+    for sec in sh["sections"]:
+        surfs = sec["surfaces"]
+        for i in range(len(surfs) - 1):
+            out = _pts_outside(surfs[i], surfs[i + 1])
+            ok(out == 0,
+               f"{name} {sec['label']}: surface {i} (rho={surfs[i]['rho']:.2f}) "
+               f"fully inside surface {i+1} ({out} pts outside)")
 
 
 def _concave_frac(R, Z):
@@ -59,6 +81,11 @@ def main():
         exts.append(float(np.max(np.hypot(R - R.mean(), Z - Z.mean()))))
     ok(all(exts[i] < exts[i+1] for i in range(len(exts)-1)),
        f"nested extents increase monotonically: {[round(e,2) for e in exts]}")
+
+    # rigorous, unified: surfaces must strictly nest (no crossing / overlap) for
+    # every machine AND concept, at every toroidal cut.
+    for name in ("W7-X", "HELIAS", "LHD", "HSX", "CFQS", "NAE-QA"):
+        assert_strictly_nested(name)
 
     print("\nRESULT:", "NESTING PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1

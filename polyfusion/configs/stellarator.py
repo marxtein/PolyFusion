@@ -56,6 +56,17 @@ _BETA_SOFT_LIMIT = 0.05   # ~5% soft stellarator beta limit (Mercier; can be exc
 _IOTA_MIN = 1e-6          # below this the configuration has no effective transform
 _R2_DISPLAY_CAP = 0.5     # shape view: cap r^2 displacement at this fraction of r^1
 _N_PHASE_FRAMES = 24      # fine toroidal cuts over one period for the phase slider
+# Unified nested-surface display (cosmetic; the rho=1 boundary — the only surface
+# the power account integrates — is identical for any fade).  Surfaces nest as
+#   S(rho) = axis + rho*round + rho^_SHAPE_FADE * shape
+# round = low-order body (m<=1 / r1 ellipse), shape = high-order shaping
+# (m>=2 / r2 bean).  Fading the SHAPE one exponent above linear (rho^1.5, not the
+# raw near-axis rho^2) keeps the surfaces strictly nested — at rho^2 the W7-X
+# phi=0 bean tip let the rho=0.85 surface poke OUTSIDE the boundary — while still
+# rounding the bean smoothly toward the axis.  Sampled at uniform rho for even
+# visual spacing (sqrt/clustered sampling bunched the outer shells).
+_SHAPE_FADE = 1.5
+_NEST_RHOS = (0.18, 0.344, 0.508, 0.672, 0.836, 1.0)
 
 
 def axis_length(R0: float, N_fp: float, delta_h: float, n: int = 720) -> float:
@@ -183,22 +194,29 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
     for m, _, _ in R_modes + Z_modes:
         if m not in cos_m:
             cos_m[m] = np.cos(m * th) if m >= 0 else np.sin(-m * th)
-    rhos = (0.25, 0.4, 0.55, 0.7, 0.85, 1.0)
+    rhos = _NEST_RHOS
     cuts = [(0.0, "φ=0"), (0.25, "φ=T/4"), (0.5, "φ=T/2")]
 
+    def _fade(m, rho):
+        # m=0 (axis position) fixed; m=1 (ellipse body) scales with size (rho);
+        # m>=2 (bean/triangle shaping) fades one order above linear (rho^1.5) so
+        # surfaces stay strictly nested and round smoothly toward the axis.  At
+        # rho=1 every term is unscaled -> the boundary is unchanged.
+        am = abs(m)
+        if am == 0:
+            return 1.0
+        if am == 1:
+            return rho
+        return rho ** _SHAPE_FADE
+
     def _shape_RZ(phi, rho=1.0):
-        # nested flux surfaces: scale each poloidal harmonic m by rho^|m|.  The
-        # m=0 part (the magnetic-axis position at this phi) does NOT scale, so
-        # surfaces collapse onto the axis; the m=2 (bean) term fades as rho^2,
-        # so inner surfaces round out to the m=1 ellipse — as real flux surfaces
-        # do.  (Uniform rho scaling made every inner surface a mini-bean.)
         Rh = np.zeros_like(th); Zh = np.zeros_like(th)
         for m, n, c in R_modes:
             Bn = math.cos(n * nfp * phi) if n >= 0 else math.sin(-n * nfp * phi)
-            Rh += c * rho ** abs(m) * cos_m[m] * Bn
+            Rh += c * _fade(m, rho) * cos_m[m] * Bn
         for m, n, c in Z_modes:
             Bn = math.cos(n * nfp * phi) if n >= 0 else math.sin(-n * nfp * phi)
-            Zh += c * rho ** abs(m) * cos_m[m] * Bn
+            Zh += c * _fade(m, rho) * cos_m[m] * Bn
         return R0 + a * Rh, a * Zh
 
     def _build_cut(frac, label):
@@ -294,10 +312,15 @@ def _nearaxis_reconstruct(na, nfp, a, th):
             Y = r * (Y1s * sin_th + Y1c * cos_th)
             return R0p + X * n_hat[0] + Y * b_hat[0], Z0p + X * n_hat[2] + Y * b_hat[2]
         x2, y2, z2 = _second(phi)
-        r1, r2 = rho * a, rho * r2r(phi)       # size from a; wobble bounded
-        X = r1 * X1c * cos_th + r2 * r2 * x2
-        Y = r1 * (Y1s * sin_th + Y1c * cos_th) + r2 * r2 * y2
-        Z = r2 * r2 * z2
+        # body (r1 ellipse) scales with size (rho); bean wobble (r2) is bounded
+        # by the cap r2r and fades as rho^_SHAPE_FADE for strictly-nested, evenly
+        # rounding surfaces (rho=1 -> cap^2, the unchanged boundary).
+        cap = r2r(phi)
+        r1 = rho * a
+        wob = (rho ** _SHAPE_FADE) * cap * cap
+        X = r1 * X1c * cos_th + wob * x2
+        Y = r1 * (Y1s * sin_th + Y1c * cos_th) + wob * y2
+        Z = wob * z2
         R = R0p + X * n_hat[0] + Y * b_hat[0] + Z * t_hat[0]
         Zc = Z0p + X * n_hat[2] + Y * b_hat[2] + Z * t_hat[2]
         return R, Zc
@@ -382,7 +405,7 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
         raise ValueError("etabar must be != 0 for section outlines "
                          "(legacy mode removed)")
     th = np.linspace(0.0, 2 * math.pi, n_theta)
-    rhos = (0.22, 0.34, 0.46, 0.58, 0.70, 0.82, 0.94, 1.0)
+    rhos = _NEST_RHOS
     cuts = [(0.0, "φ=0"), (0.25, "φ=T/4"), (0.5, "φ=T/2")]
     sections = []
 
