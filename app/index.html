@@ -96,6 +96,7 @@
   .chip span{font-size:10px;letter-spacing:.04em;color:var(--mut);border:1px solid var(--line2);border-radius:20px;padding:2px 9px;background:var(--panel)}
   .chip b{color:var(--teal);font-family:"JetBrains Mono"}
   .phsel{margin-left:14px;display:inline-flex;align-items:center;gap:5px}
+  .geomodes{display:inline-flex;gap:4px;margin:4px 0}.gmodebtn{padding:2px 8px;font-size:12px;border:1px solid #8894a3;border-radius:4px;background:#1a1f2e;color:#8894a3;cursor:pointer}.gmodebtn.on{background:#2a4a6b;color:#38e6ff;border-color:#38e6ff}
   .phbtn{font-size:10.5px;color:var(--mut);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;background:var(--panel);cursor:pointer;font-family:"JetBrains Mono"}
   .phbtn:hover{border-color:var(--teal);color:var(--fg)}
   .phbtn.on{border-color:var(--teal);color:var(--teal);background:rgba(54,226,196,.1)}
@@ -259,7 +260,54 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
   help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null;
+let STELL_STASH={};
 const ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override']);  // expert-only inputs
+const OPAQUE_PARAMS={shape:1};  // parameters never sent to the backend directly
+
+function isPlainObject(v){return v&&typeof v==='object'&&!Array.isArray(v);}
+function cloneJson(v){return JSON.parse(JSON.stringify(v));}
+
+function defaultBoundaryShape(R0,N_fp){return{source:'',nfp:N_fp||5,R:[[1,0,1.0]],Z:[[-1,0,1.0]]};}
+
+function inferStellGeomMode(){
+  if(isPlainObject(VALS.shape))return'boundary';
+  if(Array.isArray(VALS.rc)||Array.isArray(VALS.zs))return'axis';
+  return'simple';
+}
+
+function stashStellGeom(){
+  const mode=VALS._geom_mode||inferStellGeomMode();
+  if(mode==='boundary'&&isPlainObject(VALS.shape))STELL_STASH.shape=cloneJson(VALS.shape);
+  if(mode==='axis'){if(Array.isArray(VALS.rc))STELL_STASH.rc=VALS.rc.slice();if(Array.isArray(VALS.zs))STELL_STASH.zs=VALS.zs.slice();}
+  STELL_STASH.iota=VALS.iota;STELL_STASH.Vp_override=VALS.Vp_override;STELL_STASH.Sw_override=VALS.Sw_override;
+  STELL_STASH.etabar=VALS.etabar;STELL_STASH.delta_h=VALS.delta_h;
+}
+
+function setStellGeomMode(mode){
+  stashStellGeom();VALS._geom_mode=mode;
+  if(mode==='simple'){delete VALS.shape;delete VALS.rc;delete VALS.zs;VALS.iota=0;VALS.Vp_override=0;VALS.Sw_override=0;}
+  else if(mode==='axis'){delete VALS.shape;VALS.iota=0;VALS.Vp_override=0;VALS.Sw_override=0;
+    if(!Array.isArray(VALS.rc))VALS.rc=STELL_STASH.rc?STELL_STASH.rc.slice():[VALS.R0||1,VALS.delta_h||0];
+    if(!Array.isArray(VALS.zs))VALS.zs=STELL_STASH.zs?STELL_STASH.zs.slice():[0,-(VALS.delta_h||0)];}
+  else if(mode==='boundary'){
+    if(!isPlainObject(VALS.shape))VALS.shape=STELL_STASH.shape?cloneJson(STELL_STASH.shape):defaultBoundaryShape(VALS.R0,VALS.N_fp);
+    if('rc'in VALS)delete VALS.rc;if('zs'in VALS)delete VALS.zs;
+    VALS.iota=(STELL_STASH.iota!=null)?STELL_STASH.iota:0;
+    VALS.Vp_override=(STELL_STASH.Vp_override!=null)?STELL_STASH.Vp_override:0;
+    VALS.Sw_override=(STELL_STASH.Sw_override!=null)?STELL_STASH.Sw_override:0;
+    ADVANCED=true;
+  }
+}
+
+function showParamForMode(p){
+  const mode=VALS._geom_mode||'simple';
+  if(p==='delta_h')return mode==='simple';
+  if(p==='rc'||p==='zs')return mode==='axis'||mode==='boundary';
+  if(p==='etabar')return mode==='simple'||mode==='axis';
+  if(p==='Vp_override'||p==='Sw_override'||p==='iota')return mode==='boundary';
+  if(p==='shape')return false;  // shape is opaque, never a UI field
+  return true;
+}
 
 const DENS=new Set(['ni0','n0']);const BOOLS=new Set(['use_tauE','geom_weighted']);const dsc=k=>DENS.has(k)?1e-20:1;  // density display in 10^20 m^-3
 const SELF_LOSS_PARAMS={
@@ -390,6 +438,7 @@ async function loadPreset(){
   const r=await jpost('/api/run',{config:CUR,preset:pv});
   VALS=Object.assign({},r.inputs);
   // auto-reveal advanced inputs if this preset carries any (measured machines)
+  VALS._geom_mode=inferStellGeomMode();stashStellGeom();
   ADVANCED=(VALS.Vp_override>0)||(VALS.Sw_override>0)||Array.isArray(VALS.rc)||Array.isArray(VALS.zs);
   buildParams();buildThresh();buildPlotOpts();applyRun(r);fitScanRanges();setView(VIEW);
 }
@@ -433,8 +482,19 @@ function buildParams(){
   let html='';
   for(const[gk,gz,ge]of GROUPS){if(!groups[gk])continue;
     let a0='';if(gk==='geo'&&'R0'in VALS&&'A'in VALS)a0=`<span class="a0"><i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m</span>`;
-    html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div><div class="pgrid" data-grp="${gk}">`;
+    html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div>`;
+    // mode switch for stellarator geometry (simple / axis Fourier / boundary Fourier)
+    if(gk==='geo'&&CUR==='stellarator'){
+      const modes=[['simple',L('默认近轴','default near-axis')],['axis',L('磁轴 Fourier','axis Fourier')],['boundary',L('边界 Fourier','boundary Fourier')]];
+      const cur=VALS._geom_mode||inferStellGeomMode();
+      html+='<div class="geomodes">';
+      modes.forEach(([k,lab])=>html+=`<button class="gmodebtn${k===cur?' on':''}" data-gmode="${k}">${lab}</button>`);
+      html+='</div>';
+    }
+    html+=`<div class="pgrid" data-grp="${gk}">`;
     for(const p of groups[gk]){const m=META[p];const desc=L(m[0],m[1]);
+      // stellarator: hide params that don't apply to current geom mode
+      if(CUR==='stellarator'&&gk==='geo'&&!showParamForMode(p))continue;
       if(BOOLS.has(p)){const onTxt=p==='use_tauE'?L('开启：输入 τE','on: input tauE'):L('开启','on');
         const offTxt=p==='use_tauE'?L('关闭：自洽损失','off: self-consistent losses'):L('关闭','off');
         html+=`<div class="fld full"><label title="${desc}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span></label><select data-p="${p}" data-bool="1"><option value="1" ${VALS[p]!==0?'selected':''}>${onTxt}</option><option value="0" ${VALS[p]===0?'selected':''}>${offTxt}</option></select></div>`;}
@@ -455,6 +515,10 @@ function buildParams(){
   box.querySelectorAll('[data-p]').forEach(el=>{const f=el.closest('.fld');
     if(f&&ADV_PARAMS.has(el.dataset.p))f.classList.add('advfld');});
   box.classList.toggle('show-adv',!!ADVANCED);
+  // stellarator geometry mode switch handlers
+  box.querySelectorAll('.gmodebtn').forEach(b=>b.onclick=()=>{
+    setStellGeomMode(b.dataset.gmode);buildParams();
+  });
   if(CONFIGS[CUR].params.some(p=>ADV_PARAMS.has(p))){
     const bar=document.createElement('div');bar.className='advbar';
     bar.innerHTML=`<button id="advBtn" class="advbtn${ADVANCED?' on':''}">`+
