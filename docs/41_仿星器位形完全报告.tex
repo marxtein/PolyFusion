@@ -1,0 +1,319 @@
+\documentclass[UTF8,11pt]{ctexart}
+
+\usepackage[a4paper,margin=2.3cm]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs,array}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue}
+
+% --- shared macros (consistent with docs/40) ---
+\newcommand{\Vp}{V_\mathrm{p}}
+\newcommand{\Sw}{S_\mathrm{w}}
+\newcommand{\Sp}{S_\mathrm{p}}
+\newcommand{\Aflux}{A_\mathrm{flux}}
+\newcommand{\Lax}{L_\mathrm{ax}}
+\newcommand{\Pfus}{P_\mathrm{fus}}
+\newcommand{\Pbrem}{P_\mathrm{brem}}
+\newcommand{\Pcycl}{P_\mathrm{cycl}}
+\newcommand{\Pheat}{P_\mathrm{heat}}
+\newcommand{\Pwall}{P_\mathrm{wall}}
+\newcommand{\Eth}{E_\mathrm{th}}
+\newcommand{\iotabar}{\bar{\iota}}
+\newcommand{\nfp}{n_\mathrm{fp}}
+\newcommand{\nphi}{n_\varphi}
+\newcommand{\etabar}{\bar\eta}
+\newcommand{\Nhat}{\hat{\bm n}}
+\newcommand{\Bhat}{\hat{\bm b}}
+\newcommand{\That}{\hat{\bm t}}
+
+\title{\textbf{PolyFusion 仿星器位形：完全报告}\\[2pt]
+\large 物理模型 · 几何 · 可视化 · 预设库 · POPCON 与性能}
+\author{PolyFusion release —— 仿星器位形系列报告（配 docs/39、docs/40）}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+本报告把 PolyFusion 0-D 程序里\textbf{整个仿星器位形}从头讲透：它\textbf{算什么物理}（0-D 功率平衡）、\textbf{怎么描述几何}（近轴展开 + 真机傅里叶边界）、\textbf{几何如何进功率账}（哪个量、什么幂次）、\textbf{怎么画截面}（统一嵌套磁面 + 相位滑块）、\textbf{内置哪些位形}（9 个预设），以及 \textbf{POPCON 扫描怎么算、怎么被加速}。目标是让懂等离子体物理、但没读过这套代码的人，能完整地"听懂"每一步在做什么、为什么这么做、近似在哪里。核心观念贯穿全文：几何有\textbf{两个互相独立又一致}的角色——给人看的\emph{截面视图}，和给功率公式做积分权重的\emph{几何标量}$(a,\Vp,\Sw,\Lax,\iotabar)$；二者通过同一个截面面积锚 $\Aflux=\pi a^2$ 绑定。
+\end{abstract}
+
+\tableofcontents
+\vspace{6pt}
+
+%======================================================================
+\section{引言：这套代码在做什么}
+
+\paragraph{仿星器 vs 托卡马克。}
+托卡马克靠等离子体里流过的大电流产生极向磁场，把磁力线扭成嵌套的环面磁面；仿星器\textbf{不靠等离子体电流}，而是用\textbf{外部三维线圈}把磁面直接"拧"出来。代价是位形天生三维、截面随环向角 $\varphi$ 变化（W7-X 的 bean$\to$triangle，LHD 的旋转椭圆）；好处是没有电流驱动、原则上可稳态、不会有电流驱动不稳定性。
+
+\paragraph{0-D 系统码。}
+PolyFusion 是\textbf{零维（0-D）功率平衡}程序：它\emph{不}解 MHD 平衡或输运方程，而是把一台装置压缩成一组标量（体积、壁面积、磁轴长度、旋转变换、温度密度剖面指数……），用代数公式估算\textbf{聚变功率、辐射、约束时间、增益 $Q$、$\beta$、壁负荷}等，用来快速扫参数、画运行空间图（POPCON）。它和同程序里的托卡马克、磁镜、FRC、偶极场共用同一套功率平衡内核，区别只在\textbf{几何标量怎么取}和\textbf{约束定标用哪条经验律}。
+
+\paragraph{本报告范围。}
+只讲\textbf{仿星器位形}：第 \ref{sec:power} 节物理内核，第 \ref{sec:nae}--\ref{sec:integral} 节几何（近轴、真机边界、体积积分），第 \ref{sec:account} 节几何进功率，第 \ref{sec:view} 节截面可视化，第 \ref{sec:presets} 节 9 个预设，第 \ref{sec:popcon} 节 POPCON 与性能，第 \ref{sec:consistency} 节一致性与局限。代码在 \texttt{polyfusion/configs/stellarator.py}、\texttt{polyfusion/nearaxis.py}、\texttt{polyfusion/presets/stellarator.json}。
+
+%======================================================================
+\section{物理内核：0-D 功率平衡}\label{sec:power}
+
+一切从\textbf{剖面假设}开始。径向坐标 $x=r/a\in[0,1]$，密度与温度取
+\begin{equation}
+n(x)=n_0(1-x^2)^{S_n},\qquad T(x)=T_0(1-x^2)^{S_T},
+\end{equation}
+$S_n,S_T$ 是剖面峰化指数（输入）。所有体积量都是这两条剖面在 $\Vp$ 上的积分。
+
+\subsection{组分与有效电荷}
+给定离子混合（主离子份额 $f_1$、氦灰 $f_\mathrm{He}$、杂质 $f_\mathrm{imp}$、杂质电荷 $Z_\mathrm{imp}$），由准中性算出中心电子密度 $n_{e0}$、有效电荷
+\[
+Z_\mathrm{eff}=\frac{\sum_s n_{s0}Z_s^2}{n_{e0}},
+\]
+和平均质量数 $M$。这步与托卡马克逐字相同（已 L3 验证）。
+
+\subsection{聚变功率：反应性体积积分}
+Maxwellian 反应率 $\langle\sigma v\rangle(T)$ 由 \texttt{reactivity} 给出（D-T、D-D、D-He3、p-B11 等，由 \texttt{icase} 选）。把温度剖面代入、对 $x$ 积分得到\textbf{剖面平均反应性因子}
+\begin{equation}
+\Phi=f_\sigma\cdot 2\!\int_0^1 (1-x^2)^{2S_n}\,\langle\sigma v\rangle\!\big(T(x)\big)\,x\,dx,
+\end{equation}
+于是
+\begin{equation}
+\boxed{\;\Pfus=\frac{Y}{1+\delta_{12}}\,n_{10}n_{20}\,\Phi\,\Vp\;}\qquad(\text{乘 }10^{-6}\text{ 转 MW}),
+\end{equation}
+$Y$ 是单次反应释能、$\delta_{12}$ 处理同种反应物的双计数。中子功率 $P_n=\Pfus(1-f_\mathrm{ion})$，$f_\mathrm{ion}$ 是带电产物（如 $\alpha$）的能量份额。\textbf{关键}：$\Pfus\propto\Vp$——体积是最强的几何杠杆。
+
+\subsection{辐射损失}
+\begin{itemize}[leftmargin=1.4em]
+\item \textbf{轫致辐射} $\Pbrem\propto n_e^2\sqrt{T_e}\,\Vp$（含相对论修正、$Z_\mathrm{eff}$ 加权），$\propto\Vp$。
+\item \textbf{回旋辐射} $\Pcycl\propto B_0^{2.5}\,T_\mathrm{eff}^{2.5}\,n_\mathrm{eff}^{0.5}(1-R_w)^{0.5}\,a^{-0.5}\,\Vp$，$R_w$ 是壁反射率。注意它\textbf{显含小半径} $a^{-1/2}$——回旋辐射对装置尺寸敏感。
+\item \textbf{杂质线辐射} $P_\mathrm{line}$（Mavrin 拟合，可选）。
+\end{itemize}
+
+\subsection{储能、加热、增益}
+储能与输运损失
+\begin{equation}
+\Eth=\tfrac32\,(n_{i0}T_{i0}+n_{e0}T_{e0})\,\frac{\Vp}{1+S_n+S_T},\qquad
+P_\mathrm{tr}=\Eth/\tau_E .
+\end{equation}
+净外加热由功率守恒定出
+\begin{equation}
+\Pheat=\Pcycl+\Pbrem+P_\mathrm{line}+\Eth/\tau_E-f_\mathrm{ion}\Pfus,
+\end{equation}
+增益 $Q=\Pfus/\Pheat$（$\Pheat\le0$ 即\textbf{点火}）。环向比压
+\[
+\beta_t=\frac{2\mu_0(n_{i0}T_{i0}+n_{e0}T_{e0})}{B_0^2(1+S_n+S_T)} .
+\]
+
+\subsection{约束闭合：ISS04 + Sudo}
+仿星器\textbf{不用}托卡马克的 H98，而用国际仿星器定标 \textbf{ISS04}：
+\begin{equation}
+\boxed{\;\tau_\mathrm{ISS04}=0.134\,f_\mathrm{ren}\,a^{2.28}R_0^{0.64}P_L^{-0.61}
+\Big(\tfrac{\bar n}{10^{19}}\Big)^{0.54}B_0^{0.84}\,\iotabar^{0.41}\;}
+\end{equation}
+$P_L=f_\mathrm{ion}\Pfus+\Pheat$ 是损失功率，$f_\mathrm{ren}$ 是装置归一化因子，$H_\mathrm{ISS04}=\tau_E/\tau_\mathrm{ISS04}$ 是约束品质（实验在 $1$--$1.4$）。\textbf{旋转变换 $\iotabar$ 仅在此处以 $0.41$ 次幂进入}——这是几何（或实测）$\iotabar$ 对功率账的唯一通道。密度上限用 Sudo：
+\[
+n_\mathrm{Sudo}=0.25\sqrt{P_L B_0/(a^2 R_0)}\times10^{20}.
+\]
+两个自洽回路：$\tau_E=0$ 时从 ISS04 预测求解 $\tau_E$（令 $H_\mathrm{ISS04}=H_\mathrm{fac}$）；$f_T=0$ 时从电子通道平衡自洽解 $T_e/T_i$。
+
+\paragraph{小结。}功率账只认一组\textbf{标量}：$\Vp$（最强，进 $\Pfus,\Pbrem,\Pcycl,\Eth$）、$\Sw$（只进壁负荷 $\Pwall=(\Pfus+\Pheat)/\Sw$）、$a,R_0,\iotabar$（进 ISS04/Sudo）。\textbf{截面形状本身不进功率}——它纯粹是几何标量的来源和给人看的图。下面三节就讲这些标量从哪来。
+
+%======================================================================
+\section{几何模型 I：近轴展开（概念堆）}\label{sec:nae}
+
+\paragraph{动机。}
+怎么用\emph{少数几个数}描述一个三维仿星器位形？现代优化仿星器（QA/QH/QI）几乎都用\textbf{近轴展开}（near-axis / Garren--Boozer，Landreman--Sengupta--Plunk 形式）：把磁面沿磁轴做小半径 $r$ 的泰勒展开。一阶给\textbf{旋转椭圆}，二阶弯成\textbf{bean/crescent}。它只需要：磁轴的傅里叶系数 $\{R_{c,n}\},\{Z_{s,n}\}$、一个塑形标量 $\etabar$、场周期数 $\nfp$，就能解析地、自洽地给出旋转变换、拉长比、截面形状。PolyFusion 的\textbf{概念堆}预设就用这条路。
+
+\subsection{磁轴与 Frenet 标架}
+磁轴是三维傅里叶闭曲线
+\begin{equation}
+R_0(\varphi)=\sum_n R_{c,n}\cos(n\nfp\varphi),\qquad
+Z_0(\varphi)=\sum_n Z_{s,n}\sin(n\nfp\varphi).
+\end{equation}
+默认螺旋轴 $R_{c}=[R_0,\delta_h],\,Z_{s}=[0,-\delta_h]$（$\delta_h$ 为螺旋偏移）；概念堆也可给显式多谐波 $rc/zs$。沿轴建 Frenet 标架（法向 $\Nhat$、副法向 $\Bhat$、切向 $\That$），算出\textbf{曲率} $\kappa(\varphi)$ 和\textbf{挠率} $\tau(\varphi)$。代码用解析傅里叶导数 + 谱微分矩阵，所有量在一个场周期 $[0,2\pi/\nfp)$ 的 $\nphi$ 点网格上。
+
+\subsection{$\sigma$ 方程与旋转变换}
+一阶磁面的形状由 Garren--Boozer 的\textbf{周期 $\sigma$ 方程}决定，它是关于 $\sigma(\varphi)$ 和轴上旋转变换 $\iota$ 的非线性常微分方程，含\textbf{挠率贡献}。代码用 Newton 迭代解出 $(\iota,\sigma)$（对齐 pyQSC 到机器精度 $<2\times10^{-12}$）。直观理解：$\iotabar$ = 磁力线绕环一圈、极向转过的圈数；它由\textbf{轴的扭转（挠率）}和\textbf{塑形}共同决定——所以螺旋偏移 $\delta_h$ 越大、$\iotabar$ 越不同（旋转椭圆模型对 $\delta_h$ 是盲的，这正是本程序弃用它的原因）。
+
+\subsection{一阶截面：旋转椭圆与拉长比}
+解出 $\sigma$ 后，一阶 Frenet 系数
+\begin{equation}
+X_{1c}=\frac{\etabar}{\kappa},\quad Y_{1s}=\frac{\kappa}{\etabar},\quad Y_{1c}=\frac{\kappa\,\sigma}{\etabar},
+\end{equation}
+截面是椭圆，拉长比
+\begin{equation}
+e=\frac{p+\sqrt{p^2-4}}{2},\quad p=X_{1c}^2+Y_{1s}^2+Y_{1c}^2 ,
+\end{equation}
+随 $\etabar$ 减小而增大（$\sim(\kappa/\etabar)^2$）。\textbf{重要}：一阶面积 $\propto X_{1c}Y_{1s}=1$（面积守恒）——拉长比变、面积不变，这就是后面 $\Aflux=\pi a^2$ 锚的根据：\textbf{塑形不改体积}。
+
+\subsection{二阶截面：bean/crescent}
+二阶（$r^2$）系数（LSP Part 2，真空、仿星器对称特例，移植 pyQSC \texttt{calculate\_r2}，验证 $<10^{-9}$）给出
+\[
+P(\theta)=\text{axis}+X\Nhat+Y\Bhat+Z\That,\quad
+X=rX_{1c}\cos\theta+r^2(X_{20}+X_{2c}\cos2\theta+X_{2s}\sin2\theta),\ \dots
+\]
+$r^2$ 项把一阶椭圆\textbf{弯成 bean/crescent}——真机的特征截面。$B_{2c}$ 是二阶场强塑形输入（默认 $0$）。\textbf{注意}：$r^2$ 展开只在小 $r$ 有效；到反应堆小半径 $a$，$r^2$ 项会超过 $r^1$ 项使面自交——这决定了显示要限幅（第 \ref{sec:view} 节）。
+
+%======================================================================
+\section{几何模型 II：真机的傅里叶边界谐波}\label{sec:machine}
+
+\paragraph{为什么近轴不够。}
+单谐波近轴\textbf{无法}表示真实实验装置：W7-X 是准等动（bean$\to$triangle）、LHD 是 $l{=}2$ heliotron 旋转椭圆、HSX 是准螺旋对称、CFQS 是低环径比准轴对称。这些需要完整的边界谐波。
+
+\paragraph{做法。}
+真机预设携带一个显式 \texttt{shape}：取\textbf{公开平衡}（DESC \texttt{desc/examples}：W7-X、HSX、ESTELL；经典 $l{=}2$ heliotron 作 LHD）的边界 Fourier 系数，\textbf{截断} $|m|,|n|\le2$、\textbf{归一化}（减 $R_{00}$、除原生小半径），按 DESC 双 Fourier 乘积基求值，再\textbf{重缩放}到本预设的 $R_0,a=R_0/A$：
+\begin{equation}
+R(\theta,\varphi)=R_0+a\!\sum_{m,n}\!R_{mn}A_m(\theta)B_n(\varphi),\quad
+Z(\theta,\varphi)=a\!\sum_{m,n}\!Z_{mn}A_m(\theta)B_n(\varphi),
+\end{equation}
+\[
+A_m(\theta)=\begin{cases}\cos m\theta & m\ge0\\ \sin|m|\theta & m<0\end{cases},\qquad
+B_n(\varphi)=\begin{cases}\cos(n\nfp\varphi)& n\ge0\\ \sin(|n|\nfp\varphi)& n<0\end{cases}.
+\]
+这复现了 W7-X bean、LHD 旋转椭圆、HSX/CFQS 形态。\textbf{它是 cartoon}：$|m|,|n|\le2$ 截断、非完整平衡重建；纯供\emph{显示}和\emph{几何积分估算}，\textbf{不进功率账}（真机功率用实测 $\iotabar,\Vp,\Sw$ 覆写）。
+
+%======================================================================
+\section{体积与壁面：精确边界积分}\label{sec:integral}
+
+无论概念堆还是真机，\textbf{功率账要的体积 $\Vp$ 和壁面 $\Sw$ 都来自对边界的精确环向积分}，而且积分的就是\textbf{前端画出来的那一条边界}（前后端一致）。
+
+\paragraph{算法（\texttt{boundary\_metrics}）。}
+边界 $\varphi$ 周期，所以只积\textbf{一个场周期} $[0,2\pi/\nfp)$ 再乘 $\nfp$（利用场周期对称性，对全周期积分验证一致到 $<10^{-13}$）。体积用 Green 定理把面积分化为线积分
+\begin{equation}
+\Vp=\oint\!\Big[\tfrac12 R^2\,dZ\Big]\,d\varphi\;\times\nfp,
+\end{equation}
+壁面（边界外扩间隙 $g$ 后）用叉积
+\begin{equation}
+\Sw=\oint\!\!\int\big|\partial_\theta \bm P\times\partial_\varphi \bm P\big|\,d\theta\,d\varphi\;\times\nfp,
+\quad \bm P=(R\cos\varphi,\,R\sin\varphi,\,Z).
+\end{equation}
+对解析圆环面验证到 $0.004\%$。
+
+\paragraph{概念堆怎么处理 $r^2$ 失效。}
+概念堆积分的边界是\textbf{前端实际画的 bean}：满尺寸一阶体 + \textbf{限幅}二阶 wobble（$r^2$ 位移不超过 $r^1$ 的 $50\%$）。裸 $r^2$ 在 $r=a$ 会自交、体积暴涨（HELIAS 实测 $+331\%$）；限幅后是一条简单、尺寸正确的闭曲线，其积分比解析 Pappus 估计 $\pi a^2\Lax$ 低约 $2$--$6\%$（bean/曲率修正）。$\rho=1$ 边界与内面衰减律无关，故\textbf{功率账体积与显示嵌套画法解耦}。
+
+\paragraph{面积锚。}
+$\Aflux=\pi a^2$ 仍是\textbf{功率密度}的一阶通量守恒锚（一阶椭圆面积恒为 $\pi a^2$，拉长比不改它）。$\Lax$ 是近轴磁轴弧长。真机另带实测 $\Vp^{*}/\Sw^{*}$ 覆写。
+
+%======================================================================
+\section{几何怎么进功率账（哪个量、什么幂次）}\label{sec:account}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}lll@{}}
+\toprule
+功率量 & 公式（几何相关因子）& 几何依赖 \\
+\midrule
+聚变功率 & $\Pfus\propto n_{10}n_{20}\Phi\,\Vp$ & $\propto\Vp$ \\
+轫致辐射 & $\Pbrem\propto n_e^2\sqrt{T_e}\,\Vp$ & $\propto\Vp$ \\
+回旋辐射 & $\Pcycl\propto B_0^{2.5}a^{-0.5}\,\Vp$ & $\propto\Vp\,a^{-1/2}$ \\
+储能/输运 & $\Eth\propto(n_iT_i+n_eT_e)\Vp$ & $\propto\Vp$ \\
+第一壁负荷 & $\Pwall=(\Pfus+\Pheat)/\Sw$ & $\propto 1/\Sw$ \\
+ISS04 约束 & $\tau\propto a^{2.28}R_0^{0.64}P_L^{-0.61}\bar n^{0.54}B_0^{0.84}\iotabar^{0.41}$ & $a,R_0,\iotabar$ \\
+Sudo 密度限 & $n_\mathrm{Sudo}=0.25\sqrt{P_LB_0/(a^2R_0)}\,10^{20}$ & $a,R_0$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{itemize}[leftmargin=1.4em]
+\item \textbf{体积最强}：$\Pfus,\Pbrem,\Pcycl,\Eth$ 全线性正比 $\Vp$。真机用实测 $\Vp$，聚变/辐射锚在实测体积上。
+\item \textbf{$\Sw$ 只进壁负荷}。真机要 $\Sw^{*}$ 覆写，因近轴 $\Sw$ 在极端拉长下失真（如 HSX 近轴 $e_\mathrm{max}\!\sim\!384$）。
+\item \textbf{$\iotabar$ 仅以 $0.41$ 次幂进 ISS04}。真机用实测 $\iotabar$；概念堆用近轴自洽解。
+\item \textbf{形状不进功率}：bean/D 形/旋转椭圆只决定上述标量和图，功率公式只看标量。
+\end{itemize}
+
+%======================================================================
+\section{截面可视化：统一嵌套磁面 + 相位滑块}\label{sec:view}
+
+\paragraph{统一嵌套画法。}
+概念堆与真机\textbf{共用一套}嵌套构造：以磁轴（$m{=}0$ 谐波 / 近轴 $r\!\to\!0$ 极限）为芯，
+\begin{equation}
+S(\rho)=\text{axis}+\rho\,(\text{低阶体})+\rho^{1.5}\,(\text{高阶塑形}),\qquad \rho\in(0,1].
+\end{equation}
+低阶体（$m\!\le\!1$ 椭圆 / 一阶近轴）随尺寸线性缩放；高阶塑形（$m\!\ge\!2$ bean·triangle / 二阶 wobble）按 $\rho^{1.5}$ 衰减——\textbf{比原始近轴 $\rho^{|m|}{=}\rho^2$ 高一阶}。这一改动同时解决两个毛病：原 $\rho^2$ 衰减会让 W7-X $\varphi{=}0$ bean 尖端处 $\rho{=}0.85$ 面\textbf{穿出边界}（逐点 point-in-polygon 核验，$15/121$ 点在外）；$\rho^{1.5}$ 使磁面\textbf{严格嵌套不交叉}并向轴平滑圆化。$\rho$ 取均匀采样使径向间距均匀（W7-X $\varphi{=}0$ 间距不均匀度 $1.73\!\to\!1.11$，HELIAS $2.11\!\to\!1.15$），呈现 VMEC/NSE-global 那种平滑均匀套叠。$\rho=1$ 边界与衰减律无关，故\textbf{不影响第 \ref{sec:integral} 节的体积积分}。
+
+\paragraph{相位扫描。}
+仿星器截面随 $\varphi$ 变，UI 提供\textbf{相位开关}（$\varphi=0/T4/T2$ 三个特征切面）与\textbf{连续相位滑块}（真机与概念堆\textbf{统一}支持——两条路径都输出一周期 $24$ 帧）。滑块平滑的关键：把坐标视窗\textbf{固定到全帧并集}，相位扫描时截面\emph{原地形变}，而不是每帧重缩放（否则视觉抖动）。
+
+\paragraph{壁层与高级输入。}
+壁层 $=$ 边界沿外法向外扩 $g$，保证 磁面 $\subset$ 边界 $\subset$ 壁。高级输入（自定义轴 $rc/zs$、实测 $\Vp^{*}/\Sw^{*}$）折叠在\textbf{几何参数组末尾}就地展开，普通模式只露 $R_0/A/\nfp/\delta_h/\etabar/g$。
+
+%======================================================================
+\section{预设库：9 个内置位形}\label{sec:presets}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}llccccccc@{}}
+\toprule
+预设 & 类型 & $\nfp$ & $R_0$[m] & $a$[m] & $B_0$[T] & $\iotabar$ & $\Vp$[m$^3$] & 备注 \\
+\midrule
+HELIAS     & 概念·近轴 & 5 & 18.0 & 1.80 & 5.0 & 0.82 & 1149 & HELIAS 反应堆族 \\
+NAE-QA     & 概念·近轴 & 3 & 18.0 & 1.80 & 5.5 & 0.42 & 1145 & LSP r1 §5.1 缩放 \\
+precise-QA & 概念·近轴 & 2 & 9.0  & 1.50 & 5.7 & 0.42 & 369  & Landreman--Paul 2022 \\
+precise-QH & 概念·近轴 & 4 & 12.0 & 1.50 & 5.7 & 1.24 & 422  & Landreman--Paul 2022 \\
+QH-nfp3    & 概念·近轴 & 3 & 12.0 & 1.50 & 5.7 & 1.25 & 311  & pyQSC 2022 QH nfp3 \\
+\midrule
+W7-X       & 真机·边界 & 5 & 5.5  & 0.55 & 2.5 & 0.88$^{*}$ & 30$^{*}$  & DESC W7-X，bean \\
+LHD        & 真机·边界 & 10& 3.9  & 0.65 & 2.85& 0.40$^{*}$ & 30$^{*}$  & $l{=}2$ heliotron \\
+HSX        & 真机·边界 & 4 & 1.2  & 0.15 & 1.0 & 1.05$^{*}$ & 0.4$^{*}$ & DESC HSX，QHS \\
+CFQS       & 真机·边界 & 2 & 1.0  & 0.25 & 1.0 & 0.45$^{*}$ & 1.0$^{*}$ & ESTELL 代理，QA \\
+\bottomrule
+\end{tabular}
+\end{center}
+\footnotesize $^{*}$ 真机的 $\iotabar,\Vp,\Sw$ 为\textbf{实测覆写}，进功率账；其近轴诊断仅供参考。\normalsize
+
+\paragraph{两类预设。}
+\begin{description}[leftmargin=1.2em,style=nextline]
+\item[概念堆（近轴定义）] HELIAS / NAE-QA / precise-QA / precise-QH / QH-nfp3。由近轴展开\emph{定义}（显式 $rc/zs$ + $\etabar$，无覆写），本程序\textbf{原生精确}算出几何与自洽 $\iotabar$。其中 precise-QA/QH/QH-nfp3 取自公开准对称近轴库（pyQSC / Landreman--Paul 2022），缩放规则 $rc=R_0\cdot rc_\mathrm{pub}$、$\etabar=|\etabar_\mathrm{pub}|/R_0$（与 NAE-QA 相同），$\iotabar$ \textbf{精确复现发表值}（QA 0.42、QH 1.24/1.25）。
+\item[真机（边界谐波）] W7-X / LHD / HSX / CFQS。单谐波近轴无法表示，携带 $|m|,|n|\le2$ 归一化边界谐波\emph{仅供显示}，功率账用实测 $\iotabar/\Vp^{*}/\Sw^{*}$。因实验装置温度低（$T_i\!\sim\!0.5$--$2$ keV），其 $\Pfus\approx0$（这是\textbf{正确}的——它们演示几何/约束，非反应堆）。
+\end{description}
+
+%======================================================================
+\section{POPCON 扫描与性能}\label{sec:popcon}
+
+\paragraph{POPCON 是什么。}
+在两个参数（默认 $T_{i0}\times n_{i0}$，$21\times21=441$ 点）的网格上，每点跑一次完整 0-D 求解，画出 $\Pfus,Q,\Pwall,\beta,H_\mathrm{ISS04}$ 等的等值线 + 最优运行窗——这就是\textbf{运行空间图（POPCON）}。
+
+\paragraph{两个性能根因（均已无损修复）。}
+\begin{enumerate}[leftmargin=1.5em]
+\item \textbf{几何是扫描不变量、却每点重算}。POPCON 扫的 $T_{i0}/n_{i0}/B_0$ 都\textbf{不改几何}（几何只依赖 $R_0,A,\nfp,\delta_h,\etabar,rc,zs,g$），但旧代码在 $441$ 个点 + 每次 $\tau_E/T_e$ 自洽递归都重算近轴解 + 边界积分。利用这个\textbf{场周期不变性}，把几何按几何参数 \emph{memoize}（\texttt{\_stellarator\_geometry}）：整张图只算\textbf{一次}几何；若扫描键\emph{是}几何量（$R_0/\etabar/\dots$）则键变、正确重算，永不 stale。
+\item \textbf{numpy BLAS 多线程病态}。此 Windows numpy 2.4.6 的 OpenBLAS 对\textbf{中等矩阵}线程化异常：$121\times121$ 的 \texttt{linalg.solve} 多线程 $\sim0.6$ s、单线程 $\sim0.4$ ms（$\sim1300\times$），使近轴 $r^2$ 解（$\nphi{=}121$）单次 $\sim3.8$ s。numpy import 前 cap \texttt{OPENBLAS\_NUM\_THREADS=1}。无损：所有真实预设 $\Vp/\iotabar$ \textbf{逐位相同}，pyQSC 校验仍 $<10^{-9}$。
+\end{enumerate}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+ & 修复前 & 修复后 \\
+\midrule
+HELIAS 单次求解 & 4.07 s & 0.145 s \\
+\textbf{HELIAS $21\times21$ POPCON} & \textbf{$\sim$29 分钟} & \textbf{0.17 s}（live 实测）\\
+全测试套件 & $>4$ 分钟 & 34 s \\
+\bottomrule
+\end{tabular}
+\end{center}
+唯一代价：退化的\textbf{平面圆轴}测试（$\delta_h=0$，constant 曲率、零挠率，近轴方程病态）对 BLAS 求和顺序敏感 $\sim10^{-3}$，其 tokamak 对照 $\Vp$ 容差放宽 $5\!\times\!10^{-4}\to3\!\times\!10^{-3}$；真实位形不受影响。
+
+%======================================================================
+\section{一致性核查与诚实局限}\label{sec:consistency}
+
+\paragraph{一致性（全部 9 预设）。}
+\begin{itemize}[leftmargin=1.4em]
+\item \textbf{核心一致}：前端 $a,R_0,\nfp$ $=$ 后端；前端截面面积 $=$ 后端 $\Aflux=\pi a^2$（$\le1\%$）。
+\item \textbf{概念堆}：前端所画近轴边界与后端积分为\textbf{同一条曲线}，体积/壁面\textbf{恒等一致}（$<10^{-6}$）；精确积分比 Pappus 估计低 $2$--$6\%$。
+\item \textbf{真机}：功率账用实测 $\Vp/\Sw$；前端形状的几何体积/壁面在其 $\sim10$--$25\%$ 内（W7-X $32.7$ vs $30$），实测为准。
+\item \textbf{新增 QS 预设}：原生精确复现发表 $\iotabar$（QA 0.42、QH 1.24/1.25）。
+\end{itemize}
+
+\paragraph{诚实局限。}
+\begin{itemize}[leftmargin=1.4em]
+\item 截面视图是 cartoon：真机用 $|m|,|n|\le2$ 截断 + 归一化重缩放，\textbf{非完整平衡重建}；LHD 用通用 $l{=}2$ heliotron、CFQS 用 ESTELL 代理（形态族正确、非逐机精确）。
+\item 真机 $\Vp/\Sw/\iotabar$ 覆写为公开估计，需对照权威文献核实；$\Sw$ 部分为近似（见代码 \texttt{\_notes}）。
+\item 未新增\textbf{真机}预设：精确 DESC 双 Fourier 边界谐波需离线 DESC 管线，本环境不可复现，故只新增由近轴\emph{定义}的概念堆 QS 预设。
+\item 嵌套面 $\rho\,$体$+\rho^{1.5}\,$塑形为显示近似（严格嵌套、均匀间距），但 $\rho{=}1$ 边界即功率账积分边界。
+\end{itemize}
+
+\paragraph{来源与代码。}
+ISS04：Yamada \emph{NF} 45 (2005) 1684；Sudo \emph{NF} 30 (1990)；近轴：Garren \& Boozer \emph{PoF B} 3 (1991) 2805，Landreman--Sengupta--Plunk \emph{JPP} 85 (2019)；precise QS：Landreman \& Paul \emph{PRL} 128 (2022) 035001；边界谐波：DESC \texttt{desc/examples}（github.com/PlasmaControl/DESC）；近轴实现 pyQSC（github.com/landreman/pyQSC）。代码：\texttt{polyfusion/configs/stellarator.py}、\texttt{polyfusion/nearaxis.py}、\texttt{polyfusion/presets/stellarator.json}；几何$\to$功率细节见 docs/40，物理内核见 docs/39。
+
+\end{document}
