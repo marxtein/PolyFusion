@@ -283,6 +283,8 @@ function stashStellGeom(){
   STELL_STASH.etabar=VALS.etabar;STELL_STASH.delta_h=VALS.delta_h;
 }
 
+function stellGeomMode(){return VALS._geom_mode||inferStellGeomMode();}
+
 function setStellGeomMode(mode){
   stashStellGeom();VALS._geom_mode=mode;
   if(mode==='simple'){delete VALS.shape;delete VALS.rc;delete VALS.zs;VALS.iota=0;VALS.Vp_override=0;VALS.Sw_override=0;}
@@ -485,10 +487,10 @@ function buildParams(){
     html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div>`;
     // mode switch for stellarator geometry (simple / axis Fourier / boundary Fourier)
     if(gk==='geo'&&CUR==='stellarator'){
-      const modes=[['simple',L('默认近轴','default near-axis')],['axis',L('磁轴 Fourier','axis Fourier')],['boundary',L('边界 Fourier','boundary Fourier')]];
+      const modes=[['simple','item(\'simple\'),L(\'默认近轴\',\'default near-axis\')'],['axis','item(\'axis\'),L(\'磁轴 Fourier\',\'axis Fourier\')'],['boundary','item(\'boundary\'),L(\'边界 Fourier\',\'boundary Fourier\')']];
       const cur=VALS._geom_mode||inferStellGeomMode();
       html+='<div class="geomodes">';
-      modes.forEach(([k,lab])=>html+=`<button class="gmodebtn${k===cur?' on':''}" data-gmode="${k}">${lab}</button>`);
+      modes.forEach(([k,lab])=>html+=`<button class="gmodebtn${k===cur?' on':''}" data-gmode="${k}">${lab.slice(lab.indexOf(')')+1)}</button>`);
       html+='</div>';
     }
     html+=`<div class="pgrid" data-grp="${gk}">`;
@@ -502,8 +504,14 @@ function buildParams(){
       else if(p==='imp_name'){const SP=['','He','Li','Be','C','N','O','Ne','Ar','Kr','Xe','W'];
         html+=`<div class="fld"><label title="${desc}"><span class="sym">imp</span><span class="nm">${desc}</span></label><select data-p="imp_name">${SP.map(s=>`<option value="${s}" ${(VALS.imp_name||'')===s?'selected':''}>${s||L('关闭(默认)','off (default)')}</option>`).join('')}</select></div>`;}
       else if(p==='rc'||p==='zs'){const tip=(m[1]+' · '+m[0]).replace(/<[^>]+>/g,'');
-        const cur=Array.isArray(VALS[p])?VALS[p].join(','):'';
-        html+=`<div class="fld full"><label title="${tip}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span></label><input type="text" data-p="${p}" placeholder="e.g. 18,0.9,0.1" value="${cur}"></div>`;}
+        if(isPlainObject(VALS.shape)&&Array.isArray(VALS.shape.R)&&Array.isArray(VALS.shape.Z)){
+          const mk=p==='rc'?'R':'Z';const arr=VALS.shape[mk]||[];
+          const val=arr.map(([m,n,c])=>`[${m},${n},${c}]`).join(',\n');
+          const tftip=(p==='rc'?L('边界 R Fourier [m,n,c]','boundary R Fourier [m,n,c]'):L('边界 Z Fourier [m,n,c]','boundary Z Fourier [m,n,c]'));
+          html+=`<div class="fld full"><label title="${tftip}"><span class="sym">${mk}</span><span class="nm">${mk} Fourier</span></label><textarea data-p="${p}" placeholder="[m,n,c] triplets" rows="6">${val}</textarea></div>`;}
+        else{
+          const cur=Array.isArray(VALS[p])?VALS[p].join(','):'';
+          html+=`<div class="fld full"><label title="${tip}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span></label><input type="text" data-p="${p}" placeholder="e.g. 18,0.9,0.1" value="${cur}"></div>`;}}
       else{const dn=DENS.has(p);const un=dn?'10²⁰ m⁻³':m[2];const u=un?`<span class="u">[${un}]</span>`:'';
         const tip=(m[1]+' · '+m[0]).replace(/<[^>]+>/g,'');
         html+=`<div class="fld"><label title="${tip}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span>${u}</label><input type="number" step="any" data-p="${p}" ${dn?'data-sc="1e20"':''} value="${fmtIn(dn?VALS[p]*1e-20:VALS[p])}"></div>`;}
@@ -541,10 +549,17 @@ function buildParams(){
           const zEl=box.querySelector('[data-p="Zimp"]');if(zEl)zEl.value=IMPZ[el.value];}}
       else delete VALS.imp_name;}
     else if(el.dataset.p==='rc'||el.dataset.p==='zs'){
-      // custom near-axis Fourier list: comma-separated floats. blank or all-bad
-      // -> drop the key entirely so backend falls back to its delta_h default.
-      const arr=(el.value||'').split(',').map(s=>parseFloat(s.trim())).filter(x=>isFinite(x));
-      if(arr.length)VALS[el.dataset.p]=arr;else delete VALS[el.dataset.p];}
+      const mk=el.dataset.p==='rc'?'R':'Z';
+      // boundary Fourier: parse [m,n,c] triplets into VALS.shape
+      if(isPlainObject(VALS.shape)&&el.tagName==='TEXTAREA'){
+        const raw=(el.value||'').split(/[\\n,]+/).filter(s=>s.trim());
+        const arr=[];for(const s of raw){const ns=s.match(/[-\\d.]+/g);if(ns&&ns.length>=3)arr.push([parseFloat(ns[0]),parseFloat(ns[1]),parseFloat(ns[2])]);}
+        if(arr.length){if(!VALS.shape)VALS.shape={};VALS.shape[mk]=arr;}
+        else{if(VALS.shape)delete VALS.shape[mk];if(VALS.shape&&!VALS.shape.R&&!VALS.shape.Z)delete VALS.shape;}
+      }else{
+        // near-axis Fourier list: comma-separated floats
+        const arr=(el.value||'').split(',').map(s=>parseFloat(s.trim())).filter(x=>isFinite(x));
+        if(arr.length)VALS[el.dataset.p]=arr;else delete VALS[el.dataset.p];}}
     else if(el.dataset.bool)VALS[el.dataset.p]=+el.value;
     else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
     applyModeLocks();
