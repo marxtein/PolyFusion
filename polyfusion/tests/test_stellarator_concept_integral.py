@@ -86,6 +86,20 @@ def main():
     ok(abs(cf_int - cf_disp) < 0.1,
        f"integral boundary shape matches display (concave {cf_int:.2f} ~ {cf_disp:.2f})")
 
+    # (d) SHAPE ENTERS POWER: at FIXED axis (-> fixed L_ax) and FIXED a, changing
+    #     the shaping etabar changes the drawn boundary, hence Vp (boundary
+    #     integral), hence Pfus.  This pins the report's corrected claim "form
+    #     enters the power account through Vp" (docs/40, docs/41) — it would FAIL
+    #     if Vp ever reverted to the analytic shape-independent pi*a^2*L_ax.
+    lo = solve_stellarator(**{**cfg, "etabar": 0.04})
+    hi = solve_stellarator(**{**cfg, "etabar": 0.05})
+    ok(abs(lo.L_ax - hi.L_ax) < 1e-9,
+       f"axis (L_ax) unchanged by etabar ({lo.L_ax:.3f}=={hi.L_ax:.3f})")
+    ok(abs(lo.Vp - hi.Vp) / hi.Vp > 0.01,
+       f"shape (etabar) moves Vp at fixed axis: {lo.Vp:.1f} vs {hi.Vp:.1f}")
+    ok(abs(lo.Pfus - hi.Pfus) / hi.Pfus > 0.01,
+       f"=> shape moves Pfus at fixed a/L_ax: {lo.Pfus:.1f} vs {hi.Pfus:.1f} MW")
+
     print("\nRESULT:", "CONCEPT INTEGRAL PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1
 

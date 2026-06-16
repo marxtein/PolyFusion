@@ -19,6 +19,7 @@
 \newcommand{\Pwall}{P_\mathrm{wall}}
 \newcommand{\Eth}{E_\mathrm{th}}
 \newcommand{\iotabar}{\bar{\iota}}
+\newcommand{\etabar}{\bar\eta}
 
 \title{PolyFusion 仿星器几何：怎么画、怎么进功率账}
 \author{PolyFusion release —— 仿星器几何系列报告（配 docs/39）}
@@ -28,18 +29,18 @@
 \maketitle
 
 \begin{abstract}
-本报告说明 PolyFusion 0-D 程序里仿星器的几何\textbf{当前到底怎么实现}，以及这套几何\textbf{以哪些量、按什么幂次进入功率账}。核心结论：几何有\textbf{两个互相独立又互相一致}的角色——(1) 前端\textbf{截面视图}（cartoon，给人看形状），(2) 后端\textbf{功率账几何}（一组标量 $a,\Vp,\Sw,\Lax,\iotabar$，给功率公式做积分权重）。两者通过\textbf{同一个截面面积锚} $\Aflux=\pi a^2$ 绑定，已数值核对一致到 $\le 1\%$。
+本报告说明 PolyFusion 0-D 程序里仿星器的几何\textbf{当前到底怎么实现}，以及这套几何\textbf{以哪些量、按什么幂次进入功率账}。核心结论：功率公式只含一组\textbf{标量} $a,R_0,\Vp,\Sw,\Lax,\iotabar$（没有显式"形状"项），\textbf{但} $\Vp,\Sw$ 是\textbf{前端所画 $\rho{=}1$ 边界的精确积分}——所以对\textbf{概念堆}，\textbf{边界形状经 $\Vp/\Sw$ 真的进功率}（固定 $a/\Lax$、只改塑形 $\etabar$，$\Pfus$ 可摆动 $\sim5\%$）；对\textbf{真机}，$\Vp/\Sw/\iotabar$ 用实测覆写、所画边界只供显示。前后端用\textbf{同一条边界}，故"截面视图"与"功率几何"\textbf{同源一致}（$\le1\%$）。真正纯装饰、不进功率的只有\textbf{内面嵌套画法与相位帧}。
 \end{abstract}
 
-\section{两个几何角色}
+\section{几何怎么进功率：一条边界，两个用途}
 
 \paragraph{(A) 功率账几何（后端，真正进功率）。}
-功率公式只需要一小组\textbf{标量}：等离子体体积 $\Vp$、第一壁面积 $\Sw$、面积等效小半径 $a$、大半径 $R_0$、磁轴长 $\Lax$、旋转变换 $\iotabar$。它们不依赖"画成什么形状"。
+功率公式只需要一小组\textbf{标量}：等离子体体积 $\Vp$、第一壁面积 $\Sw$、面积等效小半径 $a$、大半径 $R_0$、磁轴长 $\Lax$、旋转变换 $\iotabar$。\textbf{注意}：$\Vp,\Sw$ 不是解析定值，而是\textbf{对前端所画 $\rho{=}1$ 边界做精确环向积分}得到的（\S\ref{sec:power} 的 \texttt{boundary\_metrics}）。所以\textbf{边界形状确实经 $\Vp,\Sw$ 进功率}——这是本程序在 Scheme D 后的现状，旧版"$\Vp=\pi a^2\Lax$ 解析、形状无关"已不成立。真机另用实测 $\Vp^{*}/\Sw^{*}/\iotabar$ 覆写。
 
-\paragraph{(B) 截面视图几何（前端，只给人看）。}
-UI 在 $\varphi=0,\,T/4,\,T/2$ 三个环向切面画磁面截面 + 壁层。这是\textbf{装饰性 cartoon}，不进任何功率数。
+\paragraph{(B) 截面视图几何（前端）。}
+UI 在 $\varphi=0,\,T/4,\,T/2$ 切面画磁面截面 + 壁层 + 连续相位扫描。其中 $\rho{=}1$ \textbf{外边界}就是 (A) 积分的同一条曲线（前后端一致）；真正\textbf{纯装饰、不进功率}的是\textbf{内面嵌套画法}（$\rho^{1.5}$ 衰减）\textbf{与相位帧}——它们不改 $\rho{=}1$ 边界，故不影响 $\Vp/\Sw$。
 
-二者的唯一物理绑定：\textbf{视图截面的面积 $=$ 功率账用的 $\Aflux=\pi a^2$}（见 \S\ref{sec:consistency}）。
+二者的绑定：\textbf{视图 $\rho{=}1$ 边界 $=$ 功率几何的积分边界}，且其一阶截面面积 $=\Aflux=\pi a^2$（见 \S\ref{sec:consistency}）。
 
 \section{UI 几何面板：每个输入参数干什么}\label{sec:inputs}
 
@@ -146,7 +147,7 @@ Sudo 密度限 & $n_\mathrm{Sudo}=0.25\sqrt{P_L B_0/(a^2R_0)}\cdot10^{20}$ & $a,
 \item \textbf{体积 $\Vp$ 是最强权重}：$\Pfus,\Pbrem,\Pcycl,\Eth$ 全部线性正比于 $\Vp$。真机用实测 $\Vp$，所以聚变/辐射功率锚在实测体积上。
 \item \textbf{$\Sw$ 只进壁负荷}：$\Pwall=(\Pfus+\Pheat)/\Sw$。这就是真机要 $\Sw^\mathrm{override}$ 的原因——近轴 $S_\mathrm{w,geom}$ 因极端拉长而失真（如 HSX 近轴 $e_\mathrm{max}\!\sim\!384$）。
 \item \textbf{$a,R_0,\iotabar$ 进约束闭合}：ISS04 约束时间与 Sudo 密度限。$\iotabar$ 仅在此以 $0.41$ 次幂出现；真机用实测 $\iotabar$。
-\item \textbf{形状（bean / 旋转椭圆 / D 形）不进功率}：功率只看上述标量。截面形状纯属可视化。
+\item \textbf{形状经 $\Vp/\Sw$ 进功率（概念堆）}：功率公式无显式形状项，只有标量 $\Vp,\Sw,a,R_0,\iotabar$；但 $\Vp,\Sw$ 是\textbf{所画边界的精确积分}，所以改边界形状（如 bean 的弯曲程度、$\etabar$ 控制的拉长比）会经 $\Vp/\Sw$ 改 $\Pfus/\Pbrem/\Pcycl/\Eth/\Pwall$。\textbf{数值实证}：NAE-QA 固定轴（$\Lax{=}114.1$）、固定 $a{=}1.8$，只把 $\etabar$ 从 $0.04$ 调到 $0.07$（拉长比 $3.3\!\to\!4.5$），$\Vp$ 在 $1095\!\to\!1145$ 变、$\Pfus$ 在 $1825\!\to\!1909$ MW 摆动（$\sim5\%$）。\textbf{真机}用实测 $\Vp/\Sw$ 覆写，所画形状不进功率（其积分 $V_\mathrm{p,geom}$ 仅上报对比）。真正不进的是内面嵌套显示衰减与 $B_{2c}$（不改 $\rho{=}1$、不在求解路径）。
 \end{itemize}
 
 \section{截面视图怎么画（前端）}\label{sec:view}

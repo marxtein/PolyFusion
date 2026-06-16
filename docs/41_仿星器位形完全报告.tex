@@ -51,7 +51,7 @@
 \maketitle
 
 \begin{abstract}
-本报告把 PolyFusion 0-D 程序里\textbf{整个仿星器位形}从头讲透：它\textbf{算什么物理}（0-D 功率平衡）、\textbf{怎么描述几何}（近轴展开 + 真机傅里叶边界）、\textbf{几何如何进功率账}（哪个量、什么幂次）、\textbf{怎么画截面}（统一嵌套磁面 + 相位滑块）、\textbf{内置哪些位形}（9 个预设），以及 \textbf{POPCON 扫描怎么算、怎么被加速}。目标是让懂等离子体物理、但没读过这套代码的人，能完整地"听懂"每一步在做什么、为什么这么做、近似在哪里。核心观念贯穿全文：几何有\textbf{两个互相独立又一致}的角色——给人看的\emph{截面视图}，和给功率公式做积分权重的\emph{几何标量}$(a,\Vp,\Sw,\Lax,\iotabar)$；二者通过同一个截面面积锚 $\Aflux=\pi a^2$ 绑定。
+本报告把 PolyFusion 0-D 程序里\textbf{整个仿星器位形}从头讲透：它\textbf{算什么物理}（0-D 功率平衡）、\textbf{怎么描述几何}（近轴展开 + 真机傅里叶边界）、\textbf{几何如何进功率账}（哪个量、什么幂次）、\textbf{怎么画截面}（统一嵌套磁面 + 相位滑块）、\textbf{内置哪些位形}（9 个预设），以及 \textbf{POPCON 扫描怎么算、怎么被加速}。目标是让懂等离子体物理、但没读过这套代码的人，能完整地"听懂"每一步在做什么、为什么这么做、近似在哪里。核心观念贯穿全文：功率公式只含\emph{标量} $(a,R_0,\Vp,\Sw,\Lax,\iotabar)$，无显式"形状"项；\textbf{但} $\Vp,\Sw$ 是\emph{前端所画 $\rho{=}1$ 边界的精确积分}，所以对概念堆\textbf{边界形状经 $\Vp/\Sw$ 真的进功率}（改塑形 $\etabar$ 可让 $\Pfus$ 摆动 $\sim5\%$），真机则用实测覆写、形状只供显示。前后端是\textbf{同一条边界}，通过 $\Aflux=\pi a^2$ 与精确积分 $\Vp/\Sw$ 绑定；纯装饰、不进功率的只有内面嵌套画法与相位帧。
 \end{abstract}
 
 \tableofcontents
@@ -173,7 +173,7 @@ H_ISS04 = tauE / tau_ISS04
 n_Sudo = 0.25 * math.sqrt(PL * B0 / (a**2 * R0)) * 1e20
 \end{lstlisting}
 
-\paragraph{小结。}功率账只认一组\textbf{标量}：$\Vp$（最强，进 $\Pfus,\Pbrem,\Pcycl,\Eth$）、$\Sw$（只进壁负荷 $\Pwall=(\Pfus+\Pheat)/\Sw$）、$a,R_0,\iotabar$（进 ISS04/Sudo）。\textbf{截面形状本身不进功率}——它纯粹是几何标量的来源和给人看的图。下面三节就讲这些标量从哪来。
+\paragraph{小结。}功率账只认一组\textbf{标量}：$\Vp$（最强，进 $\Pfus,\Pbrem,\Pcycl,\Eth$）、$\Sw$（只进壁负荷 $\Pwall=(\Pfus+\Pheat)/\Sw$）、$a,R_0,\iotabar$（进 ISS04/Sudo）。功率公式里没有"形状"这一项——\textbf{但这不等于形状不进功率}：第 \ref{sec:integral} 节会看到 $\Vp,\Sw$ 是\textbf{所画 $\rho{=}1$ 边界的精确积分}，所以\textbf{边界形状经 $\Vp/\Sw$ 进功率}（概念堆；真机用实测覆写）。下面几节就讲这些标量从哪来、形状如何经它们影响功率。
 
 %======================================================================
 \section{几何模型 I：近轴展开（概念堆）}\label{sec:nae}
@@ -326,7 +326,7 @@ Sudo 密度限 & $n_\mathrm{Sudo}=0.25\sqrt{P_LB_0/(a^2R_0)}\,10^{20}$ & $a,R_0$
 \item \textbf{体积最强}：$\Pfus,\Pbrem,\Pcycl,\Eth$ 全线性正比 $\Vp$。真机用实测 $\Vp$，聚变/辐射锚在实测体积上。
 \item \textbf{$\Sw$ 只进壁负荷}。真机要 $\Sw^{*}$ 覆写，因近轴 $\Sw$ 在极端拉长下失真（如 HSX 近轴 $e_\mathrm{max}\!\sim\!384$）。
 \item \textbf{$\iotabar$ 仅以 $0.41$ 次幂进 ISS04}。真机用实测 $\iotabar$；概念堆用近轴自洽解。
-\item \textbf{形状不进功率}：bean/D 形/旋转椭圆只决定上述标量和图，功率公式只看标量。
+\item \textbf{形状经 $\Vp/\Sw$ 进功率（概念堆）}：功率公式无显式形状项，但 $\Vp,\Sw$ 是\textbf{所画 $\rho{=}1$ 边界的精确积分}（\S\ref{sec:integral}），所以改边界形状会经 $\Vp/\Sw$ 改功率。\textbf{实证}：NAE-QA 固定轴（$\Lax{=}114.1$）与 $a{=}1.8$，$\etabar{:}0.04\!\to\!0.07$（拉长比 $3.3\!\to\!4.5$）令 $\Vp{:}1095\!\to\!1145$、$\Pfus{:}1825\!\to\!1909$ MW（$\sim5\%$）。\textbf{真机}用实测 $\Vp/\Sw/\iotabar$ 覆写，所画形状不进功率（积分 $V_\mathrm{p,geom}$ 仅上报）。不进功率的是内面嵌套显示衰减（$\rho^{1.5}$）与 $B_{2c}$。
 \end{itemize}
 
 %======================================================================
@@ -392,7 +392,7 @@ CFQS       & 真机·边界 & 2 & 1.0  & 0.25 & 1.0 & 0.45$^{*}$ & 1.0$^{*}$ & E
 
 \paragraph{两个性能根因（均已无损修复）。}
 \begin{enumerate}[leftmargin=1.5em]
-\item \textbf{几何是扫描不变量、却每点重算}。POPCON 扫的 $T_{i0}/n_{i0}/B_0$ 都\textbf{不改几何}（几何只依赖 $R_0,A,\nfp,\delta_h,\etabar,rc,zs,g$），但旧代码在 $441$ 个点 + 每次 $\tau_E/T_e$ 自洽递归都重算近轴解 + 边界积分。利用这个\textbf{场周期不变性}，把几何按几何参数 \emph{memoize}（\texttt{\_stellarator\_geometry}）：整张图只算\textbf{一次}几何；若扫描键\emph{是}几何量（$R_0/\etabar/\dots$）则键变、正确重算，永不 stale。
+\item \textbf{几何是扫描不变量、却每点重算}。POPCON 扫的 $T_{i0}/n_{i0}/B_0$ 都\textbf{不改几何}（几何只依赖 $R_0$、$A$、$\nfp$、$\delta_h$、$\etabar$、轴 $rc/zs$、$g$），但旧代码在 $441$ 个点 + 每次 $\tau_E/T_e$ 自洽递归都重算近轴解 + 边界积分。利用这个\textbf{场周期不变性}，把几何按几何参数 \emph{memoize}（\texttt{\_stellarator\_geometry}）：整张图只算\textbf{一次}几何；若扫描键\emph{是}几何量（$R_0/\etabar/\dots$）则键变、正确重算，永不 stale。
 
 \codefrom{\texttt{stellarator.py} · \texttt{\_stellarator\_geometry}（按几何参数缓存）}
 \begin{lstlisting}
