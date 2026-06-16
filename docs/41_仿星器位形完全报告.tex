@@ -5,6 +5,20 @@
 \usepackage{booktabs,array}
 \usepackage{xcolor}
 \usepackage{enumitem}
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue!70!black},
+  commentstyle=\color{gray!60!black}\itshape,
+  stringstyle=\color{teal!70!black},
+  breaklines=true, showstringspaces=false,
+  columns=fullflexible, keepspaces=true,
+  frame=single, rulecolor=\color{gray!40}, framesep=4pt,
+  xleftmargin=4pt, xrightmargin=2pt, aboveskip=4pt, belowskip=2pt,
+  language=Python, escapeinside={(*}{*)},
+}
+% one-line tag above a code block: filename / function it comes from
+\newcommand{\codefrom}[1]{\vspace{1pt}\noindent{\small\color{gray!55!black}\textsf{代码 · #1}}\par\nopagebreak}
 \usepackage{hyperref}
 \hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue}
 
@@ -53,7 +67,7 @@
 PolyFusion 是\textbf{零维（0-D）功率平衡}程序：它\emph{不}解 MHD 平衡或输运方程，而是把一台装置压缩成一组标量（体积、壁面积、磁轴长度、旋转变换、温度密度剖面指数……），用代数公式估算\textbf{聚变功率、辐射、约束时间、增益 $Q$、$\beta$、壁负荷}等，用来快速扫参数、画运行空间图（POPCON）。它和同程序里的托卡马克、磁镜、FRC、偶极场共用同一套功率平衡内核，区别只在\textbf{几何标量怎么取}和\textbf{约束定标用哪条经验律}。
 
 \paragraph{本报告范围。}
-只讲\textbf{仿星器位形}：第 \ref{sec:power} 节物理内核，第 \ref{sec:nae}--\ref{sec:integral} 节几何（近轴、真机边界、体积积分），第 \ref{sec:account} 节几何进功率，第 \ref{sec:view} 节截面可视化，第 \ref{sec:presets} 节 9 个预设，第 \ref{sec:popcon} 节 POPCON 与性能，第 \ref{sec:consistency} 节一致性与局限。代码在 \texttt{polyfusion/configs/stellarator.py}、\texttt{polyfusion/nearaxis.py}、\texttt{polyfusion/presets/stellarator.json}。
+只讲\textbf{仿星器位形}：第 \ref{sec:power} 节物理内核，第 \ref{sec:nae}--\ref{sec:integral} 节几何（近轴、真机边界、体积积分），第 \ref{sec:account} 节几何进功率，第 \ref{sec:view} 节截面可视化，第 \ref{sec:presets} 节 9 个预设，第 \ref{sec:popcon} 节 POPCON 与性能，第 \ref{sec:consistency} 节一致性与局限。代码在 \texttt{polyfusion/configs/stellarator.py}、\texttt{polyfusion/nearaxis.py}、\texttt{polyfusion/presets/stellarator.json}。\textbf{本报告在关键公式旁贴上对应的真实代码片段}（摘自当前 HEAD），便于公式$\leftrightarrow$实现逐行对照；片段保留原英文注释。
 
 %======================================================================
 \section{物理内核：0-D 功率平衡}\label{sec:power}
@@ -82,12 +96,36 @@ Maxwellian 反应率 $\langle\sigma v\rangle(T)$ 由 \texttt{reactivity} 给出�
 \end{equation}
 $Y$ 是单次反应释能、$\delta_{12}$ 处理同种反应物的双计数。中子功率 $P_n=\Pfus(1-f_\mathrm{ion})$，$f_\mathrm{ion}$ 是带电产物（如 $\alpha$）的能量份额。\textbf{关键}：$\Pfus\propto\Vp$——体积是最强的几何杠杆。
 
+\codefrom{\texttt{stellarator.py} · \texttt{solve\_stellarator}}
+\begin{lstlisting}
+x = np.linspace(0.0, 1.0, 101); dx = x[1] - x[0]
+Tx = Ti0 * (1 - x**2) ** ST                      # temperature profile T(x)
+sgv = reactivity(Tx, icase)                      # <sigma v>(T(x))
+Phi = fsig * 2 * float(np.sum((1 - x**2)**(2*Sn) * sgv * x * dx))   # profile-avg
+Pfus = rx["Y"] / (1 + d12) * n10 * n20 * Phi * Vp * 1e-6           # proportional Vp
+Pn = Pfus * (1 - rx["fion"])
+\end{lstlisting}
+
 \subsection{辐射损失}
 \begin{itemize}[leftmargin=1.4em]
 \item \textbf{轫致辐射} $\Pbrem\propto n_e^2\sqrt{T_e}\,\Vp$（含相对论修正、$Z_\mathrm{eff}$ 加权），$\propto\Vp$。
 \item \textbf{回旋辐射} $\Pcycl\propto B_0^{2.5}\,T_\mathrm{eff}^{2.5}\,n_\mathrm{eff}^{0.5}(1-R_w)^{0.5}\,a^{-0.5}\,\Vp$，$R_w$ 是壁反射率。注意它\textbf{显含小半径} $a^{-1/2}$——回旋辐射对装置尺寸敏感。
 \item \textbf{杂质线辐射} $P_\mathrm{line}$（Mavrin 拟合，可选）。
 \end{itemize}
+
+\codefrom{\texttt{stellarator.py} · \texttt{solve\_stellarator}（辐射）}
+\begin{lstlisting}
+Pbrem = (5.34e-37 * ne0**2 * math.sqrt(Te0)
+         * (Zeff * (1 / (1 + 2*Sn + 0.5*ST))
+            + 0.7936 / (1 + 2*Sn + 1.5*ST) * (Te0 / MEC2)
+            + 1.874 / (1 + 2*Sn + 2.5*ST) * (Te0 / MEC2)**2
+            + 3 / math.sqrt(2) / (1 + 2*Sn + 1.5*ST) * (Te0 / MEC2))
+         * 1e-6 * Vp)
+neff = ne0 / 1e20 / (1 + Sn)
+Teff = Te0 * float(np.sum((1 - x**2) ** ST)) * dx
+Pcycl = (4.14e-7 * neff**0.5 * Teff**2.5 * B0**2.5 * (1 - Rw)**0.5
+         * a**-0.5 * (1 + 2.5 * Teff / 511) * Vp)   # note the a^-0.5
+\end{lstlisting}
 
 \subsection{储能、加热、增益}
 储能与输运损失
@@ -104,6 +142,16 @@ P_\mathrm{tr}=\Eth/\tau_E .
 \beta_t=\frac{2\mu_0(n_{i0}T_{i0}+n_{e0}T_{e0})}{B_0^2(1+S_n+S_T)} .
 \]
 
+\codefrom{\texttt{stellarator.py} · \texttt{solve\_stellarator}（储能/加热/$\beta$/壁负荷）}
+\begin{lstlisting}
+Eth = 1.5 * (ni0*Ti0 + ne0*Te0) * 1e3 * QE / (1 + Sn + ST) * Vp * 1e-6
+Pth = Eth / tauE
+Pheat = Pcycl + Pbrem + P_line + Pth - rx["fion"] * Pfus
+Qfus = Pfus / Pheat if Pheat > 0 else 1000.0      # Pheat<=0 -> ignited
+betaT = 2 * MU0 * (ni0*Ti0 + ne0*Te0) * 1e3 * QE / B0**2 / (1 + Sn + ST)
+Pwall = (Pfus + Pheat) / Sw                        # the only Sw user
+\end{lstlisting}
+
 \subsection{约束闭合：ISS04 + Sudo}
 仿星器\textbf{不用}托卡马克的 H98，而用国际仿星器定标 \textbf{ISS04}：
 \begin{equation}
@@ -115,6 +163,15 @@ $P_L=f_\mathrm{ion}\Pfus+\Pheat$ 是损失功率，$f_\mathrm{ren}$ 是装置归
 n_\mathrm{Sudo}=0.25\sqrt{P_L B_0/(a^2 R_0)}\times10^{20}.
 \]
 两个自洽回路：$\tau_E=0$ 时从 ISS04 预测求解 $\tau_E$（令 $H_\mathrm{ISS04}=H_\mathrm{fac}$）；$f_T=0$ 时从电子通道平衡自洽解 $T_e/T_i$。
+
+\codefrom{\texttt{stellarator.py} · \texttt{solve\_stellarator}（ISS04 + Sudo）}
+\begin{lstlisting}
+PL = rx["fion"] * Pfus + Pheat                     # loss power
+tau_ISS04 = (0.134 * f_ren * a**2.28 * R0**0.64 * PL**-0.61
+             * (nbar / 1e19)**0.54 * B0**0.84 * iota_used**0.41)  # iota^0.41
+H_ISS04 = tauE / tau_ISS04
+n_Sudo = 0.25 * math.sqrt(PL * B0 / (a**2 * R0)) * 1e20
+\end{lstlisting}
 
 \paragraph{小结。}功率账只认一组\textbf{标量}：$\Vp$（最强，进 $\Pfus,\Pbrem,\Pcycl,\Eth$）、$\Sw$（只进壁负荷 $\Pwall=(\Pfus+\Pheat)/\Sw$）、$a,R_0,\iotabar$（进 ISS04/Sudo）。\textbf{截面形状本身不进功率}——它纯粹是几何标量的来源和给人看的图。下面三节就讲这些标量从哪来。
 
@@ -135,6 +192,17 @@ Z_0(\varphi)=\sum_n Z_{s,n}\sin(n\nfp\varphi).
 \subsection{$\sigma$ 方程与旋转变换}
 一阶磁面的形状由 Garren--Boozer 的\textbf{周期 $\sigma$ 方程}决定，它是关于 $\sigma(\varphi)$ 和轴上旋转变换 $\iota$ 的非线性常微分方程，含\textbf{挠率贡献}。代码用 Newton 迭代解出 $(\iota,\sigma)$（对齐 pyQSC 到机器精度 $<2\times10^{-12}$）。直观理解：$\iotabar$ = 磁力线绕环一圈、极向转过的圈数；它由\textbf{轴的扭转（挠率）}和\textbf{塑形}共同决定——所以螺旋偏移 $\delta_h$ 越大、$\iotabar$ 越不同（旋转椭圆模型对 $\delta_h$ 是盲的，这正是本程序弃用它的原因）。
 
+\codefrom{\texttt{nearaxis.py} · \texttt{solve\_near\_axis}（$\sigma$ 方程 Newton 迭代）}
+\begin{lstlisting}
+x = np.zeros(nphi)                       # x[0] = iota, x[1:] = sigma(phi)
+for _ in range(newton_maxit):
+    r = residual(x)
+    if np.max(np.abs(r)) < newton_tol:   # newton_tol = 1e-12
+        break
+    x = x - np.linalg.solve(jacobian(x), r)   # <- the BLAS-heavy solve (sec 9)
+iota = float(x[0]); sigma = x.copy(); sigma[0] = 0.0
+\end{lstlisting}
+
 \subsection{一阶截面：旋转椭圆与拉长比}
 解出 $\sigma$ 后，一阶 Frenet 系数
 \begin{equation}
@@ -145,6 +213,16 @@ X_{1c}=\frac{\etabar}{\kappa},\quad Y_{1s}=\frac{\kappa}{\etabar},\quad Y_{1c}=\
 e=\frac{p+\sqrt{p^2-4}}{2},\quad p=X_{1c}^2+Y_{1s}^2+Y_{1c}^2 ,
 \end{equation}
 随 $\etabar$ 减小而增大（$\sim(\kappa/\etabar)^2$）。\textbf{重要}：一阶面积 $\propto X_{1c}Y_{1s}=1$（面积守恒）——拉长比变、面积不变，这就是后面 $\Aflux=\pi a^2$ 锚的根据：\textbf{塑形不改体积}。
+
+\codefrom{\texttt{nearaxis.py} · \texttt{solve\_near\_axis}（一阶系数与拉长比）}
+\begin{lstlisting}
+X1c = etabar / curvature
+Y1s = curvature / etabar
+Y1c = curvature * sigma / etabar
+p = X1c**2 + Y1s**2 + Y1c**2
+q = -X1c * Y1s                              # = -1 (area-preserving)
+elongation = (p + np.sqrt(p*p - 4*q*q)) / (2 * np.abs(q))
+\end{lstlisting}
 
 \subsection{二阶截面：bean/crescent}
 二阶（$r^2$）系数（LSP Part 2，真空、仿星器对称特例，移植 pyQSC \texttt{calculate\_r2}，验证 $<10^{-9}$）给出
@@ -172,6 +250,14 @@ B_n(\varphi)=\begin{cases}\cos(n\nfp\varphi)& n\ge0\\ \sin(|n|\nfp\varphi)& n<0\
 \]
 这复现了 W7-X bean、LHD 旋转椭圆、HSX/CFQS 形态。\textbf{它是 cartoon}：$|m|,|n|\le2$ 截断、非完整平衡重建；纯供\emph{显示}和\emph{几何积分估算}，\textbf{不进功率账}（真机功率用实测 $\iotabar,\Vp,\Sw$ 覆写）。
 
+\codefrom{\texttt{stellarator.py} · \texttt{\_machine\_boundary\_outlines}（双 Fourier 乘积基求值）}
+\begin{lstlisting}
+# cos_m[m] = cos(m*theta) (m>=0) or sin(|m|*theta) (m<0)   # = A_m(theta)
+Bn = math.cos(n*nfp*phi) if n >= 0 else math.sin(-n*nfp*phi)   # = B_n(phi)
+Rh += c * _fade(m, rho) * cos_m[m] * Bn      # sum R_mn * A_m * B_n
+# Z built the same way; final  R = R0 + a*Rh,  Z = a*Zh
+\end{lstlisting}
+
 %======================================================================
 \section{体积与壁面：精确边界积分}\label{sec:integral}
 
@@ -189,8 +275,29 @@ B_n(\varphi)=\begin{cases}\cos(n\nfp\varphi)& n\ge0\\ \sin(|n|\nfp\varphi)& n<0\
 \end{equation}
 对解析圆环面验证到 $0.004\%$。
 
+\codefrom{\texttt{stellarator.py} · \texttt{boundary\_metrics}（体积，Green 定理）}
+\begin{lstlisting}
+phs = np.linspace(0.0, 2*math.pi/nfp, n_phi, endpoint=False)   # ONE field period
+V = 0.0
+for i in range(n_phi):
+    R, Z = Rg[i], Zg[i]
+    V += np.sum(0.5 * R * R * (np.roll(Z, -1) - Z)) * dph       # contour 1/2 R^2 dZ
+V = abs(V) * nfp                                                # x field periods
+\end{lstlisting}
+
 \paragraph{概念堆怎么处理 $r^2$ 失效。}
 概念堆积分的边界是\textbf{前端实际画的 bean}：满尺寸一阶体 + \textbf{限幅}二阶 wobble（$r^2$ 位移不超过 $r^1$ 的 $50\%$）。裸 $r^2$ 在 $r=a$ 会自交、体积暴涨（HELIAS 实测 $+331\%$）；限幅后是一条简单、尺寸正确的闭曲线，其积分比解析 Pappus 估计 $\pi a^2\Lax$ 低约 $2$--$6\%$（bean/曲率修正）。$\rho=1$ 边界与内面衰减律无关，故\textbf{功率账体积与显示嵌套画法解耦}。
+
+\codefrom{\texttt{stellarator.py} · \texttt{\_nearaxis\_reconstruct}（限幅二阶重建）}
+\begin{lstlisting}
+# s1 = max |r1 displacement|, s2 = max |r2 displacement| at this phi
+cap = min(a, _R2_DISPLAY_CAP * s1 / s2) if s2 > 0 else a    # _R2_DISPLAY_CAP=0.5
+def surf(rho):
+    wob = (rho ** _SHAPE_FADE) * cap * cap     # bounded r2; rho=1 -> cap^2
+    R = R0p + rho * a * body_R + wob * wob_R   # full-size body + capped wobble
+    Z = Z0p + rho * a * body_Z + wob * wob_Z
+    return R, Z
+\end{lstlisting}
 
 \paragraph{面积锚。}
 $\Aflux=\pi a^2$ 仍是\textbf{功率密度}的一阶通量守恒锚（一阶椭圆面积恒为 $\pi a^2$，拉长比不改它）。$\Lax$ 是近轴磁轴弧长。真机另带实测 $\Vp^{*}/\Sw^{*}$ 覆写。
@@ -231,6 +338,15 @@ Sudo 密度限 & $n_\mathrm{Sudo}=0.25\sqrt{P_LB_0/(a^2R_0)}\,10^{20}$ & $a,R_0$
 S(\rho)=\text{axis}+\rho\,(\text{低阶体})+\rho^{1.5}\,(\text{高阶塑形}),\qquad \rho\in(0,1].
 \end{equation}
 低阶体（$m\!\le\!1$ 椭圆 / 一阶近轴）随尺寸线性缩放；高阶塑形（$m\!\ge\!2$ bean·triangle / 二阶 wobble）按 $\rho^{1.5}$ 衰减——\textbf{比原始近轴 $\rho^{|m|}{=}\rho^2$ 高一阶}。这一改动同时解决两个毛病：原 $\rho^2$ 衰减会让 W7-X $\varphi{=}0$ bean 尖端处 $\rho{=}0.85$ 面\textbf{穿出边界}（逐点 point-in-polygon 核验，$15/121$ 点在外）；$\rho^{1.5}$ 使磁面\textbf{严格嵌套不交叉}并向轴平滑圆化。$\rho$ 取均匀采样使径向间距均匀（W7-X $\varphi{=}0$ 间距不均匀度 $1.73\!\to\!1.11$，HELIAS $2.11\!\to\!1.15$），呈现 VMEC/NSE-global 那种平滑均匀套叠。$\rho=1$ 边界与衰减律无关，故\textbf{不影响第 \ref{sec:integral} 节的体积积分}。
+
+\codefrom{\texttt{stellarator.py} · \texttt{\_fade}（真机谐波的 $\rho$ 衰减律）}
+\begin{lstlisting}
+def _fade(m, rho):
+    am = abs(m)
+    if am == 0: return 1.0      # m=0: axis position, fixed
+    if am == 1: return rho      # m=1: ellipse body, linear in size
+    return rho ** _SHAPE_FADE   # m>=2: bean/triangle shaping, _SHAPE_FADE=1.5
+\end{lstlisting}
 
 \paragraph{相位扫描。}
 仿星器截面随 $\varphi$ 变，UI 提供\textbf{相位开关}（$\varphi=0/T4/T2$ 三个特征切面）与\textbf{连续相位滑块}（真机与概念堆\textbf{统一}支持——两条路径都输出一周期 $24$ 帧）。滑块平滑的关键：把坐标视窗\textbf{固定到全帧并集}，相位扫描时截面\emph{原地形变}，而不是每帧重缩放（否则视觉抖动）。
@@ -277,7 +393,24 @@ CFQS       & 真机·边界 & 2 & 1.0  & 0.25 & 1.0 & 0.45$^{*}$ & 1.0$^{*}$ & E
 \paragraph{两个性能根因（均已无损修复）。}
 \begin{enumerate}[leftmargin=1.5em]
 \item \textbf{几何是扫描不变量、却每点重算}。POPCON 扫的 $T_{i0}/n_{i0}/B_0$ 都\textbf{不改几何}（几何只依赖 $R_0,A,\nfp,\delta_h,\etabar,rc,zs,g$），但旧代码在 $441$ 个点 + 每次 $\tau_E/T_e$ 自洽递归都重算近轴解 + 边界积分。利用这个\textbf{场周期不变性}，把几何按几何参数 \emph{memoize}（\texttt{\_stellarator\_geometry}）：整张图只算\textbf{一次}几何；若扫描键\emph{是}几何量（$R_0/\etabar/\dots$）则键变、正确重算，永不 stale。
+
+\codefrom{\texttt{stellarator.py} · \texttt{\_stellarator\_geometry}（按几何参数缓存）}
+\begin{lstlisting}
+key = (R0, A, int(round(N_fp)), delta_h, etabar, g,
+       rc_key, zs_key, shape_key, B2c)    # GEOMETRY params only (no Ti0/ni0/B0)
+cached = _GEOM_CACHE.get(key)
+if cached is not None:
+    return cached            # whole POPCON grid reuses ONE geometry
+\end{lstlisting}
 \item \textbf{numpy BLAS 多线程病态}。此 Windows numpy 2.4.6 的 OpenBLAS 对\textbf{中等矩阵}线程化异常：$121\times121$ 的 \texttt{linalg.solve} 多线程 $\sim0.6$ s、单线程 $\sim0.4$ ms（$\sim1300\times$），使近轴 $r^2$ 解（$\nphi{=}121$）单次 $\sim3.8$ s。numpy import 前 cap \texttt{OPENBLAS\_NUM\_THREADS=1}。无损：所有真实预设 $\Vp/\iotabar$ \textbf{逐位相同}，pyQSC 校验仍 $<10^{-9}$。
+
+\codefrom{\texttt{app/server.py}（numpy 导入前 cap BLAS 线程）}
+\begin{lstlisting}
+for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
+           "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")   # MUST be before numpy loads OpenBLAS
+import numpy as np
+\end{lstlisting}
 \end{enumerate}
 
 \begin{center}
