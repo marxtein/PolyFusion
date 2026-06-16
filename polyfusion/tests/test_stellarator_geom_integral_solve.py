@@ -43,7 +43,7 @@ def main():
     shape = p["shape"]
     a = p["R0"] / p["A"]
     bfn, nfp = _shape_boundary_fn(p["R0"], a, shape)
-    V_int, S_int = boundary_metrics(bfn, nfp, g=p["g"])
+    V_int, S_int, Sp_int = boundary_metrics(bfn, nfp, g=p["g"])
 
     # shape + NO override -> Vp/Sw come from the boundary integral (consistent)
     r = solve_stellarator(**_base(p), shape=shape, Vp_override=0.0, Sw_override=0.0)

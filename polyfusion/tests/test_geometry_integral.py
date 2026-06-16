@@ -32,7 +32,7 @@ def main():
     def torus(phi):                      # circular cross-section, no phi dep
         return R0 + a * np.cos(th), a * np.sin(th)
 
-    Vp, Sw = boundary_metrics(torus, nfp=1, g=0.0, n_phi=200)
+    Vp, Sw, Sp = boundary_metrics(torus, nfp=1, g=0.0, n_phi=200)
     Vref = 2 * math.pi**2 * R0 * a**2
     Sref = 4 * math.pi**2 * R0 * a
     ok(abs(Vp - Vref) / Vref < 1e-3, f"torus volume {Vp:.5f} ~ {Vref:.5f}")
@@ -43,7 +43,7 @@ def main():
     def helical(phi):
         return R0 + a * np.cos(th) + 0.1 * np.cos(th - 5 * phi), a * np.sin(th)
 
-    Vfull, Sfull = boundary_metrics(helical, nfp=5, g=0.0, n_phi=200)
+    Vfull, Sfull, _ = boundary_metrics(helical, nfp=5, g=0.0, n_phi=200)
     # boundary_metrics already uses the one-period x nfp shortcut internally;
     # cross-check it against a brute full-[0,2pi] integration
     phs = np.linspace(0.0, 2 * math.pi, 200, endpoint=False)
@@ -56,8 +56,8 @@ def main():
        f"one-period x nfp volume {Vfull:.5f} == full-torus {abs(Vbrute):.5f}")
 
     # wall gap increases the surface monotonically
-    _, Sw0 = boundary_metrics(torus, nfp=1, g=0.0)
-    _, Swg = boundary_metrics(torus, nfp=1, g=0.1)
+    _, Sw0, _ = boundary_metrics(torus, nfp=1, g=0.0)
+    _, Swg, _ = boundary_metrics(torus, nfp=1, g=0.1)
     ok(Swg > Sw0, f"wall gap raises surface ({Swg:.3f} > {Sw0:.3f})")
 
     print("\nRESULT:", "GEOMETRY INTEGRAL PASS" if PASS else "SOME FAILED")

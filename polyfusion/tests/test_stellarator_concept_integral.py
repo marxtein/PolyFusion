@@ -55,7 +55,7 @@ def main():
 
     bfn, nfp = _nearaxis_boundary_fn(R0=18.0, A=10.0, N_fp=3,
                                      delta_h=0.9, etabar=0.05)
-    V_int, S_int = boundary_metrics(bfn, nfp, g=0.1)
+    V_int, S_int, _ = boundary_metrics(bfn, nfp, g=0.1)
 
     r = solve_stellarator(**cfg)
     # (a) concept Vp/Sw == exact integral of the near-axis boundary (identity)

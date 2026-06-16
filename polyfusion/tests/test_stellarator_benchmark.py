@@ -113,7 +113,7 @@ def main():
     # analytic Pappus pi*a^2*L_ax (the bean/curvature correction).
     _bfn, _nfp = _nearaxis_boundary_fn(R0=18.0, A=10.0, N_fp=3,
                                        delta_h=0.045 * 18.0, etabar=0.9 / 18.0)
-    V_int, _ = boundary_metrics(_bfn, _nfp, 0.1)
+    V_int, _, _ = boundary_metrics(_bfn, _nfp, 0.1)
     ok(abs(na.Vp - V_int) / V_int < 1e-9,
        f"near-axis volume == exact boundary integral ({na.Vp:.3f} == {V_int:.3f})")
     pap = math.pi * 1.8**2 * na.L_ax

@@ -55,7 +55,7 @@ _KEV_J = 1e3 * QE
 _BETA_SOFT_LIMIT = 0.05   # ~5% soft stellarator beta limit (Mercier; can be exceeded)
 _IOTA_MIN = 1e-6          # below this the configuration has no effective transform
 _R2_DISPLAY_CAP = 0.5     # shape view: cap r^2 displacement at this fraction of r^1
-_N_PHASE_FRAMES = 24      # fine toroidal cuts over one period for the phase slider
+_N_PHASE_FRAMES = 120     # fine toroidal cuts over one period for the phase slider (endpoints inclusive: frac 0..1, φ=0 and φ=T at ends)
 # Unified nested-surface display (cosmetic; the rho=1 boundary — the only surface
 # the power account integrates — is identical for any fade).  Surfaces nest as
 #   S(rho) = axis + rho*round + rho^_SHAPE_FADE * shape
@@ -113,6 +113,21 @@ def boundary_metrics(boundary_fn, nfp, g=0.0, n_phi=120):
         V += np.sum(0.5 * R * R * (np.roll(Z, -1) - Z)) * dph
     V = abs(V) * nfp
 
+    # plasma surface area: same integral as wall area but on the un-offset
+    # plasma boundary (Rg/Zg).  Computed here so Sp_int < Sw_int always.
+    Sp_int = 0.0
+    for i in range(n_phi):
+        ip = (i + 1) % n_phi; im = (i - 1) % n_phi
+        R = Rg[i]; Z = Zg[i]; c = math.cos(phs[i]); s = math.sin(phs[i])
+        Pth_R = (np.roll(R, -1) - np.roll(R, 1)) * 0.5
+        Pth_Z = (np.roll(Z, -1) - np.roll(Z, 1)) * 0.5
+        dRdp = (Rg[ip] - Rg[im]) * 0.5; dZdp = (Zg[ip] - Zg[im]) * 0.5
+        ax, ay, az = Pth_R * c, Pth_R * s, Pth_Z
+        bx, by, bz = dRdp * c - R * s * dph, dRdp * s + R * c * dph, dZdp
+        cx = ay * bz - az * by; cy = az * bx - ax * bz; cz = ax * by - ay * bx
+        Sp_int += np.sum(np.sqrt(cx * cx + cy * cy + cz * cz))
+    Sp_int = Sp_int * nfp
+
     # wall boundary = each section offset outward from its centroid by g
     Wr = np.empty_like(Rg); Wz = np.empty_like(Zg)
     for i in range(n_phi):
@@ -133,7 +148,7 @@ def boundary_metrics(boundary_fn, nfp, g=0.0, n_phi=120):
         cx = ay * bz - az * by; cy = az * bx - ax * bz; cz = ax * by - ay * bx
         S += np.sum(np.sqrt(cx * cx + cy * cy + cz * cz))
     S = S * nfp
-    return float(V), float(S)
+    return float(V), float(S), float(Sp_int)
 
 
 def _shape_boundary_fn(R0, a, shape, n_theta=200):
@@ -236,8 +251,8 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
 
     sections = [_build_cut(frac, label) for frac, label in cuts]
     # fine phi frames over one field period for the phase slider (UI scrub)
-    frames = [_build_cut(k / _N_PHASE_FRAMES,
-                         "φ=%.2fT" % (k / _N_PHASE_FRAMES))
+    frames = [_build_cut(k / (_N_PHASE_FRAMES - 1),
+                         "φ=%.3fT" % (k / (_N_PHASE_FRAMES - 1)))
               for k in range(_N_PHASE_FRAMES)]
 
     # display axis ring (mean major radius; harmonic excursion is small)
@@ -247,7 +262,9 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
             "Z": (0.0 * phi_axis).tolist()}
     return {"mode": "machine-boundary", "metric_mode": "machine-boundary",
             "a": a, "a_disp": a, "g": g, "sections": sections, "frames": frames,
-            "axis": axis, "shape_source": shape.get("source", "")}
+            "axis": axis, "shape_source": shape.get("source", ""),
+            "frame_range": {"frac_min": 0.0, "frac_max": 1.0,
+                            "n_frames": _N_PHASE_FRAMES}}
 
 
 def _nearaxis_reconstruct(na, nfp, a, th):
@@ -503,20 +520,22 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
 
     frames = []
     for k in range(_N_PHASE_FRAMES):
-        frac = k / _N_PHASE_FRAMES
+        frac = k / (_N_PHASE_FRAMES - 1)   # inclusive: k=0→0, k=N-1→1(φ=T)
         phi = frac * period
         surfs = _cut_surfaces(rz.cut(phi))   # ONE precompute, reused per rho
         Rb, Zb = surfs[-1]["R"], surfs[-1]["Z"]
         aR, aZ = _axis_at(phi)
         elong = float((np.max(Zb) - np.min(Zb)) / (np.max(Rb) - np.min(Rb)))
-        frames.append({"label": "φ=%.2fT" % frac, "frac": float(frac),
+        frames.append({"label": "φ=%.3fT" % frac, "frac": float(frac),
                        "elong": elong, "R": Rb, "Z": Zb, "surfaces": surfs,
                        "wall": _wall_offset(Rb, Zb, aR, aZ, g)})
 
     axis = {"R": na.R0_arr[::6].tolist(), "Z": na.Z0_arr[::6].tolist()}
     return {"mode": "near-axis", "metric_mode": metric_mode,
             "a": a, "a_disp": float(a_disp), "g": g,
-            "sections": sections, "frames": frames, "axis": axis}
+            "sections": sections, "frames": frames, "axis": axis,
+            "frame_range": {"frac_min": 0.0, "frac_max": 1.0,
+                            "n_frames": _N_PHASE_FRAMES}}
 
 
 def _ellipse_perimeter(amaj, amin):
@@ -672,10 +691,12 @@ def _stellarator_geometry(R0, A, N_fp, delta_h, etabar, g, rc, zs, shape,
     else:
         bfn, nfp = _nearaxis_boundary_fn(R0, A, N_fp, delta_h, etabar,
                                          rc=rc, zs=zs, B2c=B2c)
-    Vp_geom, Sw_geom = boundary_metrics(bfn, nfp, g)
+    Vp_geom, Sw_geom, Sp_geom = boundary_metrics(bfn, nfp, g)
     res = dict(geom)
     res["Vp_integ"] = Vp_geom
     res["Sw_integ"] = Sw_geom
+    res["Sp_integ"] = Sp_geom
+    res["Sp_geom"] = Sp_geom
     if len(_GEOM_CACHE) >= 256:        # bound memory; geometry sets are tiny
         _GEOM_CACHE.clear()
     _GEOM_CACHE[key] = res
@@ -805,8 +826,9 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     helicity = geom["helicity"]; kappa_eff = geom["kappa_eff"]; elong_max = geom["elong_max"]
     Vp_geom = geom["Vp_integ"]; Sw_geom = geom["Sw_integ"]
     Vp = Vp_override if (Vp_override and Vp_override > 0) else Vp_geom
-    Sp = geom["Sp_geom"]
-    Sw = Sw_override if (Sw_override and Sw_override > 0) else Sw_geom
+    Sp = geom["Sp_integ"]
+    # Sw always from boundary integral — sp<sw by construction
+    Sw = Sw_geom
     # measured machine: Vp AND Sw are measured overrides, so the near-axis
     # diagnostics (iota_geom/kappa_eff/elong_max) are estimates only; flag it.
     # Vp_geom/Sw_geom are reported as the (exact-integral or near-axis) geometry

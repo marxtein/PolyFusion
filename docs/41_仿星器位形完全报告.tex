@@ -189,6 +189,24 @@ Z_0(\varphi)=\sum_n Z_{s,n}\sin(n\nfp\varphi).
 \end{equation}
 默认螺旋轴 $R_{c}=[R_0,\delta_h],\,Z_{s}=[0,-\delta_h]$（$\delta_h$ 为螺旋偏移）；概念堆也可给显式多谐波 $rc/zs$。沿轴建 Frenet 标架（法向 $\Nhat$、副法向 $\Bhat$、切向 $\That$），算出\textbf{曲率} $\kappa(\varphi)$ 和\textbf{挠率} $\tau(\varphi)$。代码用解析傅里叶导数 + 谱微分矩阵，所有量在一个场周期 $[0,2\pi/\nfp)$ 的 $\nphi$ 点网格上。
 
+\paragraph{三种用户入口，但只有两条几何主路径。}
+从 UI 和预设看，仿星器几何有三种入口：第一，初学者/概念扫描使用 $R_0,A,\nfp,\delta_h,\etabar$，由代码自动生成默认螺旋磁轴；第二，pyQSC / near-axis 用户使用显式 $rc/zs+\etabar$，直接给磁轴 Fourier；第三，DESC/VMEC 边界用户和真机预设使用 \texttt{shape.R/Z} 的边界 Fourier 三元组。前两者\textbf{同属近轴路径}，都会进入 \texttt{solve\_near\_axis()}；第三者走\textbf{真机边界路径}，由 \texttt{\_machine\_boundary\_outlines()} / \texttt{\_shape\_boundary\_fn()} 直接求边界。
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}llll@{}}
+\toprule
+入口 & 适合用户 & 数据形式 & 几何含义 \\
+\midrule
+$\delta_h+\etabar$ & 初学者、概念堆扫参 & 标量 & 默认螺旋磁轴 + 近轴 r2 磁面 \\
+$rc/zs+\etabar$ & pyQSC / Garren--Boozer 近轴用户 & 一维数组 & 显式\textbf{磁轴} Fourier + 近轴 r2 磁面 \\
+\texttt{shape.R/Z} & DESC/VMEC 边界用户、真机用户 & $[m,n,c]$ 三元组列表 & 二维\textbf{边界面} Fourier \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+因此 precise-QA / precise-QH 的 $rc/zs$ 与 W7-X 的 \texttt{shape.R/Z} 不是同一种 Fourier：前者是一条磁轴曲线 $R_0(\varphi),Z_0(\varphi)$；后者是完整边界面 $R(\theta,\varphi),Z(\theta,\varphi)$ 的截断谐波。UI 用三档几何输入模式开关把二者语义分开：\textbf{默认近轴}只露 $\delta_h,\etabar$；\textbf{磁轴 Fourier}只露 $rc/zs+\etabar$；\textbf{边界 Fourier}只露边界 $R/Z$ Fourier 与真机覆写 $\iotabar,\Vp^*,\Sw^*$。内部仍以隐藏 \texttt{shape} 对象透传，避免编辑普通数值后丢失真机边界。
+
 \subsection{$\sigma$ 方程与旋转变换}
 一阶磁面的形状由 Garren--Boozer 的\textbf{周期 $\sigma$ 方程}决定，它是关于 $\sigma(\varphi)$ 和轴上旋转变换 $\iota$ 的非线性常微分方程，含\textbf{挠率贡献}。代码用 Newton 迭代解出 $(\iota,\sigma)$（对齐 pyQSC 到机器精度 $<2\times10^{-12}$）。直观理解：$\iotabar$ = 磁力线绕环一圈、极向转过的圈数；它由\textbf{轴的扭转（挠率）}和\textbf{塑形}共同决定——所以螺旋偏移 $\delta_h$ 越大、$\iotabar$ 越不同（旋转椭圆模型对 $\delta_h$ 是盲的，这正是本程序弃用它的原因）。
 
@@ -248,7 +266,7 @@ Z(\theta,\varphi)=a\!\sum_{m,n}\!Z_{mn}A_m(\theta)B_n(\varphi),
 A_m(\theta)=\begin{cases}\cos m\theta & m\ge0\\ \sin|m|\theta & m<0\end{cases},\qquad
 B_n(\varphi)=\begin{cases}\cos(n\nfp\varphi)& n\ge0\\ \sin(|n|\nfp\varphi)& n<0\end{cases}.
 \]
-这复现了 W7-X bean、LHD 旋转椭圆、HSX/CFQS 形态。\textbf{它是 cartoon}：$|m|,|n|\le2$ 截断、非完整平衡重建；纯供\emph{显示}和\emph{几何积分估算}，\textbf{不进功率账}（真机功率用实测 $\iotabar,\Vp,\Sw$ 覆写）。
+这复现了 W7-X bean、LHD 旋转椭圆、HSX/CFQS 形态。\textbf{它是 cartoon}：$|m|,|n|\le2$ 截断、非完整平衡重建；进功率的 $\Vp,\Sw,\Sp$ 均由 \texttt{boundary\_metrics} 同一调用积分统一给出（$V_p$ 可用实测覆写，$\Sw,\Sp$ 不独立覆写）。
 
 \codefrom{\texttt{stellarator.py} · \texttt{\_machine\_boundary\_outlines}（双 Fourier 乘积基求值）}
 \begin{lstlisting}
@@ -261,7 +279,7 @@ Rh += c * _fade(m, rho) * cos_m[m] * Bn      # sum R_mn * A_m * B_n
 %======================================================================
 \section{体积与壁面：精确边界积分}\label{sec:integral}
 
-无论概念堆还是真机，\textbf{功率账要的体积 $\Vp$ 和壁面 $\Sw$ 都来自对边界的精确环向积分}，而且积分的就是\textbf{前端画出来的那一条边界}（前后端一致）。
+无论概念堆还是真机，\textbf{功率账要的体积 $\Vp$、壁面 $\Sw$ 和等离子体表面积 $\Sp$ 都来自对边界的精确环向积分}（\texttt{boundary\_metrics} 同一调用中产出，$\Sp<\Sw$ 由构造保证），而且积分的就是\textbf{前端画出来的那一条边界}（前后端一致）。$\Vp$ 可用实测覆写替换；$\Sw$ 和 $\Sp$ 不独立覆写。
 
 \paragraph{算法（\texttt{boundary\_metrics}）。}
 边界 $\varphi$ 周期，所以只积\textbf{一个场周期} $[0,2\pi/\nfp)$ 再乘 $\nfp$（利用场周期对称性，对全周期积分验证一致到 $<10^{-13}$）。体积用 Green 定理把面积分化为线积分
@@ -324,7 +342,7 @@ Sudo 密度限 & $n_\mathrm{Sudo}=0.25\sqrt{P_LB_0/(a^2R_0)}\,10^{20}$ & $a,R_0$
 
 \begin{itemize}[leftmargin=1.4em]
 \item \textbf{体积最强}：$\Pfus,\Pbrem,\Pcycl,\Eth$ 全线性正比 $\Vp$。真机用实测 $\Vp$，聚变/辐射锚在实测体积上。
-\item \textbf{$\Sw$ 只进壁负荷}。真机要 $\Sw^{*}$ 覆写，因近轴 $\Sw$ 在极端拉长下失真（如 HSX 近轴 $e_\mathrm{max}\!\sim\!384$）。
+\item \textbf{$\Sw$ 只进壁负荷}。$\Sw$ 和 $\Sp$ 均来自边界积分（同一调用，$\Sp<\Sw$ 由构造保证），不再独立覆写。
 \item \textbf{$\iotabar$ 仅以 $0.41$ 次幂进 ISS04}。真机用实测 $\iotabar$；概念堆用近轴自洽解。
 \item \textbf{形状经 $\Vp/\Sw$ 进功率（概念堆）}：功率公式无显式形状项，但 $\Vp,\Sw$ 是\textbf{所画 $\rho{=}1$ 边界的精确积分}（\S\ref{sec:integral}），所以改边界形状会经 $\Vp/\Sw$ 改功率。\textbf{实证}：NAE-QA 固定轴（$\Lax{=}114.1$）与 $a{=}1.8$，$\etabar{:}0.04\!\to\!0.07$（拉长比 $3.3\!\to\!4.5$）令 $\Vp{:}1095\!\to\!1145$、$\Pfus{:}1825\!\to\!1909$ MW（$\sim5\%$）。\textbf{真机}用实测 $\Vp/\Sw/\iotabar$ 覆写，所画形状不进功率（积分 $V_\mathrm{p,geom}$ 仅上报）。不进功率的是内面嵌套显示衰减（$\rho^{1.5}$）与 $B_{2c}$。
 \end{itemize}
@@ -349,10 +367,10 @@ def _fade(m, rho):
 \end{lstlisting}
 
 \paragraph{相位扫描。}
-仿星器截面随 $\varphi$ 变，UI 提供\textbf{相位开关}（$\varphi=0/T4/T2$ 三个特征切面）与\textbf{连续相位滑块}（真机与概念堆\textbf{统一}支持——两条路径都输出一周期 $24$ 帧）。滑块平滑的关键：把坐标视窗\textbf{固定到全帧并集}，相位扫描时截面\emph{原地形变}，而不是每帧重缩放（否则视觉抖动）。
+仿星器截面随 $\varphi$ 变，UI 提供\textbf{相位开关}（$\varphi=0/T4/T2$ 三个特征切面）与\textbf{连续相位滑块}（真机与概念堆\textbf{统一}支持——两条路径都输出一周期 120 帧，$\varphi{=}0$ 和 $\varphi{=}T$ 在滑块两端）。拖动时标签即时更新、重绘用 \texttt{requestAnimationFrame} 防抖；控件放在独立 \texttt{\#phControls} 容器中，不被 \texttt{drawShape()} 重建销毁，保证原生 drag 交互不被中断。
 
 \paragraph{壁层与高级输入。}
-壁层 $=$ 边界沿外法向外扩 $g$，保证 磁面 $\subset$ 边界 $\subset$ 壁。高级输入（自定义轴 $rc/zs$、实测 $\Vp^{*}/\Sw^{*}$）折叠在\textbf{几何参数组末尾}就地展开，普通模式只露 $R_0/A/\nfp/\delta_h/\etabar/g$。
+壁层 $=$ 边界沿外法向外扩 $g$，保证 磁面 $\subset$ 边界 $\subset$ 壁。几何组顶部提供\textbf{三档输入模式}（默认近轴 / 磁轴 Fourier / 边界 Fourier），选定后只显示该路径真正需要用户编辑的参数；不适用的几何输入从 UI 消失，并在切换时从前端状态中清理，避免隐藏参数继续生效。前端 \texttt{clean()} 只透传数字、字符串、数组和白名单对象；当前唯一白名单对象是隐藏的 \texttt{shape}，用于 W7-X/LHD/HSX/CFQS 这类真机边界在编辑任意输入后仍随请求保留。清空真机边界的 $R/Z$ 输入才表示显式删除 \texttt{shape}、退回近轴路径。
 
 %======================================================================
 \section{预设库：9 个内置位形}\label{sec:presets}
@@ -376,12 +394,12 @@ CFQS       & 真机·边界 & 2 & 1.0  & 0.25 & 1.0 & 0.45$^{*}$ & 1.0$^{*}$ & E
 \bottomrule
 \end{tabular}
 \end{center}
-\footnotesize $^{*}$ 真机的 $\iotabar,\Vp,\Sw$ 为\textbf{实测覆写}，进功率账；其近轴诊断仅供参考。\normalsize
+\footnotesize $^{*}$ 真机的 $\iotabar,\Vp$ 为\textbf{实测覆写}（进功率账）；$\Sw,\Sp$ 由边界积分统一给出。\normalsize
 
 \paragraph{两类预设。}
 \begin{description}[leftmargin=1.2em,style=nextline]
 \item[概念堆（近轴定义）] HELIAS / NAE-QA / precise-QA / precise-QH / QH-nfp3。由近轴展开\emph{定义}（显式 $rc/zs$ + $\etabar$，无覆写），本程序\textbf{原生精确}算出几何与自洽 $\iotabar$。其中 precise-QA/QH/QH-nfp3 取自公开准对称近轴库（pyQSC / Landreman--Paul 2022），缩放规则 $rc=R_0\cdot rc_\mathrm{pub}$、$\etabar=|\etabar_\mathrm{pub}|/R_0$（与 NAE-QA 相同），$\iotabar$ \textbf{精确复现发表值}（QA 0.42、QH 1.24/1.25）。
-\item[真机（边界谐波）] W7-X / LHD / HSX / CFQS。单谐波近轴无法表示，携带 $|m|,|n|\le2$ 归一化边界谐波\emph{仅供显示}，功率账用实测 $\iotabar/\Vp^{*}/\Sw^{*}$。因实验装置温度低（$T_i\!\sim\!0.5$--$2$ keV），其 $\Pfus\approx0$（这是\textbf{正确}的——它们演示几何/约束，非反应堆）。
+\item[真机（边界谐波）] W7-X / LHD / HSX / CFQS。携带 $|m|,|n|\le2$ 归一化边界谐波，功率账用 $\iotabar$ 实测覆写和边界积分（$\Vp$ 可用实测覆写，$\Sw,\Sp$ 统一积分）。
 \end{description}
 
 %======================================================================
@@ -434,14 +452,14 @@ HELIAS 单次求解 & 4.07 s & 0.145 s \\
 \begin{itemize}[leftmargin=1.4em]
 \item \textbf{核心一致}：前端 $a,R_0,\nfp$ $=$ 后端；前端截面面积 $=$ 后端 $\Aflux=\pi a^2$（$\le1\%$）。
 \item \textbf{概念堆}：前端所画近轴边界与后端积分为\textbf{同一条曲线}，体积/壁面\textbf{恒等一致}（$<10^{-6}$）；精确积分比 Pappus 估计低 $2$--$6\%$。
-\item \textbf{真机}：功率账用实测 $\Vp/\Sw$；前端形状的几何体积/壁面在其 $\sim10$--$25\%$ 内（W7-X $32.7$ vs $30$），实测为准。
+\item \textbf{真机}：功率账用体积实测覆写（$>0$ 时替换 $\Vp$）或边界积分；$\Sw$ 和 $\Sp$ 始终由同一调用统一积分；前端形状的几何 $\Vp_{\mathrm{geom}}$ 作为诊断对比上报。
 \item \textbf{新增 QS 预设}：原生精确复现发表 $\iotabar$（QA 0.42、QH 1.24/1.25）。
 \end{itemize}
 
 \paragraph{诚实局限。}
 \begin{itemize}[leftmargin=1.4em]
 \item 截面视图是 cartoon：真机用 $|m|,|n|\le2$ 截断 + 归一化重缩放，\textbf{非完整平衡重建}；LHD 用通用 $l{=}2$ heliotron、CFQS 用 ESTELL 代理（形态族正确、非逐机精确）。
-\item 真机 $\Vp/\Sw/\iotabar$ 覆写为公开估计，需对照权威文献核实；$\Sw$ 部分为近似（见代码 \texttt{\_notes}）。
+\item 真机 $\Vp$ 覆写为公开估计（$\Sw,\Sp$ 由边界积分统一给出），需对照权威文献核实；预设中的 $\Sw^\mathrm{override}$ 仅作诊断对照（见代码 \texttt{\_notes}）。
 \item 未新增\textbf{真机}预设：精确 DESC 双 Fourier 边界谐波需离线 DESC 管线，本环境不可复现，故只新增由近轴\emph{定义}的概念堆 QS 预设。
 \item 嵌套面 $\rho\,$体$+\rho^{1.5}\,$塑形为显示近似（严格嵌套、均匀间距），但 $\rho{=}1$ 边界即功率账积分边界。
 \end{itemize}
