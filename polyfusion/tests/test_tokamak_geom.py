@@ -76,3 +76,26 @@ def test_funsc_legacy_default_unchanged_and_models_differ():
     assert r2.Vp == pytest.approx(r1.Vp, rel=0.02)        # CF limiter ~ Miller
     assert r2.shaf_shift > 0.0
     assert r1.geom_volume_ratio == pytest.approx(1.0)     # no override -> ratio 1
+
+
+def test_shape_outlines_closed_and_wall_outside():
+    out = tg.tokamak_shape_outlines(R0=6.2, A=3.1, kappa=1.7, delta=0.33, g=0.1,
+                                    geom_model=2, divertor=1)
+    lcfs = out["lcfs"]
+    wall = out["wall"]
+    assert len(lcfs["R"]) == len(lcfs["Z"]) >= 64
+    # wall encloses a larger area than the LCFS
+    Vp_l, _ = tg.revolution_metrics(np.array(lcfs["R"]), np.array(lcfs["Z"]))
+    Vp_w, _ = tg.revolution_metrics(np.array(wall["R"]), np.array(wall["Z"]))
+    assert Vp_w > Vp_l
+    assert out["geom_model"] == 2
+
+
+def test_config_spec_accepts_geom_params():
+    from polyfusion.configs.base import get
+    spec = get("tokamak")
+    for k in ("geom_model", "divertor", "Vp_override", "Sw_override"):
+        assert k in spec.params
+    # bounds reject out-of-range model
+    errs = spec.validate({**spec.presets["ITER"], "geom_model": 5})
+    assert any("geom_model" in e for e in errs)

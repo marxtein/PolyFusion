@@ -220,6 +220,30 @@ def cf_boundary(R0, a, kappa, delta, divertor=0, n_theta=360):
     return R, Z, shaf_shift
 
 
+def tokamak_shape_outlines(R0, A, kappa, delta, g=0.0, geom_model=1,
+                           divertor=0, n_theta=181, **_ignored):
+    """JSON-able cross-section outline for the UI shape view.
+
+    Returns {lcfs:{R,Z}, wall:{R,Z}, axis:{R,Z}, geom_model, shaf_shift}.
+    Model 0 (legacy fits have no drawn boundary) falls back to the Miller
+    outline for display only — the power account still uses the model-0 fits.
+    """
+    a = R0 / A
+    shaf = 0.0
+    gm = int(geom_model)
+    if gm == 2:
+        R, Z, shaf = cf_boundary(R0, a, kappa, delta, int(divertor), n_theta)
+    else:
+        R, Z = miller_boundary(R0, a, kappa, delta, n_theta)
+    Rw, Zw = offset_outward(np.append(R, R[0]), np.append(Z, Z[0]), g)
+    return {
+        "lcfs": {"R": R.tolist(), "Z": Z.tolist()},
+        "wall": {"R": Rw.tolist(), "Z": Zw.tolist()},
+        "axis": {"R": [R0 + shaf], "Z": [0.0]},
+        "geom_model": gm, "shaf_shift": shaf,
+    }
+
+
 def legacy_metrics(R0, A, kappa, delta, g):
     """Original closed-form D-shape fits (funsc verbatim) — geom model 0."""
     a = R0 / A

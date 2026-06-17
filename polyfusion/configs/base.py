@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from ..tokamak import funsc
+from ..tokageom import tokamak_shape_outlines
 from ..presets import (PRESETS as TOKAMAK_PRESETS, PARAM_ORDER as TOKAMAK_PARAMS,
                        PRESET_GROUPS as TOKAMAK_GROUPS)
 from ..presets_io import load_presets
@@ -77,6 +78,8 @@ TOKAMAK_CONTOURS = [
     {"f": "Eth", "c": "#b388ff", "lv": [10, 50, 100, 500, 1000], "label": "Eth [MJ]", "on": False},
     {"f": "ne0", "c": "#d4a373", "lv": [0.5, 1, 2, 5, 10], "scale": 1e-20, "label": "ne0 [1e20]", "on": False},
     {"f": "Vp", "c": "#7ddc6b", "lv": [50, 100, 500, 1000, 5000], "label": "Vp [m³]", "on": False},
+    {"f": "geom_volume_ratio", "c": "#9be564", "lv": [0.8, 1.0, 1.2], "dash": "dot", "label": "Vp_geom/Vp", "on": False},
+    {"f": "shaf_shift", "c": "#ff9e3d", "lv": [0.1, 0.3, 0.5], "label": "Shafranov [m]", "on": False},
 ]
 MIRROR_CONTOURS = [
     {"f": "Pfus", "c": "#4ea1ff", "lv": [1, 10, 50, 100, 500], "label": "Pfus [MW]", "on": True},
@@ -344,12 +347,15 @@ def _stell_cross(p: dict) -> list[str]:
 
 TOKAMAK = ConfigSpec(
     name="tokamak", label="托卡马克 Tokamak",
-    params=["use_tauE"] + TOKAMAK_PARAMS + ["imp_name", "H_fac"],
+    params=["use_tauE"] + TOKAMAK_PARAMS + ["imp_name", "H_fac",
+            "geom_model", "divertor", "Vp_override", "Sw_override"],
     required=TOKAMAK_PARAMS,
     positive=["R0", "A", "kappa", "ni0", "Ti0", "BT0", "Ip", "Zimp"],
     bounds={**_COMMON_BOUNDS, "delta": (-0.999, 0.999),
             "fT": (0.0, None), "tauE": (0.0, None), "use_tauE": (0.0, 1.0),
-            "H_fac": (0.0, None)},
+            "H_fac": (0.0, None),
+            "geom_model": (0.0, 2.0), "divertor": (0.0, 1.0),
+            "Vp_override": (0.0, None), "Sw_override": (0.0, None)},
     cross=_tokamak_cross,
     presets=TOKAMAK_PRESETS,
     contour_fields=["Pfus", "Qfus", "Pheat", "betaN", "nbar_o_nGw", "H98"],
@@ -361,6 +367,7 @@ TOKAMAK = ConfigSpec(
     optional_window={"ge": {"q": 2}, "le": {"betaN": 3.5, "H98": 1.5}},
     contour_spec=TOKAMAK_CONTOURS,
     preset_groups=TOKAMAK_GROUPS,
+    shape_fn=lambda params: tokamak_shape_outlines(**params),
     _solve=funsc,
 )
 
@@ -456,6 +463,10 @@ for _p in TOKAMAK_PRESETS.values():
     _p.setdefault("use_tauE", 1.0)
     _p.setdefault("f_aux_e", 0.5)
     _p.setdefault("H_fac", 1.0)
+    _p.setdefault("geom_model", 0.0)
+    _p.setdefault("divertor", 0.0)
+    _p.setdefault("Vp_override", 0.0)
+    _p.setdefault("Sw_override", 0.0)
 for _p in MIRROR_PRESETS.values():
     _p.setdefault("use_tauE", 1.0)
     _p.setdefault("geometry", "sin2_simple")
