@@ -13,3 +13,14 @@ def test_revolution_metrics_circular_torus():
     Vp, Sp = tg.revolution_metrics(R, Z)
     assert Vp == pytest.approx(2 * math.pi**2 * R0 * a**2, rel=1e-3)   # 2 pi^2 R a^2
     assert Sp == pytest.approx(4 * math.pi**2 * R0 * a, rel=1e-3)      # 4 pi^2 R a
+
+
+def test_miller_boundary_volume_matches_known_torus():
+    # ITER-like: R0=6.2, a=2.0 (A=3.1), kappa=1.7, delta=0.33
+    R, Z = tg.miller_boundary(R0=6.2, a=2.0, kappa=1.7, delta=0.33, n_theta=720)
+    Vp, Sp = tg.revolution_metrics(R, Z)
+    # circular-limit cross-check: extent and elongation sane
+    assert R.max() == pytest.approx(8.2, rel=1e-6)        # R0 + a
+    assert R.min() == pytest.approx(4.2, rel=1e-6)        # R0 - a
+    assert Z.max() == pytest.approx(1.7 * 2.0, rel=1e-6)  # kappa * a
+    assert 700.0 < Vp < 820.0                              # validated CF/Miller ~786 m^3

@@ -69,3 +69,19 @@ def offset_outward(R, Z, gap):
         Rw = np.append(Rw, Rw[0])
         Zw = np.append(Zw, Zw[0])
     return Rw, Zw
+
+
+def miller_boundary(R0, a, kappa, delta, n_theta=360):
+    """Miller D-shape LCFS contour (R, Z) [m], open (endpoint excluded).
+
+        R(t) = R0 + a cos(t + arcsin(delta) sin t)
+        Z(t) = kappa a sin t
+    """
+    if R0 <= 0 or a <= 0 or kappa <= 0:
+        raise ValueError(f"R0, a, kappa must be > 0 (got {R0}, {a}, {kappa})")
+    if not -1.0 < delta < 1.0:
+        raise ValueError(f"triangularity delta must be in (-1, 1) (got {delta})")
+    t = np.linspace(0.0, 2 * math.pi, int(n_theta), endpoint=False)
+    R = R0 + a * np.cos(t + math.asin(delta) * np.sin(t))
+    Z = kappa * a * np.sin(t)
+    return R, Z
