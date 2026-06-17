@@ -59,3 +59,20 @@ def test_dispatch_override_replaces_metric_keeps_geom_diagnostic():
     assert out["Sw"] == 700.0
     assert out["Vp_geom"] != 900.0     # integrated value still reported
     assert out["geom_volume_ratio"] == pytest.approx(out["Vp_geom"] / 900.0)
+
+
+def test_funsc_legacy_default_unchanged_and_models_differ():
+    from polyfusion.tokamak import funsc
+    base = dict(R0=6.35, A=3.43, kappa=1.86, delta=0.5, Sn=0.5, ST=1.0,
+                ni0=6.81e19, Ti0=25, fT=1.0, fsig=1.0, f1=0.5, BT0=5.18,
+                Ip=9.2, tauE=2.0, fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7,
+                g=0.05, icase=1)
+    r0 = funsc(**base)                                   # default geom_model=0
+    r0b = funsc(**base, geom_model=0)
+    assert r0.Vp == pytest.approx(r0b.Vp, abs=1e-9)      # default == explicit legacy
+    r1 = funsc(**base, geom_model=1)
+    r2 = funsc(**base, geom_model=2, divertor=0)
+    assert r1.Vp != pytest.approx(r0.Vp, rel=1e-6)        # Miller differs from fit
+    assert r2.Vp == pytest.approx(r1.Vp, rel=0.02)        # CF limiter ~ Miller
+    assert r2.shaf_shift > 0.0
+    assert r1.geom_volume_ratio == pytest.approx(1.0)     # no override -> ratio 1

@@ -20,6 +20,7 @@ from dataclasses import replace as _dc_replace
 from .twotemp import (critical_energy, ion_deposition_fraction, equilibration_time,
                       p_ei_exchange, solve_channel_balance)
 from .impurity import lz_line_net, SPECIES as _IMP_SPECIES
+from .tokageom import tokamak_geometry
 
 # Per-reaction parameters: charges, mass numbers, charged-fraction fion,
 # energy release Y [J], like-particle flag delta12, and a label.
@@ -158,6 +159,13 @@ class Result:
     nbar_geom: float  # area-equivalent line-average density diagnostic [m^-3]
     Te_line_geom: float  # area-equivalent line-average electron temperature [keV]
     Ti_line_geom: float  # area-equivalent line-average ion temperature [keV]
+    Vp_geom: float        # raw integrated/fit plasma volume before override [m^3]
+    Sw_geom: float        # raw integrated/fit wall area before override [m^2]
+    geom_volume_ratio: float  # Vp_geom / Vp (1.0 unless Vp_override set)
+    geom_wall_ratio: float    # Sw_geom / Sw (1.0 unless Sw_override set)
+    shaf_shift: float     # Shafranov shift [m] (CF model only; 0 otherwise)
+    geom_model: float     # geometry model actually used (0/1/2)
+    divertor: float       # divertor topology echo (0 limiter / 1 double-null)
     strcase: str    # reaction label
 
     def as_dict(self) -> dict:
@@ -166,7 +174,8 @@ class Result:
 
 def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
           BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
-          imp_name=None, f_aux_e=0.5, H_fac=1.0, use_tauE=1.0) -> Result:
+          imp_name=None, f_aux_e=0.5, H_fac=1.0, use_tauE=1.0,
+          geom_model=0.0, divertor=0.0, Vp_override=0.0, Sw_override=0.0) -> Result:
     """Evaluate the 0-D power balance for one operating point.
 
     See parameter table in ``docs/01_托卡马克代码说明文档.md`` (§3) for units.
@@ -203,7 +212,9 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
             return funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
                          BT0, Ip, t, fHe, fimp, Zimp, Rw, g, icase,
                          imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac,
-                         use_tauE=1.0)
+                         use_tauE=1.0,
+                         geom_model=geom_model, divertor=divertor,
+                         Vp_override=Vp_override, Sw_override=Sw_override)
 
         def _resid_t(t, res):
             # H98(t) is monotone increasing in t; root at H98 = H_fac
@@ -217,7 +228,9 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
             return funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, ft, fsig, f1,
                          BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
                          imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac,
-                         use_tauE=1.0)
+                         use_tauE=1.0,
+                         geom_model=geom_model, divertor=divertor,
+                         Vp_override=Vp_override, Sw_override=Sw_override)
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
@@ -252,12 +265,13 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     if BT0 <= 0 or Ip <= 0 or tauE <= 0:
         raise ValueError(f"BT0, Ip, tauE must be > 0 (got {BT0}, {Ip}, {tauE})")
 
-    # --- geometry ---
-    a = R0 / A
-    Ad = R0 / (g + a)
-    Vp = (2 * math.pi**2 * kappa * (A - delta) + 16 * math.pi * kappa * delta / 3) * a**3
-    Sp = (4 * math.pi**2 * A * kappa**0.65 - 4 * kappa * delta) * a**2
-    Sw = (4 * math.pi**2 * Ad * kappa**0.65 - 4 * kappa * delta) * (a + g)**2
+    # --- geometry (three selectable models; docs/04) ---
+    geom = tokamak_geometry(int(geom_model), R0, A, kappa, delta, g,
+                            int(divertor), Vp_override, Sw_override)
+    a = geom["a"]
+    Vp = geom["Vp"]
+    Sp = geom["Sp"]
+    Sw = geom["Sw"]
 
     # --- composition ---
     Te0 = fT * Ti0
@@ -389,5 +403,9 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         P_LH=P_LH, LH_ratio=LH_ratio, tau_ITPA20=tau_ITPA20, H_ITPA20=H_ITPA20,
         nu_eff_ang=nu_eff, Sn_sugg=Sn_sugg, nbar_geom=nbar_geom,
         Te_line_geom=Te_line_geom, Ti_line_geom=Ti_line_geom,
+        Vp_geom=geom["Vp_geom"], Sw_geom=geom["Sw_geom"],
+        geom_volume_ratio=geom["geom_volume_ratio"],
+        geom_wall_ratio=geom["geom_wall_ratio"], shaf_shift=geom["shaf_shift"],
+        geom_model=float(int(geom_model)), divertor=float(int(divertor)),
         strcase=rx["name"],
     )
