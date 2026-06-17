@@ -99,3 +99,24 @@ def test_config_spec_accepts_geom_params():
     # bounds reject out-of-range model
     errs = spec.validate({**spec.presets["ITER"], "geom_model": 5})
     assert any("geom_model" in e for e in errs)
+
+
+def test_all_presets_solve_under_every_geom_model():
+    from polyfusion.configs.base import get
+    spec = get("tokamak")
+    for name, preset in spec.presets.items():
+        for gm in (0, 1, 2):
+            out = spec.solve({**preset, "geom_model": gm})
+            assert out["valid"] == 1.0, f"{name} invalid under geom_model={gm}: {out.get('invalid_fields')}"
+            assert out["Vp"] > 0
+
+
+def test_legacy_vs_miller_within_few_percent_for_conventional_aspect():
+    # conventional tokamaks (A >~ 2.5): the fit and the integral should agree well
+    from polyfusion.configs.base import get
+    spec = get("tokamak")
+    for name in ("ITER", "JET", "EAST"):
+        p = spec.presets[name]
+        v0 = spec.solve({**p, "geom_model": 0})["Vp"]
+        v1 = spec.solve({**p, "geom_model": 1})["Vp"]
+        assert abs(v1 - v0) / v0 < 0.05, f"{name}: legacy {v0:.1f} vs Miller {v1:.1f}"
