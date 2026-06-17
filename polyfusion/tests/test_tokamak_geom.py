@@ -37,3 +37,25 @@ def test_cf_limiter_matches_miller_and_double_null_smaller():
     assert Vl == pytest.approx(Vm, rel=0.02)         # limiter ~ Miller (validated 786 vs 786)
     assert Vd < 0.95 * Vl                            # X-point cuts volume (validated ~718 vs 786)
     assert 0.0 < shaf_l < a                          # outward Shafranov shift, sub-minor-radius
+
+
+def test_legacy_dispatch_matches_old_formula_exactly():
+    R0, A, kappa, delta, g = 6.2, 3.1, 1.7, 0.33, 0.05
+    a = R0 / A
+    Ad = R0 / (g + a)
+    Vp_old = (2 * math.pi**2 * kappa * (A - delta) + 16 * math.pi * kappa * delta / 3) * a**3
+    Sp_old = (4 * math.pi**2 * A * kappa**0.65 - 4 * kappa * delta) * a**2
+    Sw_old = (4 * math.pi**2 * Ad * kappa**0.65 - 4 * kappa * delta) * (a + g)**2
+    out = tg.tokamak_geometry(0, R0, A, kappa, delta, g, 0, 0.0, 0.0)
+    assert out["Vp"] == pytest.approx(Vp_old, rel=0, abs=1e-9)
+    assert out["Sp"] == pytest.approx(Sp_old, rel=0, abs=1e-9)
+    assert out["Sw"] == pytest.approx(Sw_old, rel=0, abs=1e-9)
+    assert out["a"] == pytest.approx(a)
+
+
+def test_dispatch_override_replaces_metric_keeps_geom_diagnostic():
+    out = tg.tokamak_geometry(1, 6.2, 3.1, 1.7, 0.33, 0.05, 0, 900.0, 700.0)
+    assert out["Vp"] == 900.0          # override wins
+    assert out["Sw"] == 700.0
+    assert out["Vp_geom"] != 900.0     # integrated value still reported
+    assert out["geom_volume_ratio"] == pytest.approx(out["Vp_geom"] / 900.0)

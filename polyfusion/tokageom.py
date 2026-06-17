@@ -218,3 +218,48 @@ def cf_boundary(R0, a, kappa, delta, divertor=0, n_theta=360):
     x_axis = xs[int(np.argmin(psi_mid))]
     shaf_shift = (x_axis - 1.0) * R0
     return R, Z, shaf_shift
+
+
+def legacy_metrics(R0, A, kappa, delta, g):
+    """Original closed-form D-shape fits (funsc verbatim) — geom model 0."""
+    a = R0 / A
+    Ad = R0 / (g + a)
+    Vp = (2 * math.pi**2 * kappa * (A - delta) + 16 * math.pi * kappa * delta / 3) * a**3
+    Sp = (4 * math.pi**2 * A * kappa**0.65 - 4 * kappa * delta) * a**2
+    Sw = (4 * math.pi**2 * Ad * kappa**0.65 - 4 * kappa * delta) * (a + g)**2
+    return a, Vp, Sp, Sw
+
+
+def tokamak_geometry(geom_model, R0, A, kappa, delta, g, divertor,
+                     Vp_override, Sw_override, n_theta=360):
+    """Dispatch geometry by model and return a metrics dict.
+
+    Keys: a, Vp, Sp, Sw (used by the power account) plus diagnostics
+    Vp_geom, Sp_geom, Sw_geom (raw integrated/fit values before any override),
+    geom_volume_ratio, geom_wall_ratio (Vp_geom/Vp, Sw_geom/Sw),
+    shaf_shift (CF only; 0 otherwise), geom_model, divertor.
+    """
+    a = R0 / A
+    shaf = 0.0
+    if geom_model == 0:
+        a, Vp_g, Sp_g, Sw_g = legacy_metrics(R0, A, kappa, delta, g)
+    else:
+        if geom_model == 1:
+            R, Z = miller_boundary(R0, a, kappa, delta, n_theta)
+        elif geom_model == 2:
+            R, Z, shaf = cf_boundary(R0, a, kappa, delta, divertor, n_theta)
+        else:
+            raise ValueError(f"geom_model must be 0, 1 or 2 (got {geom_model})")
+        Vp_g, Sp_g = revolution_metrics(R, Z)
+        Rw, Zw = offset_outward(R, Z, g)
+        _, Sw_g = revolution_metrics(Rw, Zw)
+    Vp = Vp_override if Vp_override and Vp_override > 0 else Vp_g
+    Sw = Sw_override if Sw_override and Sw_override > 0 else Sw_g
+    return {
+        "a": a, "Vp": Vp, "Sp": Sp_g, "Sw": Sw,
+        "Vp_geom": Vp_g, "Sp_geom": Sp_g, "Sw_geom": Sw_g,
+        "geom_volume_ratio": Vp_g / Vp if Vp else float("nan"),
+        "geom_wall_ratio": Sw_g / Sw if Sw else float("nan"),
+        "shaf_shift": shaf,
+        "geom_model": float(geom_model), "divertor": float(divertor),
+    }
