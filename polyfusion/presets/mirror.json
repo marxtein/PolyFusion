@@ -1,6 +1,7 @@
 {
   "presets": {
     "BEAM": {
+      "geometry": "sin2_simple",
       "a_c": 0.3,
       "L_c": 10.0,
       "B_vac": 3.0,
@@ -27,6 +28,7 @@
       "phi_i_over_Te": 0.0
     },
     "GDT": {
+      "geometry": "sin2_simple",
       "a_c": 0.15,
       "L_c": 7.0,
       "B_vac": 0.35,
@@ -53,6 +55,7 @@
       "phi_i_over_Te": 0.0
     },
     "pB-mirror": {
+      "geometry": "sin2_simple",
       "a_c": 0.5,
       "L_c": 15.0,
       "B_vac": 10.0,
@@ -79,6 +82,7 @@
       "phi_i_over_Te": 0.0
     },
     "GAMMA-10": {
+      "geometry": "sin2_simple",
       "a_c": 0.18,
       "L_c": 6.0,
       "B_vac": 0.5,
@@ -103,11 +107,43 @@
       "B_expand": 100.0,
       "lnLambda": 17.0,
       "phi_i_over_Te": 0.0
+    },
+    "GDT-multi": {
+      "geometry": "multi_zone",
+      "a_c": 0.15,
+      "L_c": 7.0,
+      "B_vac": 0.35,
+      "R_mirror": 35.0,
+      "ni0": 5e+19,
+      "Ti0": 0.25,
+      "Te0": 0.25,
+      "tauE": 0.01,
+      "Sn": 0.5,
+      "ST": 1.0,
+      "g": 0.03,
+      "fsig": 1.0,
+      "f_throat": 0.1,
+      "Rw": 0.8,
+      "icase": 1,
+      "f1": 0.5,
+      "fHe": 0.0,
+      "fimp": 0.0,
+      "Zimp": 10,
+      "use_tauE": 1.0,
+      "f_aux_e": 0.5,
+      "B_expand": 100.0,
+      "lnLambda": 17.0,
+      "phi_i_over_Te": 0.0,
+      "L_th": 1.05,
+      "profile": "hermite",
+      "f_axial": 0.8,
+      "L_expand": 2.0
     }
   },
   "groups": {
     "实验装置 Experiments": [
       "GDT",
+      "GDT-multi",
       "GAMMA-10"
     ],
     "概念·反应堆 Concepts": [

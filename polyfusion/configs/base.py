@@ -26,10 +26,10 @@ from .dipole import solve_dipole
 from .stellarator import solve_stellarator, section_outlines
 
 # Inputs each solver accepts (positional/keyword names).
-_MIRROR_PARAMS = ["use_tauE", "a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0", "tauE",
+_MIRROR_PARAMS = ["use_tauE", "geometry", "a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0", "tauE",
                   "Sn", "ST", "g", "fsig", "f_throat", "f_alpha", "B_expand", "Rw",
                   "icase", "f1", "fHe", "fimp", "Zimp", "phi_i_over_Te", "lnLambda",
-                  "imp_name"]
+                  "imp_name", "L_th", "profile", "f_axial", "L_expand"]
 _FRC_PARAMS = ["use_tauE", "geom_weighted", "sep_model", "m", "r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "f_shape", "fsig", "Rw",
                "icase", "f1", "fHe", "fimp", "Zimp", "imp_name"]
 _DIPOLE_PARAMS = ["use_tauE", "r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
@@ -270,6 +270,9 @@ def _tokamak_cross(p: dict) -> list[str]:
 
 def _mirror_cross(p: dict) -> list[str]:
     errors = []
+    geom = p.get("geometry", "sin2_simple")
+    if geom not in ("sin2_simple", "multi_zone"):
+        errors.append(f"geometry must be 'sin2_simple' or 'multi_zone' (got {geom!r})")
     R = _num(p, "R_mirror")
     if R is not None and R <= 1.0:
         errors.append(f"R_mirror must be > 1 (got {R}): no magnetic well otherwise")
@@ -453,6 +456,7 @@ for _p in TOKAMAK_PRESETS.values():
     _p.setdefault("H_fac", 1.0)
 for _p in MIRROR_PRESETS.values():
     _p.setdefault("use_tauE", 1.0)
+    _p.setdefault("geometry", "sin2_simple")
     _p.setdefault("f_aux_e", 0.5)
     _p.setdefault("B_expand", 100.0)
     _p.setdefault("lnLambda", 17.0)

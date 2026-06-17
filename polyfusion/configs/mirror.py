@@ -35,6 +35,7 @@ from ..constants import QE, MP, ME, MU0, MEC2
 from ..reactivity import reactivity
 from ..tokamak import _REACTIONS, twotemp_diagnostics, line_radiation_profile
 from ..twotemp import solve_channel_balance
+from ..geometry import get_geometry
 
 _KEV_J = 1e3 * QE
 _LN_LAMBDA = 17.0
@@ -110,17 +111,21 @@ def _solve_phi_e_over_Te(K: float) -> float:
     return y
 
 
-def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
+def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, geometry="sin2_simple", tauE=1.0,
                  Sn=0.0, ST=0.0, g=0.0, fsig=1.0, f_throat=0.1,
                  f_alpha=None, B_expand=100.0,
                  Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
                  phi_i_over_Te=None, lnLambda=_LN_LAMBDA,
-                 imp_name=None, f_aux_e=0.5, use_tauE=1.0) -> MirrorResult:
+                 imp_name=None, f_aux_e=0.5, use_tauE=1.0,
+                 L_th=None, profile="hermite", f_axial=0.8, L_expand=2.0) -> MirrorResult:
     """Evaluate the 0-D mirror power balance at one operating point.
 
     Parameters (SI / keV / m^-3); see docs/24 §3 for the full table.
     ``Sn``/``ST`` are the radial peaking exponents (0 = flat, tokamak family),
     ``g`` the plasma-wall gap, ``f_throat`` the throat length fraction of L_c.
+    ``geometry`` selects the axial geometry model: ``"sin2_simple"`` (default,
+    original cylinder + sin² throat model) or ``"multi_zone"`` (independent
+    throat length, expander zone, switchable B(z) profile).
 
     Batch-2 physics (docs/30):
     * ``f_alpha = None`` (default) now computes the prompt loss-cone bound
@@ -144,13 +149,14 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
 
     if Te0 == 0:
         def _eval(te):
-            return solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, te, tauE,
+            return solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, te, geometry=geometry, tauE=tauE,
                                 Sn=Sn, ST=ST, g=g, fsig=fsig, f_throat=f_throat,
                                 f_alpha=f_alpha, B_expand=B_expand, Rw=Rw,
                                 icase=icase, f1=f1, fHe=fHe, fimp=fimp,
                                 Zimp=Zimp, phi_i_over_Te=phi_i_over_Te,
                                 lnLambda=lnLambda, imp_name=imp_name,
-                                f_aux_e=f_aux_e, use_tauE=use_tauE)
+                                f_aux_e=f_aux_e, use_tauE=use_tauE,
+                                L_th=L_th, profile=profile, f_axial=f_axial, L_expand=L_expand)
 
         def _resid(te, res):
             # electron share of the end loss (phi_e + Te per escaping electron)
@@ -218,6 +224,19 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
     B0 = B_vac * math.sqrt(1 - beta)
     R_mc = R_mirror / math.sqrt(1 - beta)
 
+    # ---------- geometry object ----------
+    geom_cls = get_geometry(geometry)
+    geom_kwargs = dict(a_c=a_c, L_c=L_c, B_vac=B_vac, R_mirror=R_mirror, beta=beta)
+    f_axial_used = 1.0
+    if geometry == "sin2_simple":
+        geom_kwargs.update(f_throat=f_throat, g=g)
+    elif geometry == "multi_zone":
+        L_th_val = f_throat * L_c if L_th is None else L_th
+        geom_kwargs.update(L_th=L_th_val, g=g, profile=profile,
+                           f_axial=f_axial, L_expand=L_expand, B_expand=B_expand)
+        f_axial_used = f_axial
+    geom = geom_cls(**geom_kwargs)
+
     # charged-product deposition: default = prompt loss-cone bound (docs/30
     # batch 2).  An isotropically born alpha falls in the loss cone with
     # solid-angle fraction 1 - sqrt(1 - 1/R_mc); the deposited fraction is
@@ -226,24 +245,11 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
     f_alpha_used = 1.0 if manual_tauE else (
         math.sqrt(1.0 - 1.0 / R_mc) if f_alpha is None else f_alpha)
 
-    # ---------- geometry: cylinder + flux-mapped throat regions ----------
-    L_th = f_throat * L_c
-    V_cyl = math.pi * a_c**2 * L_c
-    # B(z)/Bc = 1+(R_mc-1) sin^2(pi z/2L_th): integral of Bc/B over the throat
-    # is L_th/sqrt(R_mc) (analytic), giving the end-region volume exactly.
-    V_end = 2 * math.pi * a_c**2 * L_th / math.sqrt(R_mc) if L_th > 0 else 0.0
-    Vp = V_cyl + V_end
-    # plasma side surface: cylinder part + throat part (numeric, a(z) flux map)
-    if L_th > 0:
-        zt = np.linspace(0.0, 1.0, 60)
-        a_z = a_c / np.sqrt(1 + (R_mc - 1) * np.sin(math.pi * zt / 2) ** 2)
-        S_end = 2 * 2 * math.pi * float(np.trapezoid(a_z, zt)) * L_th
-    else:
-        S_end = 0.0
-    Sp = 2 * math.pi * a_c * L_c + S_end
-    r_w = a_c + g
-    Sw = 2 * math.pi * r_w * L_c + 2 * math.pi * r_w**2   # side + end plates
-    A_throat = math.pi * a_c**2 * math.sqrt(1 - beta) / R_mirror  # flux area, both = 2x
+    # ---------- geometry (from geometry module) ----------
+    Vp = geom.volume()
+    Sp = geom.surface()
+    Sw = geom.wall_surface()
+    A_throat = geom.throat_area()
 
     # ---------- radial profiles and volume averages (tokamak family) ----------
     x = np.linspace(0.0, 1.0, 101)
@@ -316,7 +322,7 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
         # loss power density n(phi+T)/tau integrated over profiles:
         #   Int n dV = n0 V/(1+Sn);  Int nT dV = n0T0 V/(1+Sn+ST)
         Ptrans = ((ni0 * phi_i + ne0 * phi_e) / (1 + Sn)
-                  + (ni0 * Ti0 + ne0 * Te0) / (1 + Sn + ST)) * _KEV_J * Vp / tau_c * 1e-6
+                  + f_axial_used * (ni0 * Ti0 + ne0 * Te0) / (1 + Sn + ST)) * _KEV_J * Vp / tau_c * 1e-6
 
     # alpha/charged-product deposition: in an open trap part of the charged
     # fusion power escapes through the loss cone before slowing down
