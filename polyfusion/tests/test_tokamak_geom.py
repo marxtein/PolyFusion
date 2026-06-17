@@ -120,3 +120,15 @@ def test_legacy_vs_miller_within_few_percent_for_conventional_aspect():
         v0 = spec.solve({**p, "geom_model": 0})["Vp"]
         v1 = spec.solve({**p, "geom_model": 1})["Vp"]
         assert abs(v1 - v0) / v0 < 0.05, f"{name}: legacy {v0:.1f} vs Miller {v1:.1f}"
+
+
+def test_cf_low_aspect_no_log_domain_warning():
+    # high-eps spherical tokamak (EXL-50U-like) must not trip a numpy log warning
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # any RuntimeWarning becomes an error
+        R, Z, shaf = tg.cf_boundary(R0=0.7, a=0.4375, kappa=2.5, delta=0.5,
+                                    divertor=1, n_theta=600)
+    Vp, _ = tg.revolution_metrics(R, Z)
+    assert Vp > 0
+    assert np.all(R > 0)

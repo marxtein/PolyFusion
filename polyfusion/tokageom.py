@@ -197,6 +197,8 @@ def cf_boundary(R0, a, kappa, delta, divertor=0, n_theta=360):
     for k, ang in enumerate(th):
         dx, dy = math.cos(ang), math.sin(ang)
         s0, s1 = 1e-4, 1.2 * eps + 0.4
+        if dx < 0:                       # cap inward rays so x = xc + s*dx > 0 (log domain)
+            s1 = min(s1, (xc - 1e-3) / (-dx))
         f0 = _cf_psi(xc + s0 * dx, s0 * dy, coeffs)
         f1 = _cf_psi(xc + s1 * dx, s1 * dy, coeffs)
         if f0 * f1 > 0:                 # ray misses boundary (X-point notch): clamp to Miller
