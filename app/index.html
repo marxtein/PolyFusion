@@ -69,6 +69,8 @@
   .modefld{grid-column:1/-1}.modebar{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
   .modebtn{min-width:0;padding:6px 4px;border:1px solid var(--line2);border-radius:6px;background:var(--ink2);color:var(--mut);font:11px/1.15 "Chakra Petch",sans-serif;cursor:pointer}
   .modebtn:hover{border-color:var(--teal);color:var(--fg)}.modebtn.on{border-color:var(--teal);color:var(--teal);background:rgba(54,226,196,.1);font-weight:700}
+  .syncgeom{margin-top:6px;width:100%;padding:6px 8px;border:1px dashed var(--line2);border-radius:6px;background:var(--panel2);color:var(--mut);font:11px/1.15 "Chakra Petch",sans-serif;cursor:pointer}
+  .syncgeom:hover:not(:disabled){border-color:var(--amber);color:var(--fg)}.syncgeom:disabled{opacity:.42;cursor:not-allowed}
   .fld label{font-size:12px;color:var(--mut);margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help;display:flex;align-items:baseline;gap:6px}
   .fld label .nm{font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
   .fld label .u{color:var(--dim);font-size:10.5px;flex:0 0 auto}.fld.full{grid-column:1/-1}
@@ -241,16 +243,22 @@ const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub
   Te0:'T<sub>e0</sub>',f_alpha_used:'f<sub>α,used</sub>',nu_eff_ang:'ν<sub>eff</sub>',Sn_sugg:'S<sub>n</sub><sup>Ang</sup>',
   tauE_used:'τ<sub>E,used</sub>',taue_mode:'τ<sub>E</sub>mode',Pth:'P<sub>th</sub>',ring_model:'ring',
   P_LH:'P<sub>LH</sub>',LH_ratio:'P<sub>sep</sub>/P<sub>LH</sub>',tau_ITPA20:'τ<sub>ITPA20</sub>',H_ITPA20:'H<sub>ITPA20</sub>',
-  tau_classical:'τ<sub>cl</sub>',tau_Bohm:'τ<sub>Bohm</sub>',a_over_rhoi:'a/ρ<sub>i</sub>'};
+  tau_classical:'τ<sub>cl</sub>',tau_Bohm:'τ<sub>Bohm</sub>',a_over_rhoi:'a/ρ<sub>i</sub>',
+  aspect_geom:'A<sub>geom</sub>',aspect_vol:'A<sub>vol</sub>',fpavg:'f<sub>p,avg</sub>',n_Sudo:'n<sub>Sudo</sub>',
+  PL_ISS04:'P<sub>L,ISS04</sub>',beta_soft_limit:'&beta;<sub>soft</sub>',geom_volume_ratio:'V<sub>p</sub>/V<sub>geom</sub>',
+  geom_wall_ratio:'S<sub>w</sub>/S<sub>w,geom</sub>',nbar_geom:'n&#772;<sub>geom</sub>',
+  Te_line_geom:'T<sub>e,line,geom</sub>',Ti_line_geom:'T<sub>i,line,geom</sub>',nbar_geom_o_nbar:'n&#772;<sub>geom</sub>/n&#772;'};
 const pk=k=>PR[k]?`<span class="sym">${PR[k]}</span>`:k;
 const chipLab=s=>{const u=(s.label.match(/\[[^\]]+\]/)||[''])[0];return (PR[s.f]?`<span class="sym">${PR[s.f]}</span>`:s.f)+(u?' '+u:'');};
 const GROUPS=[['rx','反应','Reaction'],['geo','几何','Geometry'],['prof','剖面','Profile'],['plasma','等离子体','Plasma'],['field','场·电流','Field·Current'],['fuel','燃料·杂质','Fuel·Impurity'],['conf','约束·修正','Confinement·Factors']];
-const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',A_flux:'m²',a_vol:'m',C_sec_mean:'m',C_wall_mean:'m',Vp_geom:'m³',Sp_geom:'m²',Sw_geom:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',tau_eta:'s',Te0:'keV',tauE_used:'s',P_LH:'MW',tau_ITPA20:'s',tau_classical:'s',tau_Bohm:'s'};
+const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',A_flux:'m²',a_vol:'m',C_sec_mean:'m',C_wall_mean:'m',Vp_geom:'m³',Sp_geom:'m²',Sw_geom:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',tau_eta:'s',Te0:'keV',tauE_used:'s',P_LH:'MW',tau_ITPA20:'s',tau_classical:'s',tau_Bohm:'s',
+  PL_ISS04:'MW',Te_line_geom:'keV',Ti_line_geom:'keV',n_Sudo:'m⁻³',nbar_geom:'m⁻³'};
 const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','Pth','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth']],
-  ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ITPA20','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tau_ITPA20','tauE_used','taue_mode','tau_eta','tauN_o_taueta','tau_classical','tau_Bohm','ntau']],
-  ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_avg','beta_null','beta_o_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain','P_LH','LH_ratio','a_over_rhoi']],
-  ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','fTavg','fnavg','Sp','Sw','L_ax','L_in','A_throat','flux_p','G1','G2','GB','p_shape','f_shape_calc','geom_weighted','sep_model','m_shape','A_flux','a_vol','C_sec_mean','C_wall_mean','Vp_geom','Sp_geom','Sw_geom','lambda_ii','coll_ratio','nbar','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
-const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_c','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','beta_o_limit']);
+  ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ITPA20','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tau_ITPA20','tauE_used','taue_mode','tau_eta','tauN_o_taueta','tau_classical','tau_Bohm','ntau','PL_ISS04']],
+  ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_avg','beta_null','beta_o_limit','beta_soft_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','nbar_geom_o_nbar','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain','P_LH','LH_ratio','a_over_rhoi']],
+  ['几何·后验 Geometry·Posterior',['aspect_geom','aspect_vol','a_vol','A_flux','Vp_geom','Sp_geom','Sw_geom','C_sec_mean','C_wall_mean','geom_volume_ratio','geom_wall_ratio','fnavg','fTavg','fpavg','nbar_geom','Te_line_geom','Ti_line_geom']],
+  ['等离子体 Plasma',['ne0','ni0','nbar','n_Sudo','Vp','Sp','Sw','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','L_ax','L_in','A_throat','flux_p','G1','G2','GB','p_shape','f_shape_calc','geom_weighted','sep_model','m_shape','lambda_ii','coll_ratio','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
+const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_c','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','nbar_geom_o_nbar','beta_o_limit','beta_soft_limit']);
 const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 28 40 28 32 28 24 30 14 40 8Z"/>',
   mirror:'<path d="M10 20Q32 30 54 20M10 44Q32 34 54 44"/><circle cx="12" cy="32" r="8"/><circle cx="52" cy="32" r="8"/>',
   frc:'<ellipse cx="32" cy="32" rx="20" ry="11"/><ellipse cx="32" cy="32" rx="11" ry="6"/>',
@@ -269,12 +277,86 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null;
 let STELL_STASH={};
 const ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override']);  // expert-only inputs
-const OPAQUE_PARAMS=new Set(['shape']);  // opaque JSON objects intentionally sent to backend
+const OPAQUE_PARAMS=new Set(['shape','geometry_variants']);  // opaque JSON objects intentionally sent to backend
 
 function isPlainObject(v){return v&&typeof v==='object'&&!Array.isArray(v);}
 function cloneJson(v){return JSON.parse(JSON.stringify(v));}
 
 function defaultBoundaryShape(R0,N_fp){return{source:'',nfp:N_fp||5,R:[[1,0,1.0]],Z:[[-1,0,1.0]]};}
+function isFiniteNum(v){return typeof v==='number'&&isFinite(v);}
+function simpleAxisVariant(vals=VALS){return{rc:[vals.R0,vals.delta_h],zs:[0,-vals.delta_h],etabar:vals.etabar,source:'synthetic from simple near-axis'};}
+function simpleBoundaryVariant(vals=VALS){
+  const R0=vals.R0,a=vals.a,N_fp=vals.N_fp,dh=vals.delta_h,axis=simpleAxisVariant(vals);
+  const R=[[0,0,0],[1,0,1]],Z=[[-1,0,1]];
+  if(a&&Math.abs(dh)>1e-12){R.push([0,1,dh/a]);Z.push([0,-1,-dh/a]);}
+  return{shape:{kind:'fourier',nfp:N_fp||5,R,Z,axis_rc:axis.rc.slice(),axis_zs:axis.zs.slice(),source:'synthetic from simple near-axis'},iota:0,Vp_override:0,Sw_override:0,etabar:vals.etabar,source:'synthetic from simple near-axis'};
+}
+function canSyncStellGeometry(vals=VALS){
+  if(CUR!=='stellarator')return false;
+  const mode=vals._geom_mode||inferStellGeomMode();
+  if(!['R0','a','N_fp'].every(k=>isFiniteNum(vals[k]))||vals.R0<=0||vals.a<=0||vals.N_fp<1)return false;
+  if(mode==='simple')return isFiniteNum(vals.delta_h)&&isFiniteNum(vals.etabar)&&vals.etabar!==0;
+  if(mode==='axis')return Array.isArray(vals.rc)&&vals.rc.length>0&&Array.isArray(vals.zs)&&vals.zs.length>0&&isFiniteNum(vals.etabar)&&vals.etabar!==0;
+  if(mode==='boundary')return isPlainObject(vals.shape);
+  return false;
+}
+function _variantLooksEdited(v){
+  if(!isPlainObject(v))return false;
+  const src=(v.source||(v.shape&&v.shape.source)||'')+'';
+  return src.indexOf('synthetic')<0;
+}
+function stellSyncPayload(vals=VALS){
+  const mode=vals._geom_mode||inferStellGeomMode();
+  const p=cloneJson(vals);delete p._geom_mode;
+  if(mode==='boundary'){
+    delete p.rc;delete p.zs;delete p.delta_h;
+  }else if(mode==='axis'){
+    delete p.shape;delete p.delta_h;delete p.iota;delete p.Vp_override;delete p.Sw_override;
+  }else{
+    delete p.shape;delete p.rc;delete p.zs;delete p.iota;delete p.Vp_override;delete p.Sw_override;
+  }
+  return p;
+}
+function showSyncError(msg){
+  const text=String(msg||L('几何同步失败','geometry sync failed'));
+  const box=document.getElementById('results');
+  if(box)box.innerHTML=`<div class="err">${text.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</div>`;
+  else if(typeof alert==='function')alert(text);
+}
+function syncStellGeometryVariants(){
+  if(!canSyncStellGeometry())return false;
+  const mode=stellGeomMode();
+  return jpost('/api/stellarator/sync_geometry',{config:'stellarator',source_mode:mode,params:stellSyncPayload()}).then(r=>{
+    if(r.errors||r.error){showSyncError(r.errors?r.errors.join('\n'):r.error);return false;}
+    if(!isPlainObject(r.geometry_variants)){showSyncError(L('后端未返回 geometry_variants','backend did not return geometry_variants'));return false;}
+    VALS.geometry_variants=cloneJson(r.geometry_variants);
+    const current=stellVariant(mode);
+    if(current)applyStellVariant(mode,current);
+    VALS._geom_mode=mode;
+    stashStellGeom();
+    return true;
+  }).catch(e=>{
+    showSyncError(e&&e.message?e.message:e);
+    return false;
+  });
+}
+function stellAVolDisplay(){
+  if(CUR!=='stellarator')return null;
+  const mode=stellGeomMode();
+  if(mode==='boundary'&&isFiniteNum(VALS.Vp_override)&&VALS.Vp_override>0&&isFiniteNum(VALS.R0)&&VALS.R0>0){
+    return Math.sqrt(VALS.Vp_override/(2*Math.PI*Math.PI*VALS.R0));
+  }
+  const sameMode=LASTRUN&&LASTRUN._geom_mode===mode;
+  if(sameMode&&LASTRUN.outputs&&isFiniteNum(LASTRUN.outputs.a_vol))return LASTRUN.outputs.a_vol;
+  if(isFiniteNum(VALS.a))return VALS.a;
+  return null;
+}
+function stellAHeaderHtml(){
+  if(CUR!=='stellarator'||!isFiniteNum(VALS.a))return '';
+  const av=stellAVolDisplay();
+  const avHtml=isFiniteNum(av)?` · <i>a<sub>vol</sub></i> = ${av.toFixed(3)} m`:'';
+  return `<span class="a0"><i>a</i> = ${VALS.a.toFixed(3)} m${avHtml}</span>`;
+}
 
 function inferStellGeomMode(){
   if(isPlainObject(VALS.shape))return'boundary';
@@ -294,9 +376,25 @@ function stellGeomMode(){return VALS._geom_mode||inferStellGeomMode();}
 function stellGeomModeHtml(){const m=stellGeomMode();const item=(k,zh,en)=>`<button type="button" class="modebtn${m===k?' on':''}" data-gmode="${k}">${L(zh,en)}</button>`;return `<div class="fld full modefld"><label><span class="sym">geo</span><span class="nm">${L('几何输入方式','geometry input mode')}</span></label><div class="modebar">${item('simple','默认近轴','simple near-axis')}${item('axis','磁轴 Fourier','axis Fourier')}${item('boundary','边界 Fourier','boundary Fourier')}</div></div>`;}
 function migrateStellRadius(){if(CUR==='stellarator'&&VALS&&!('a'in VALS)&&'A'in VALS&&'R0'in VALS){VALS.a=VALS.R0/VALS.A;delete VALS.A;}}
 
+function stellVariant(mode){const gv=VALS.geometry_variants;return isPlainObject(gv)&&isPlainObject(gv[mode])?gv[mode]:null;}
+function applyStellVariant(mode,v){
+  if(mode==='simple'){
+    if(isFiniteNum(v.delta_h))VALS.delta_h=v.delta_h;if(isFiniteNum(v.etabar))VALS.etabar=v.etabar;
+    delete VALS.shape;delete VALS.rc;delete VALS.zs;delete VALS.iota;delete VALS.Vp_override;delete VALS.Sw_override;
+  }else if(mode==='axis'){
+    if(Array.isArray(v.rc))VALS.rc=v.rc.slice();if(Array.isArray(v.zs))VALS.zs=v.zs.slice();if(isFiniteNum(v.etabar))VALS.etabar=v.etabar;
+    delete VALS.shape;delete VALS.delta_h;delete VALS.iota;delete VALS.Vp_override;delete VALS.Sw_override;
+  }else if(mode==='boundary'){
+    if(isPlainObject(v.shape))VALS.shape=cloneJson(v.shape);if(isFiniteNum(v.etabar))VALS.etabar=v.etabar;
+    VALS.iota=isFiniteNum(v.iota)?v.iota:0;VALS.Vp_override=isFiniteNum(v.Vp_override)?v.Vp_override:0;VALS.Sw_override=isFiniteNum(v.Sw_override)?v.Sw_override:0;
+    delete VALS.rc;delete VALS.zs;delete VALS.delta_h;ADVANCED=true;
+  }
+}
 function setStellGeomMode(mode){
   stashStellGeom();VALS._geom_mode=mode;
-  if(mode==='simple'){delete VALS.shape;delete VALS.rc;delete VALS.zs;VALS.iota=0;VALS.Vp_override=0;VALS.Sw_override=0;}
+  const variant=(typeof stellVariant==='function')?stellVariant(mode):null;
+  if(variant&&typeof applyStellVariant==='function'){applyStellVariant(mode,variant);return;}
+  if(mode==='simple'){delete VALS.shape;delete VALS.rc;delete VALS.zs;delete VALS.iota;delete VALS.Vp_override;delete VALS.Sw_override;}
   else if(mode==='axis'){delete VALS.shape;VALS.iota=0;VALS.Vp_override=0;VALS.Sw_override=0;
     if(!Array.isArray(VALS.rc))VALS.rc=STELL_STASH.rc?STELL_STASH.rc.slice():[VALS.R0||1,VALS.delta_h||0];
     if(!Array.isArray(VALS.zs))VALS.zs=STELL_STASH.zs?STELL_STASH.zs.slice():[0,-(VALS.delta_h||0)];}
@@ -320,7 +418,8 @@ function showParamForMode(p){
   return true;
 }
 
-const DENS=new Set(['ni0','n0']);const BOOLS=new Set(['use_tauE','geom_weighted']);const dsc=k=>DENS.has(k)?1e-20:1;  // density display in 10^20 m^-3
+const DENS=new Set(['ni0','n0']);const OUT_DENS=new Set(['ne0','ni0','n0','nbar','n_Sudo','nbar_geom']);
+const BOOLS=new Set(['use_tauE','geom_weighted']);const dsc=k=>DENS.has(k)?1e-20:1;  // density display in 10^20 m^-3
 const SELF_LOSS_PARAMS={
   tokamak:['H_fac'],
   mirror:['f_alpha','B_expand','phi_i_over_Te','lnLambda'],
@@ -495,10 +594,8 @@ function buildParams(){
   let html='';
   for(const[gk,gz,ge]of GROUPS){if(!groups[gk])continue;
     let a0='';
-    if(gk==='geo'&&CUR==='stellarator'&&'a'in VALS){
-      const av=LASTRUN&&LASTRUN.outputs&&typeof LASTRUN.outputs.a_vol==='number'?` · <i>a<sub>vol</sub></i> = ${LASTRUN.outputs.a_vol.toFixed(3)} m`:'';
-      a0=`<span class="a0"><i>a</i> = ${(+VALS.a).toFixed(3)} m${av}</span>`;
-    }else if(gk==='geo'&&'R0'in VALS&&'A'in VALS)a0=`<span class="a0"><i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m</span>`;
+    if(gk==='geo'&&CUR==='stellarator')a0=stellAHeaderHtml();
+    else if(gk==='geo'&&'R0'in VALS&&'A'in VALS)a0=`<span class="a0"><i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m</span>`;
     html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div>`;
     html+=`<div class="pgrid" data-grp="${gk}">`;
     if(CUR==='stellarator'&&gk==='geo')html+=stellGeomModeHtml();
@@ -515,7 +612,8 @@ function buildParams(){
       else if(p==='imp_name'){const SP=['','He','Li','Be','C','N','O','Ne','Ar','Kr','Xe','W'];
         html+=`<div class="fld"><label title="${desc}"><span class="sym">imp</span><span class="nm">${desc}</span></label><select data-p="imp_name">${SP.map(s=>`<option value="${s}" ${(VALS.imp_name||'')===s?'selected':''}>${s||L('关闭(默认)','off (default)')}</option>`).join('')}</select></div>`;}
       else if(p==='rc'||p==='zs'){const tip=(m[1]+' · '+m[0]).replace(/<[^>]+>/g,'');
-        if(isPlainObject(VALS.shape)&&Array.isArray(VALS.shape.R)&&Array.isArray(VALS.shape.Z)){
+        if(CUR==='stellarator'&&stellGeomMode()==='boundary'){
+          if(!isPlainObject(VALS.shape))VALS.shape=defaultBoundaryShape(VALS.R0,VALS.N_fp);
           const mk=p==='rc'?'R':'Z';const arr=VALS.shape[mk]||[];
           const val=arr.map(([m,n,c])=>`[${m},${n},${c}]`).join(',\n');
           const tftip=(p==='rc'?L('边界 R Fourier [m,n,c]','boundary R Fourier [m,n,c]'):L('边界 Z Fourier [m,n,c]','boundary Z Fourier [m,n,c]'));
@@ -534,6 +632,15 @@ function buildParams(){
   box.querySelectorAll('[data-p]').forEach(el=>{const f=el.closest('.fld');
     if(CUR!=='stellarator'&&f&&ADV_PARAMS.has(el.dataset.p))f.classList.add('advfld');});
   box.classList.toggle('show-adv',!!ADVANCED);
+  if(CUR==='stellarator'){
+    const mf=box.querySelector('.modefld');
+    if(mf&&!document.getElementById('syncGeom')){
+      const b=document.createElement('button');b.type='button';b.id='syncGeom';b.className='syncgeom';
+      b.textContent=L('同步到其他几何','sync to other geometries');mf.appendChild(b);
+    }
+    const sb=document.getElementById('syncGeom');
+    if(sb){sb.disabled=!canSyncStellGeometry();sb.onclick=async()=>{if(await syncStellGeometryVariants()){buildParams();buildThresh();buildPlotOpts();recompute();}};}
+  }
   // stellarator geometry mode switch handlers
   box.querySelectorAll('[data-gmode]').forEach(b=>b.onclick=()=>{
     setStellGeomMode(b.dataset.gmode);
@@ -565,8 +672,8 @@ function buildParams(){
       const mk=el.dataset.p==='rc'?'R':'Z';
       // boundary Fourier: parse [m,n,c] triplets into VALS.shape
       if(isPlainObject(VALS.shape)&&el.tagName==='TEXTAREA'){
-        const raw=(el.value||'').split(/[\\n,]+/).filter(s=>s.trim());
-        const arr=[];for(const s of raw){const ns=s.match(/[-\\d.]+/g);if(ns&&ns.length>=3)arr.push([parseFloat(ns[0]),parseFloat(ns[1]),parseFloat(ns[2])]);}
+        const ns=(el.value||'').match(/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/g)||[];
+        const arr=[];for(let i=0;i+2<ns.length;i+=3)arr.push([parseFloat(ns[i]),parseFloat(ns[i+1]),parseFloat(ns[i+2])]);
         if(arr.length){if(!VALS.shape)VALS.shape={};VALS.shape[mk]=arr;}
         else{if(VALS.shape)delete VALS.shape[mk];if(VALS.shape&&!VALS.shape.R&&!VALS.shape.Z)delete VALS.shape;}
       }else{
@@ -577,6 +684,7 @@ function buildParams(){
     else if(el.dataset.p==='sep_model')VALS.sep_model=el.value;
     else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
     applyModeLocks();
+    const sg=document.getElementById('syncGeom');if(sg)sg.disabled=!canSyncStellGeometry();
     clearTimeout(timer);timer=setTimeout(()=>{updateA0();fitScanRanges();recompute();},280);});
   applyModeLocks();
 }
@@ -601,9 +709,9 @@ function applyModeLocks(){
   }
 }
 function updateA0(){const h=[...document.querySelectorAll('.grp-h .a0')][0];if(!h)return;
-  if(CUR==='stellarator'&&'a'in VALS){
-    const av=LASTRUN&&LASTRUN.outputs&&typeof LASTRUN.outputs.a_vol==='number'?` · <i>a<sub>vol</sub></i> = ${LASTRUN.outputs.a_vol.toFixed(3)} m`:'';
-    h.innerHTML=`<i>a</i> = ${(+VALS.a).toFixed(3)} m${av}`;
+  if(CUR==='stellarator'&&isFiniteNum(VALS.a)){
+    const av=stellAVolDisplay();
+    h.innerHTML=`<i>a</i> = ${VALS.a.toFixed(3)} m${isFiniteNum(av)?` · <i>a<sub>vol</sub></i> = ${av.toFixed(3)} m`:''}`;
   }else if('R0'in VALS&&'A'in VALS)h.innerHTML=`<i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m`;}
 function buildThresh(){
   const w=CONFIGS[CUR].best_window||{ge:{},le:{}};
@@ -642,15 +750,30 @@ function buildPlotOpts(){
   box.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{const f=o.dataset.f;PLOTSEL.has(f)?PLOTSEL.delete(f):PLOTSEL.add(f);buildPlotOpts();if(VIEW==='popcon')drawPopcon();});
 }
 function fmtIn(v){if(typeof v!=='number'||!isFinite(v))return '';const a=Math.abs(v);if(a!==0&&(a<1e-3||a>=1e5))return v.toExponential(3);return +v.toFixed(6);}
-function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='sep_model'){if(typeof v==='string'&&v)o[k]=v;}else if(OPAQUE_PARAMS.has(k)&&isPlainObject(v))o[k]=v;else if(Array.isArray(v)){const a=v.filter(x=>typeof x==='number'&&isFinite(x));if(a.length)o[k]=a;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return o;}
+function cleanStellOverrides(o){
+  if(CUR!=='stellarator')return o;
+  const mode=stellGeomMode();
+  delete o._geom_mode;
+  if(mode==='boundary'){
+    delete o.rc;delete o.zs;delete o.delta_h;
+    if(!isPlainObject(o.shape))delete o.shape;
+  }else if(mode==='axis'){
+    delete o.shape;delete o.delta_h;delete o.iota;delete o.Vp_override;delete o.Sw_override;
+    if(!Array.isArray(o.rc))delete o.rc;if(!Array.isArray(o.zs))delete o.zs;
+  }else{
+    delete o.shape;delete o.rc;delete o.zs;delete o.iota;delete o.Vp_override;delete o.Sw_override;
+  }
+  return o;
+}
+function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='sep_model'){if(typeof v==='string'&&v)o[k]=v;}else if(OPAQUE_PARAMS.has(k)&&isPlainObject(v))o[k]=v;else if(Array.isArray(v)){const a=v.filter(x=>typeof x==='number'&&isFinite(x));if(a.length)o[k]=a;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return cleanStellOverrides(o);}
 async function recompute(){const r=await jpost('/api/run',{config:CUR,overrides:clean()});applyRun(r);if(VIEW!=='popcon')setView(VIEW);}
 function applyRun(r){
-  LASTRUN=r;const box=document.getElementById('results');
+  r._geom_mode=CUR==='stellarator'?stellGeomMode():null;LASTRUN=r;const box=document.getElementById('results');
   if(r.errors){box.innerHTML=`<div class="err">${r.errors.join('\n')}</div>`;caseBadge.textContent='';return;}
   const o=r.outputs;caseBadge.textContent=o.strcase||CUR;document.getElementById('stRx').textContent=o.strcase||'—';
   let html='';for(const[g,keys]of RGRP){const rows=keys.filter(k=>k in o&&typeof o[k]==='number').map(k=>{
     const cls=HOT.has(k)?'hot':COOL.has(k)?'cool':WARN.has(k)?'warn':'';
-    const isd=k==='ne0'||k==='ni0'||k==='n0';const val=isd?o[k]*1e-20:o[k];const uu=isd?'10²⁰ m⁻³':(UNIT[k]||'');
+    const isd=OUT_DENS.has(k);const val=isd?o[k]*1e-20:o[k];const uu=isd?'10²⁰ m⁻³':(UNIT[k]||'');
     const u=uu?` <span class="u">${uu}</span>`:'';
     // audit P1: Q=1000 cap must read as ignition/self-sustain, not a number
     if(k==='Qfus'&&o.ignited===1)return `<div class="kv hot"><span class="k">${pk(k)}</span><span class="v">∞ ⚡${L('点火','ignited')}</span></div>`;
@@ -661,6 +784,7 @@ function applyRun(r){
     return `<div class="kv ${cls}"><span class="k">${pk(k)}</span><span class="v">${typeof val==='string'?val:fmt(val)}${u}${est}</span></div>`;}).join('');
     if(rows)html+=`<div class="grp"><div class="grp-t">${g}</div>${rows}</div>`;}
   box.innerHTML=html;
+  updateA0();
   if(VIEW==='popcon')document.getElementById('plotMeta').innerHTML=`<span>P_fus <b>${fmt(o.Pfus)}</b> MW</span><span>Q <b>${fmt(o.Qfus)}</b></span>`;
 }
 function fmt(v){if(v==null||typeof v!=='number'||!isFinite(v))return '—';const a=Math.abs(v);if(a!==0&&(a<1e-2||a>=1e5))return v.toExponential(3);return v.toFixed(a<1?4:3);}
@@ -733,8 +857,8 @@ function drawShape(){
   const lin=(x,y,c,w,fill,fc)=>({type:'scatter',mode:'lines',x,y,line:{color:c,width:w||2.4},fill:fill?'toself':undefined,fillcolor:fc||'rgba(255,176,46,.06)'});
   const cv=(x,y,c,w,ds)=>({type:'scatter',mode:'lines',x,y,line:{color:c,width:w||1.4,dash:ds||'solid'}});
   const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
-  const seg=(x1,y1,x2,y2,c,txt)=>({type:'scatter',mode:txt?'lines+markers+text':'lines+markers',x:[x1,x2],y:[y1,y2],text:['',txt||''],
-    textposition:'middle right',textfont:{color:c,size:10},line:{color:c,width:1.8},marker:{color:c,size:[2,8],symbol:'triangle-right'}});
+  const seg=(x1,y1,x2,y2,c,txt,sym)=>({type:'scatter',mode:txt?'lines+markers+text':'lines+markers',x:[x1,x2],y:[y1,y2],text:['',txt||''],
+    textposition:'middle right',textfont:{color:c,size:10},line:{color:c,width:1.8},marker:{color:c,size:[2,8],symbol:sym||'triangle-right'}});
   const txt=(x,y,t,c)=>({type:'scatter',mode:'text',x,y,text:t,textfont:{color:c,size:11,family:'JetBrains Mono'}});
   const GC=k=>GRP[k][1];
   if(CUR==='tokamak'){
@@ -860,8 +984,14 @@ function drawShape(){
           X.push((v.l_s/2)*0.78*q*Math.cos(th));Y.push(sgn*rn+sgn*(v.r_s-rn)*0.86*q*Math.sin(th));}
         add(cv(X,Y,GC('flux'),1.18,'dash'),'flux');}));
     }
-    [-0.72,-0.48,0.48,0.72].forEach(yy=>add(cv([-v.l_s/2*1.15,-v.l_s/2*0.95,-v.l_s/2*0.72,v.l_s/2*0.72,v.l_s/2*0.95,v.l_s/2*1.15],
-      [yy*v.r_w,yy*v.r_w,yy*v.r_s*0.86,yy*v.r_s*0.86,yy*v.r_w,yy*v.r_w],GC('open'),1.05,'dot'),'open'));
+    // open SOL field lines outside the separatrix: real backend curves (audit
+    // docs/42 P2) when a run is present, else a schematic fallback.
+    if(sh&&Array.isArray(sh.open_lines)&&sh.open_lines.length){
+      sh.open_lines.forEach(ln=>add(cv(ln.z,ln.r,GC('open'),1.05,'dot'),'open'));
+    }else{
+      [-0.72,-0.48,0.48,0.72].forEach(yy=>add(cv([-v.l_s/2*1.15,-v.l_s/2*0.95,-v.l_s/2*0.72,v.l_s/2*0.72,v.l_s/2*0.95,v.l_s/2*1.15],
+        [yy*v.r_w,yy*v.r_w,yy*v.r_s*0.86,yy*v.r_s*0.86,yy*v.r_w,yy*v.r_w],GC('open'),1.05,'dot'),'open'));
+    }
     // O point (magnetic axis / field null) and X points (separatrix on axis)
     const opR=sh?sh.o_points.r:[rn,-rn],opZ=sh?sh.o_points.z:[0,0];
     add({type:'scatter',mode:'markers+text',x:opZ,y:opR,text:[L('O 点','O-point'),L('O 点','O-point')],
@@ -871,7 +1001,10 @@ function drawShape(){
     add({type:'scatter',mode:'markers+text',x:xpZ,y:xpR,text:[L('X 点','X-point'),L('X 点','X-point')],
       textposition:['middle right','middle left'],textfont:{color:'#ff9f43',size:10},
       marker:{color:'#ff9f43',size:9,symbol:'x-thin',line:{width:2,color:'#ff9f43'}}},'annot');
-    add(seg(-0.38*v.l_s,0.18*v.r_s,-0.05*v.l_s,0.18*v.r_s,'#ff6b6b',L('B←','B←')),'annot');
+    // reversed internal field (the defining FRC feature): inside the field null
+    // r<r_s/sqrt2 the axial field B_z<0, i.e. points -z (left). Arrowhead must
+    // point left — head (big marker) at the left end, triangle-left symbol.
+    add(seg(-0.05*v.l_s,0.18*v.r_s,-0.38*v.l_s,0.18*v.r_s,'#ff6b6b',L('B←','B←'),'triangle-left'),'annot');
     add(seg(-0.50*v.l_s,1.08*v.r_s,-0.15*v.l_s,1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');
     add(seg(-0.50*v.l_s,-1.08*v.r_s,-0.15*v.l_s,-1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');
     document.getElementById('plotMeta').innerHTML=`<span>${L('分离面来自后端几何；壁 r_w；磁面/反向场为示意','separatrix from backend; wall r_w; flux/reversal schematic')}</span>`;
@@ -938,7 +1071,7 @@ async function runScan(){
   }catch(e){err.textContent=String(e);}finally{run.disabled=false;run.textContent=t;}
 }
 function onLoadFile(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
-  rd.onload=()=>{try{const d=JSON.parse(rd.result);Object.assign(VALS,d);buildParams();recompute();}catch(err){document.getElementById('err').textContent='JSON: '+err.message;}};
+  rd.onload=()=>{try{const d=JSON.parse(rd.result);Object.assign(VALS,d);if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();}buildParams();recompute();}catch(err){document.getElementById('err').textContent='JSON: '+err.message;}};
   rd.readAsText(f);e.target.value='';}
 function dl(name,text){const b=new Blob([text],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();URL.revokeObjectURL(a.href);}
 function scanCsv(s){const F=Object.keys(s.fields);let out='# '+s.xkey+','+s.ykey+','+F.join(',')+'\n';

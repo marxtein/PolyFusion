@@ -61,6 +61,36 @@ def twotemp_diagnostics(rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M):
     return Ecrit, f_fast, tau_eq, pei
 
 
+def _line_average_factor(S):
+    """Centered-line average factor for ``(1 - rho**2)**S``."""
+    return math.sqrt(math.pi) / 2 * math.gamma(S + 1) / math.gamma(S + 1.5)
+
+
+def _line_average_factor_from_vfrac(S, rho, vfrac):
+    """Area-equivalent line-average factor from a cumulative volume fraction.
+
+    ``u = sqrt(V(rho) / V(1))`` is the equivalent circular line coordinate.  For
+    self-similar circular geometry, ``u == rho`` and this reduces to the gamma
+    expression in :func:`_line_average_factor`.
+    """
+    rho = np.asarray(rho, dtype=float)
+    vfrac = np.asarray(vfrac, dtype=float)
+    if rho.shape != vfrac.shape or rho.ndim != 1 or rho.size < 2:
+        raise ValueError("rho and vfrac must be one-dimensional arrays of equal length")
+    if np.allclose(vfrac, rho**2, rtol=1e-10, atol=1e-12):
+        return _line_average_factor(S)
+    u = np.sqrt(np.clip(vfrac, 0.0, 1.0))
+    order = np.argsort(u)
+    u = u[order]
+    rho = rho[order]
+    values = (1.0 - np.clip(rho, 0.0, 1.0) ** 2) ** S
+    return float(np.trapezoid(values, u))
+
+
+def _line_average_value(center, S, rho, vfrac):
+    return float(center) * _line_average_factor_from_vfrac(S, rho, vfrac)
+
+
 def line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx):
     """Impurity line-radiation power [MW] for the (1-x^2)^S profile family.
 
@@ -125,6 +155,9 @@ class Result:
     H_ITPA20: float   # tauE / tau_ITPA20 (second opinion next to H98)
     nu_eff_ang: float  # Angioni effective collisionality 0.1 Zeff n19 R/<Te>^2
     Sn_sugg: float  # density-peaking exponent suggested by Angioni scaling
+    nbar_geom: float  # area-equivalent line-average density diagnostic [m^-3]
+    Te_line_geom: float  # area-equivalent line-average electron temperature [keV]
+    Ti_line_geom: float  # area-equivalent line-average ion temperature [keV]
     strcase: str    # reaction label
 
     def as_dict(self) -> dict:
@@ -248,6 +281,7 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     dx = x[1] - x[0]
     fTavg = np.sum(x * (1 - x**2) ** ST) / np.sum(x)
     fnavg = np.sum(x * (1 - x**2) ** Sn) / np.sum(x)
+    vfrac = x**2
 
     # --- reactivity profile integral Phi ---
     phi = 0.0
@@ -295,7 +329,10 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     betap = (25 / betaT) * ((1 + kappa**2) / 2) * (betaN / 100) ** 2
 
     # --- density limits and confinement scalings ---
-    nbar = ne0 * math.sqrt(math.pi) / 2 * math.gamma(Sn + 1) / math.gamma(Sn + 1.5)
+    nbar = ne0 * _line_average_factor(Sn)
+    nbar_geom = _line_average_value(ne0, Sn, x, vfrac)
+    Te_line_geom = _line_average_value(Te0, ST, x, vfrac)
+    Ti_line_geom = _line_average_value(Ti0, ST, x, vfrac)
     nGw = 1e20 * Ip / (math.pi * a**2)
     nbar_o_nGw = nbar / nGw
     PL = rx["fion"] * Pfus + Pheat
@@ -350,5 +387,7 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         P_ei=P_ei, Te0=Te0, fT_used=fT, te_mode=0.0, te_resid=0.0,
         tauE_used=tauE, taue_mode=0.0,
         P_LH=P_LH, LH_ratio=LH_ratio, tau_ITPA20=tau_ITPA20, H_ITPA20=H_ITPA20,
-        nu_eff_ang=nu_eff, Sn_sugg=Sn_sugg, strcase=rx["name"],
+        nu_eff_ang=nu_eff, Sn_sugg=Sn_sugg, nbar_geom=nbar_geom,
+        Te_line_geom=Te_line_geom, Ti_line_geom=Ti_line_geom,
+        strcase=rx["name"],
     )

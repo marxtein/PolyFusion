@@ -53,8 +53,14 @@ def _run_clean(vals: dict) -> dict:
         support.append(_extract_function(src, "isPlainObject"))
     except ValueError:
         pass
+    support.extend([
+        _extract_function(src, "inferStellGeomMode"),
+        _extract_function(src, "stellGeomMode"),
+        _extract_function(src, "cleanStellOverrides"),
+    ])
     clean_fn = _extract_function(src, "clean")
     js = f"""
+let CUR = 'stellarator';
 let VALS = {json.dumps(vals, ensure_ascii=False)};
 {chr(10).join(support)}
 {clean_fn}
@@ -84,7 +90,7 @@ VALS._geom_mode = inferStellGeomMode();
 const initial = VALS._geom_mode;
 setStellGeomMode('simple');
 const simple = {{mode: VALS._geom_mode, hasShape: !!VALS.shape, hasRc: !!VALS.rc,
-  iota: VALS.iota, Vp_override: VALS.Vp_override, Sw_override: VALS.Sw_override}};
+  hasIota: 'iota' in VALS, iota: VALS.iota, Vp_override: VALS.Vp_override, Sw_override: VALS.Sw_override}};
 setStellGeomMode('axis');
 const axis = {{mode: VALS._geom_mode, hasShape: !!VALS.shape,
   hasRc: Array.isArray(VALS.rc), hasZs: Array.isArray(VALS.zs)}};
@@ -130,7 +136,7 @@ def main() -> int:
     allok &= ok(seq["initial"] == "boundary",
                 "W7-X preset starts in boundary Fourier mode")
     allok &= ok(seq["simple"]["mode"] == "simple" and not seq["simple"]["hasShape"]
-                and not seq["simple"]["hasRc"] and seq["simple"]["iota"] == 0,
+                and not seq["simple"]["hasRc"] and not seq["simple"]["hasIota"],
                 "simple near-axis mode removes machine boundary and measured overrides")
     allok &= ok(seq["axis"]["mode"] == "axis" and seq["axis"]["hasRc"]
                 and seq["axis"]["hasZs"] and not seq["axis"]["hasShape"],
@@ -148,8 +154,10 @@ def main() -> int:
     if "shape" in payload:
         allok &= ok(payload["shape"] == w7x["shape"],
                     "clean() sends shape unchanged")
-    allok &= ok(payload.get("delta_h") == 0.25,
-                "clean() keeps the numerically unchanged delta_h")
+    allok &= ok("delta_h" not in payload,
+                "boundary Fourier clean() omits unused delta_h")
+    allok &= ok(payload.get("etabar") == w7x["etabar"],
+                "boundary Fourier clean() keeps etabar for backend validation")
 
     edited = run_case(payload, config="stellarator")
     allok &= ok(edited.get("shape", {}).get("mode") == "machine-boundary",

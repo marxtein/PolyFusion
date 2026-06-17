@@ -28,6 +28,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from polyfusion.io import run_case, list_configs   # noqa: E402
 from polyfusion.configs.base import get             # noqa: E402
+from polyfusion.configs.stellarator import sync_geometry_variants  # noqa: E402
 from polyfusion.scan import scan2d, best_region_mask  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -123,6 +124,15 @@ class Handler(BaseHTTPRequestHandler):
                                config=req.get("config", "tokamak"))
             elif self.path == "/api/scan":
                 out = _do_scan(req)
+            elif self.path == "/api/stellarator/sync_geometry":
+                if req.get("config", "stellarator") != "stellarator":
+                    return self._send(400, json.dumps({"error": "stellarator geometry sync requires config=stellarator"}))
+                out = {
+                    "config": "stellarator",
+                    "geometry_variants": sync_geometry_variants(
+                        _floatify(req.get("params") or req.get("overrides")),
+                        source_mode=req.get("source_mode")),
+                }
             else:
                 return self._send(404, json.dumps({"error": "not found"}))
             # numpy-safe: serialise inside the try so any encoding bug -> 400, not a crash

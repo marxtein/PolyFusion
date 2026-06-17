@@ -74,6 +74,7 @@ def main():
     surfs = _frc_nested_surfaces(z_arch, r_arch, r_s, K, n_levels=8)
     ok(len(surfs) == 8, "requested 8 nested surfaces returned")
     mid_r2 = []
+    mins = []
     z_amps = []
     for s in surfs:
         z = np.asarray(s["z"]); r = np.asarray(s["r"])
@@ -87,17 +88,23 @@ def main():
            f"(max overshoot {over:.2e})")
         ok(np.abs(z).max() < b + 1e-9,
            f"surface psi={s['psi']:.4f} within half-length |z| < l_s/2")
-        # rounded oval around the O point, NOT a flat bottom on the axis: every
-        # interior surface stays well off the axis (psi=0 lives on the axis, so
-        # psi<0 contours cannot run along r=0).
-        ok(r.min() > 0.2 * (r_s / math.sqrt(2.0)),
-           f"surface psi={s['psi']:.4f} stays off-axis (rounded, not flat-bottomed)")
         mid_r2.append(r.max())
+        mins.append(r.min())
         z_amps.append(np.abs(z).max())
     ok(all(x < y for x, y in zip(mid_r2, mid_r2[1:])),
-       "surfaces nest: outer midplane radius strictly increasing")
+       "surfaces nest: outer radius strictly increasing")
+    ok(all(x > y for x, y in zip(mins, mins[1:])),
+       "surfaces nest: inner radius strictly decreasing (outer reach toward axis)")
     ok(all(x < y for x, y in zip(z_amps, z_amps[1:])),
        "surfaces nest: axial amplitude strictly increasing")
+    r_o = r_s / math.sqrt(2.0)
+    # the family must SPAN from near the axis (outermost) to the O point ring
+    # (innermost): the flux fills the whole confined band, not just a ring far
+    # from the axis (user feedback: "离轴太远").
+    ok(mins[-1] < 0.45 * r_o,
+       f"outermost interior surface reaches toward the axis (min r={mins[-1]:.3f} < 0.45 r_o={0.45*r_o:.3f})")
+    ok(mins[0] > 0.55 * r_o,
+       f"innermost surface hugs the O-point ring (min r={mins[0]:.3f} > 0.55 r_o={0.55*r_o:.3f})")
 
     # ---- 4. outline dict carries surfaces + O/X points (both modes) ----
     for mode in ("superellipse", "mrr"):
@@ -134,6 +141,25 @@ def main():
             worst = max(worst, float(np.max(r - np.interp(z, zz, rr))))
         ok(worst <= 1e-6, f"{mode}: surfaces inside separatrix envelope "
                           f"(max overshoot {worst:.2e})")
+
+        # ---- open SOL field lines OUTSIDE the separatrix (audit docs/42 P2) ----
+        ol = d.get("open_lines")
+        ok(isinstance(ol, list) and len(ol) > 0,
+           f"{mode}: outline carries open SOL field lines")
+        worst_in = 0.0      # how far INSIDE the separatrix (should be ~0: outside)
+        max_r = 0.0
+        spans = True
+        for s in ol:
+            z = np.array(s["z"]); r = np.abs(np.array(s["r"]))
+            worst_in = max(worst_in, float(np.max(np.interp(z, zz, rr) - r)))
+            max_r = max(max_r, float(r.max()))
+            spans = spans and (np.abs(z).max() > 2.5)   # extends past |z|=l_s/2
+        ok(worst_in <= 1e-6,
+           f"{mode}: open lines stay OUTSIDE the separatrix (max intrusion {worst_in:.2e})")
+        ok(max_r <= rw + 1e-9, f"{mode}: open lines stay inside the wall r_w")
+        ok(spans, f"{mode}: open lines extend past the separatrix ends (open, not closed)")
+        ok(all((min(s["r"]) > -1e-9) or (max(s["r"]) < 1e-9) for s in ol),
+           f"{mode}: open lines are sign-consistent (separate upper/lower)")
 
     print("\nRESULT:", "FRC FLUX PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1

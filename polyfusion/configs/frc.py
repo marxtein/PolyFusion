@@ -368,12 +368,22 @@ def _frc_nested_surfaces(z_arch, r_arch, r_s: float, K: float,
     psi_o = -math.log(math.cosh(K))
     phi = np.linspace(0.0, 2.0 * math.pi, n_theta)
     cphi, sphi = np.cos(phi), np.sin(phi)
-    a_r0 = r_s - r_o
 
-    # largest a_z that keeps the bounding ellipse (a_r0) inside the arch
+    levels = np.linspace(0.0, 1.0, n_levels + 2)[1:-1]
+    # each level's ASYMMETRIC midplane span comes from the analytic flux:
+    # inner radius x_in*r_s (reaches toward the axis for outer levels) and outer
+    # x_out*r_s.  center r_c and half-width a_r are therefore not symmetric about
+    # the O point -> the band between the O ring and the axis gets filled.
+    radii = [_rr_flux_radii(psi_o * (1.0 - t), K) for t in levels]
+    a_rs = [0.5 * (xo - xi) * r_s for xi, xo in radii]
+    a_r_out = a_rs[-1]
+
+    # axial extent of the OUTERMOST oval: largest a_z keeping it inside the arch.
+    r_c_out = 0.5 * (radii[-1][0] + radii[-1][1]) * r_s
+
     def _fits(a_z: float) -> bool:
         z = a_z * cphi
-        r = r_o + a_r0 * sphi
+        r = r_c_out + a_r_out * sphi
         return bool(np.all(r <= np.interp(z, z_arch, r_arch) + 1e-12))
 
     lo, hi = 0.0, b
@@ -383,17 +393,47 @@ def _frc_nested_surfaces(z_arch, r_arch, r_s: float, K: float,
             lo = mid
         else:
             hi = mid
-    a_z0 = 0.97 * lo                      # small margin so it reads as interior
+    a_z_out = 0.97 * lo                   # small margin so it reads as interior
 
     out = []
-    for t in np.linspace(0.0, 1.0, n_levels + 2)[1:-1]:
-        psi_star = psi_o * (1.0 - t)
-        _x_in, x_out = _rr_flux_radii(psi_star, K)
-        s = (x_out * r_s - r_o) / a_r0    # midplane top radius = flux x_out
-        s = min(max(s, 1e-3), 1.0)
-        z = s * a_z0 * cphi
-        r = r_o + s * a_r0 * sphi
-        out.append({"psi": float(psi_star), "z": z.tolist(), "r": r.tolist()})
+    for t, (xi, xo), a_r in zip(levels, radii, a_rs):
+        r1, r2 = xi * r_s, xo * r_s
+        r_c = 0.5 * (r1 + r2)
+        a_z = a_z_out * (a_r / a_r_out)   # same aspect -> nested, monotone in a_r
+        z = a_z * cphi
+        r = r_c + a_r * sphi
+        out.append({"psi": float(psi_o * (1.0 - t)),
+                    "z": z.tolist(), "r": r.tolist()})
+    return out
+
+
+def _frc_open_field_lines(z_arch, r_arch, r_s: float, r_w: float,
+                          n_lines: int = 4, n_z: int = 161) -> list:
+    """Open SOL field lines OUTSIDE the separatrix (audit docs/42 P2).
+
+    Each line is the separatrix arch pushed outward by a constant gap d and
+    clamped to the wall: ``r(z) = min(r_sep(z) + d, 0.99 r_w)`` over a z range
+    that runs PAST the X points (|z| > l_s/2), where r_sep=0 so the line settles
+    near the axis ends -> the line is OPEN (it does not close on the O point, it
+    hugs the separatrix in the middle and flares toward the wall ends), the SOL
+    picture in the paper's Fig. 4(a).  Upper-half curves; the caller mirrors."""
+    z_arch = np.asarray(z_arch, dtype=float)
+    r_arch = np.asarray(r_arch, dtype=float)
+    r_top = float(np.max(r_arch))                       # ~ r_s
+    r_cap = 0.99 * r_w
+    # Each line is the separatrix arch SCALED about the origin by lambda > 1.
+    # Scaling a star-shaped-about-origin arch by lambda>1 encloses it, so the
+    # line is OUTSIDE the separatrix at every z (lambda*r_arch(z/lambda) >
+    # r_arch(z)); it also extends to |z| = lambda*b, wrapping past the X points
+    # -> an open SOL line.  r is clamped to the wall.  Pushing by a constant
+    # radial gap (the naive version) intrudes near the near-vertical X-point
+    # ends; scaling does not.
+    lam_max = max(1.06, 0.99 * r_w / r_top)
+    out = []
+    for lam in np.linspace(1.06, lam_max, n_lines):
+        z = lam * z_arch
+        r = np.minimum(lam * r_arch, r_cap)
+        out.append({"z": z.tolist(), "r": r.tolist()})
     return out
 
 
@@ -437,10 +477,16 @@ def frc_shape_outlines(r_s, l_s, r_w, f_shape=None, n_theta=181,
         zr = srf["z"]; rr = np.asarray(srf["r"])
         surfaces.append({"psi": srf["psi"], "z": zr, "r": rr.tolist()})          # upper +r_o
         surfaces.append({"psi": srf["psi"], "z": zr, "r": (-rr).tolist()})       # lower -r_o
+    # open SOL field lines outside the separatrix (audit docs/42 P2), mirrored
+    open_lines = []
+    for ln in _frc_open_field_lines(za, ra, r_s, r_w):
+        zr = ln["z"]; rr = np.asarray(ln["r"])
+        open_lines.append({"z": zr, "r": rr.tolist()})                            # upper
+        open_lines.append({"z": zr, "r": (-rr).tolist()})                         # lower
     common = {
         "type": "frc", "m_shape": float(m_shape), "f_shape_calc": f_shape,
-        "wall": wall, "null_points": nulls,
-        "o_points": o_points, "x_points": x_points, "surfaces": surfaces,
+        "wall": wall, "null_points": nulls, "o_points": o_points,
+        "x_points": x_points, "surfaces": surfaces, "open_lines": open_lines,
     }
     if sep_model == "mrr":
         zt, rt = _mrr_separatrix(r_s, l_s, m_shape, n_theta)

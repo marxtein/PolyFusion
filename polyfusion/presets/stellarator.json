@@ -27,7 +27,75 @@
       "H_fac": 1.0,
       "iota": 0.0,
       "Vp_override": 0.0,
-      "Sw_override": 0.0
+      "Sw_override": 0.0,
+      "geometry_variants": {
+        "authority": "simple",
+        "simple": {
+          "delta_h": 0.32,
+          "etabar": 0.05
+        },
+        "axis": {
+          "rc": [
+            18.0,
+            0.32
+          ],
+          "zs": [
+            0.0,
+            -0.32
+          ],
+          "etabar": 0.05,
+          "source": "synthetic from simple near-axis"
+        },
+        "boundary": {
+          "shape": {
+            "kind": "fourier",
+            "nfp": 5,
+            "R": [
+              [
+                0,
+                0,
+                0.0
+              ],
+              [
+                1,
+                0,
+                1.0
+              ],
+              [
+                0,
+                1,
+                0.177777778
+              ]
+            ],
+            "Z": [
+              [
+                -1,
+                0,
+                1.0
+              ],
+              [
+                0,
+                -1,
+                -0.177777778
+              ]
+            ],
+            "axis_rc": [
+              18.0,
+              0.32
+            ],
+            "axis_zs": [
+              0.0,
+              -0.32
+            ],
+            "source": "synthetic from simple near-axis"
+          },
+          "iota": 0.0,
+          "Vp_override": 0.0,
+          "Sw_override": 0.0,
+          "etabar": 0.05,
+          "source": "synthetic from simple near-axis"
+        }
+      }
     },
     "NAE-QA": {
       "R0": 18.0,
@@ -56,7 +124,75 @@
       "H_fac": 1.0,
       "iota": 0.0,
       "Vp_override": 0.0,
-      "Sw_override": 0.0
+      "Sw_override": 0.0,
+      "geometry_variants": {
+        "authority": "simple",
+        "simple": {
+          "delta_h": 0.81,
+          "etabar": 0.05
+        },
+        "axis": {
+          "rc": [
+            18.0,
+            0.81
+          ],
+          "zs": [
+            0.0,
+            -0.81
+          ],
+          "etabar": 0.05,
+          "source": "synthetic from simple near-axis"
+        },
+        "boundary": {
+          "shape": {
+            "kind": "fourier",
+            "nfp": 3,
+            "R": [
+              [
+                0,
+                0,
+                0.0
+              ],
+              [
+                1,
+                0,
+                1.0
+              ],
+              [
+                0,
+                1,
+                0.45
+              ]
+            ],
+            "Z": [
+              [
+                -1,
+                0,
+                1.0
+              ],
+              [
+                0,
+                -1,
+                -0.45
+              ]
+            ],
+            "axis_rc": [
+              18.0,
+              0.81
+            ],
+            "axis_zs": [
+              0.0,
+              -0.81
+            ],
+            "source": "synthetic from simple near-axis"
+          },
+          "iota": 0.0,
+          "Vp_override": 0.0,
+          "Sw_override": 0.0,
+          "etabar": 0.05,
+          "source": "synthetic from simple near-axis"
+        }
+      }
     },
     "W7-X": {
       "R0": 5.5,
@@ -219,6 +355,167 @@
           ]
         ],
         "source": "DESC public equilibrium desc/examples/W7-X (5 field periods), boundary Fourier harmonics truncated to |m|,|n|<=2, normalized (R00 removed, /native minor radius). Bean(phi=0)->triangle(half period)."
+      },
+      "geometry_variants": {
+        "authority": "boundary",
+        "simple": {
+          "delta_h": 0.1925,
+          "etabar": 0.1785,
+          "source": "synthetic from boundary Fourier fitted iota",
+          "iota_fit": 0.8808679428228557
+        },
+        "axis": {
+          "rc": [
+            5.5,
+            0.1925
+          ],
+          "zs": [
+            0.0,
+            -0.1925
+          ],
+          "etabar": 0.1785,
+          "source": "synthetic from boundary Fourier fitted iota"
+        },
+        "boundary": {
+          "shape": {
+            "kind": "fourier",
+            "nfp": 5,
+            "R": [
+              [
+                0,
+                0,
+                0.0
+              ],
+              [
+                0,
+                1,
+                0.54886
+              ],
+              [
+                0,
+                2,
+                -0.013618
+              ],
+              [
+                1,
+                0,
+                0.965385
+              ],
+              [
+                1,
+                1,
+                -0.372217
+              ],
+              [
+                1,
+                2,
+                -0.031371
+              ],
+              [
+                2,
+                0,
+                0.0751
+              ],
+              [
+                2,
+                1,
+                0.110686
+              ],
+              [
+                2,
+                2,
+                0.138008
+              ],
+              [
+                -1,
+                -1,
+                0.46948
+              ],
+              [
+                -1,
+                -2,
+                0.040476
+              ],
+              [
+                -2,
+                -1,
+                -0.065377
+              ],
+              [
+                -2,
+                -2,
+                -0.1294
+              ]
+            ],
+            "Z": [
+              [
+                0,
+                -1,
+                0.464941
+              ],
+              [
+                0,
+                -2,
+                -0.005303
+              ],
+              [
+                1,
+                -1,
+                -0.365661
+              ],
+              [
+                1,
+                -2,
+                -0.009966
+              ],
+              [
+                2,
+                -1,
+                -0.022802
+              ],
+              [
+                2,
+                -2,
+                0.099762
+              ],
+              [
+                -1,
+                0,
+                -1.234827
+              ],
+              [
+                -1,
+                1,
+                -0.456171
+              ],
+              [
+                -1,
+                2,
+                -0.04146
+              ],
+              [
+                -2,
+                0,
+                0.008349
+              ],
+              [
+                -2,
+                1,
+                -0.054954
+              ],
+              [
+                -2,
+                2,
+                0.099665
+              ]
+            ],
+            "source": "DESC public equilibrium desc/examples/W7-X (5 field periods), boundary Fourier harmonics truncated to |m|,|n|<=2, normalized (R00 removed, /native minor radius). Bean(phi=0)->triangle(half period)."
+          },
+          "iota": 0.88,
+          "Vp_override": 30.0,
+          "Sw_override": 128.0,
+          "etabar": 0.119
+        }
       }
     },
     "LHD": {
@@ -292,6 +589,77 @@
           ]
         ],
         "source": "Canonical l=2 rotating-ellipse heliotron (DESC HELIOTRON structure) at LHD N_fp=10, normalized & rescaled to LHD R0/a. Real LHD is l=2/m=10 heliotron; cross-section ellipse rotates with toroidal angle."
+      },
+      "geometry_variants": {
+        "authority": "boundary",
+        "simple": {
+          "delta_h": 0.013,
+          "etabar": 0.1,
+          "source": "synthetic from boundary Fourier fitted iota",
+          "iota_fit": 0.4051216588408921
+        },
+        "axis": {
+          "rc": [
+            3.9,
+            0.013
+          ],
+          "zs": [
+            0.0,
+            -0.013
+          ],
+          "etabar": 0.1,
+          "source": "synthetic from boundary Fourier fitted iota"
+        },
+        "boundary": {
+          "shape": {
+            "kind": "fourier",
+            "nfp": 10,
+            "R": [
+              [
+                0,
+                0,
+                0.0
+              ],
+              [
+                1,
+                0,
+                -1.048371
+              ],
+              [
+                1,
+                1,
+                -0.314511
+              ],
+              [
+                -1,
+                -1,
+                0.314511
+              ]
+            ],
+            "Z": [
+              [
+                -1,
+                0,
+                1.048371
+              ],
+              [
+                -1,
+                1,
+                -0.314511
+              ],
+              [
+                1,
+                -1,
+                -0.314511
+              ]
+            ],
+            "source": "Canonical l=2 rotating-ellipse heliotron (DESC HELIOTRON structure) at LHD N_fp=10, normalized & rescaled to LHD R0/a. Real LHD is l=2/m=10 heliotron; cross-section ellipse rotates with toroidal angle."
+          },
+          "iota": 0.4,
+          "Vp_override": 30.0,
+          "Sw_override": 120.0,
+          "etabar": 0.405
+        }
       }
     },
     "HSX": {
@@ -455,6 +823,170 @@
           ]
         ],
         "source": "DESC public equilibrium desc/examples/HSX (4 field periods), |m|,|n|<=2 normalized harmonics. Quasi-helically symmetric."
+      },
+      "geometry_variants": {
+        "authority": "boundary",
+        "simple": {
+          "delta_h": 0.0525,
+          "etabar": 0.8,
+          "source": "synthetic from boundary Fourier fitted iota",
+          "iota_fit": 1.0664615517893525
+        },
+        "axis": {
+          "rc": [
+            1.2,
+            0.23517495,
+            0.0240318
+          ],
+          "zs": [
+            0.0,
+            0.1807446,
+            0.0215622
+          ],
+          "etabar": 1.6,
+          "iota_fit": 1.1069643817203703,
+          "source": "synthetic from boundary Fourier centerline fitted iota"
+        },
+        "boundary": {
+          "shape": {
+            "kind": "fourier",
+            "nfp": 4,
+            "R": [
+              [
+                -2,
+                -2,
+                -0.138015
+              ],
+              [
+                -2,
+                -1,
+                -0.05462
+              ],
+              [
+                -1,
+                -2,
+                0.13899
+              ],
+              [
+                -1,
+                -1,
+                0.495501
+              ],
+              [
+                0,
+                0,
+                0.0
+              ],
+              [
+                0,
+                1,
+                1.567833
+              ],
+              [
+                0,
+                2,
+                0.160212
+              ],
+              [
+                1,
+                0,
+                1.084399
+              ],
+              [
+                1,
+                1,
+                -0.404597
+              ],
+              [
+                1,
+                2,
+                -0.1547
+              ],
+              [
+                2,
+                0,
+                -0.002902
+              ],
+              [
+                2,
+                1,
+                0.071412
+              ],
+              [
+                2,
+                2,
+                0.13256
+              ]
+            ],
+            "Z": [
+              [
+                -2,
+                0,
+                -0.025091
+              ],
+              [
+                -2,
+                1,
+                -0.079591
+              ],
+              [
+                -2,
+                2,
+                0.132897
+              ],
+              [
+                -1,
+                0,
+                -1.18494
+              ],
+              [
+                -1,
+                1,
+                -0.577231
+              ],
+              [
+                -1,
+                2,
+                -0.124208
+              ],
+              [
+                0,
+                -2,
+                0.143748
+              ],
+              [
+                0,
+                -1,
+                1.204964
+              ],
+              [
+                1,
+                -2,
+                -0.13899
+              ],
+              [
+                1,
+                -1,
+                -0.495501
+              ],
+              [
+                2,
+                -2,
+                0.128446
+              ],
+              [
+                2,
+                -1,
+                -0.069766
+              ]
+            ],
+            "source": "DESC public equilibrium desc/examples/HSX (4 field periods), |m|,|n|<=2 normalized harmonics. Quasi-helically symmetric."
+          },
+          "iota": 1.05,
+          "Vp_override": 0.4,
+          "Sw_override": 9.1,
+          "etabar": 0.948
+        }
       }
     },
     "CFQS": {
@@ -618,6 +1150,167 @@
           ]
         ],
         "source": "DESC public equilibrium desc/examples/ESTELL (2-field-period quasi-axisymmetric) as CFQS proxy (CFQS is a low-aspect N_fp=2 QA), |m|,|n|<=2 normalized harmonics."
+      },
+      "geometry_variants": {
+        "authority": "boundary",
+        "simple": {
+          "delta_h": 0.149762195,
+          "etabar": 0.3,
+          "source": "synthetic from boundary Fourier fitted iota",
+          "iota_fit": 0.4504991525592091
+        },
+        "axis": {
+          "rc": [
+            1.0,
+            0.149762195
+          ],
+          "zs": [
+            0.0,
+            -0.149762195
+          ],
+          "etabar": 0.3,
+          "source": "synthetic from boundary Fourier fitted iota"
+        },
+        "boundary": {
+          "shape": {
+            "kind": "fourier",
+            "nfp": 2,
+            "R": [
+              [
+                -2,
+                -2,
+                -0.046492
+              ],
+              [
+                -2,
+                -1,
+                0.108192
+              ],
+              [
+                -1,
+                -2,
+                0.015445
+              ],
+              [
+                -1,
+                -1,
+                -0.415471
+              ],
+              [
+                0,
+                0,
+                0.0
+              ],
+              [
+                0,
+                1,
+                -0.478361
+              ],
+              [
+                0,
+                2,
+                0.031761
+              ],
+              [
+                1,
+                0,
+                0.995143
+              ],
+              [
+                1,
+                1,
+                0.339176
+              ],
+              [
+                1,
+                2,
+                -0.016066
+              ],
+              [
+                2,
+                0,
+                0.041733
+              ],
+              [
+                2,
+                1,
+                -0.057684
+              ],
+              [
+                2,
+                2,
+                0.027232
+              ]
+            ],
+            "Z": [
+              [
+                -2,
+                0,
+                0.011829
+              ],
+              [
+                -2,
+                1,
+                0.03279
+              ],
+              [
+                -2,
+                2,
+                0.047562
+              ],
+              [
+                -1,
+                0,
+                -1.13995
+              ],
+              [
+                -1,
+                1,
+                0.395685
+              ],
+              [
+                -1,
+                2,
+                -0.013832
+              ],
+              [
+                0,
+                -2,
+                0.004985
+              ],
+              [
+                0,
+                -1,
+                -0.360597
+              ],
+              [
+                1,
+                -2,
+                -0.01363
+              ],
+              [
+                1,
+                -1,
+                0.362207
+              ],
+              [
+                2,
+                -2,
+                0.01788
+              ],
+              [
+                2,
+                -1,
+                0.088179
+              ]
+            ],
+            "source": "DESC public equilibrium desc/examples/ESTELL (2-field-period quasi-axisymmetric) as CFQS proxy (CFQS is a low-aspect N_fp=2 QA), |m|,|n|<=2 normalized harmonics."
+          },
+          "iota": 0.45,
+          "Vp_override": 1.0,
+          "Sw_override": 12.6,
+          "etabar": 0.711
+        }
       }
     },
     "precise-QA": {
@@ -672,7 +1365,187 @@
         -7.36e-07,
         -3.4e-08
       ],
-      "source": "pyQSC/Landreman-Paul 2022 precise QA near-axis (nfp=2, aspect~6); rc/zs scaled to R0, etabar=|etabar_pub|/R0. Solved natively by the near-axis engine (no DESC). iota_geom~0.42 matches published."
+      "source": "pyQSC/Landreman-Paul 2022 precise QA near-axis (nfp=2, aspect~6); rc/zs scaled to R0, etabar=|etabar_pub|/R0. Solved natively by the near-axis engine (no DESC). iota_geom~0.42 matches published.",
+      "geometry_variants": {
+        "authority": "axis",
+        "simple": {
+          "delta_h": 2.183497059,
+          "etabar": 0.075376809,
+          "source": "synthetic from axis Fourier"
+        },
+        "axis": {
+          "rc": [
+            9.034723774,
+            1.656089887,
+            0.195510432,
+            0.023371412,
+            0.002754141,
+            0.000319865,
+            3.6924e-05,
+            4.639e-06,
+            4.39e-07,
+            6.6e-08
+          ],
+          "zs": [
+            0.0,
+            -1.423033975,
+            -0.185463209,
+            -0.023029564,
+            -0.002755232,
+            -0.00032401,
+            -3.7569e-05,
+            -4.102e-06,
+            -7.36e-07,
+            -3.4e-08
+          ],
+          "etabar": 0.075376809
+        },
+        "boundary": {
+          "shape": {
+            "kind": "fourier",
+            "nfp": 2,
+            "R": [
+              [
+                0,
+                0,
+                0.0
+              ],
+              [
+                1,
+                0,
+                1.0
+              ],
+              [
+                0,
+                1,
+                1.104059925
+              ],
+              [
+                0,
+                2,
+                0.130340288
+              ],
+              [
+                0,
+                3,
+                0.015580941
+              ],
+              [
+                0,
+                4,
+                0.001836094
+              ],
+              [
+                0,
+                5,
+                0.000213243
+              ],
+              [
+                0,
+                6,
+                2.4616e-05
+              ],
+              [
+                0,
+                7,
+                3.093e-06
+              ],
+              [
+                0,
+                8,
+                2.93e-07
+              ],
+              [
+                0,
+                9,
+                4.4e-08
+              ]
+            ],
+            "Z": [
+              [
+                -1,
+                0,
+                1.0
+              ],
+              [
+                0,
+                -1,
+                -0.948689317
+              ],
+              [
+                0,
+                -2,
+                -0.123642139
+              ],
+              [
+                0,
+                -3,
+                -0.015353043
+              ],
+              [
+                0,
+                -4,
+                -0.001836821
+              ],
+              [
+                0,
+                -5,
+                -0.000216007
+              ],
+              [
+                0,
+                -6,
+                -2.5046e-05
+              ],
+              [
+                0,
+                -7,
+                -2.735e-06
+              ],
+              [
+                0,
+                -8,
+                -4.91e-07
+              ],
+              [
+                0,
+                -9,
+                -2.3e-08
+              ]
+            ],
+            "axis_rc": [
+              9.034723774,
+              1.656089887,
+              0.195510432,
+              0.023371412,
+              0.002754141,
+              0.000319865,
+              3.6924e-05,
+              4.639e-06,
+              4.39e-07,
+              6.6e-08
+            ],
+            "axis_zs": [
+              0.0,
+              -1.423033975,
+              -0.185463209,
+              -0.023029564,
+              -0.002755232,
+              -0.00032401,
+              -3.7569e-05,
+              -4.102e-06,
+              -7.36e-07,
+              -3.4e-08
+            ],
+            "source": "synthetic from axis Fourier near-axis"
+          },
+          "iota": 0.0,
+          "Vp_override": 0.0,
+          "Sw_override": 0.0,
+          "etabar": 0.075376809,
+          "source": "synthetic from axis Fourier near-axis"
+        }
+      }
     },
     "precise-QH": {
       "R0": 12.0,
@@ -724,7 +1597,173 @@
         -2.8734e-05,
         -8.25e-06
       ],
-      "source": "pyQSC/Landreman-Paul 2022 precise QH near-axis (nfp=4, aspect~8); rc/zs scaled to R0, etabar=|etabar_pub|/R0. Solved natively by the near-axis engine (no DESC). iota_geom~1.24 matches published."
+      "source": "pyQSC/Landreman-Paul 2022 precise QH near-axis (nfp=4, aspect~8); rc/zs scaled to R0, etabar=|etabar_pub|/R0. Solved natively by the near-axis engine (no DESC). iota_geom~1.24 matches published.",
+      "geometry_variants": {
+        "authority": "axis",
+        "simple": {
+          "delta_h": 3.219289806,
+          "etabar": 0.125023666,
+          "source": "synthetic from axis Fourier"
+        },
+        "axis": {
+          "rc": [
+            12.040330115,
+            2.39916303,
+            0.377124502,
+            0.056071124,
+            0.006707946,
+            0.00039581,
+            -8.8053e-05,
+            -3.4596e-05,
+            -5.413e-06
+          ],
+          "zs": [
+            0.0,
+            2.146588831,
+            0.343171999,
+            0.051628726,
+            0.00634045,
+            0.000421763,
+            -7.0892e-05,
+            -2.8734e-05,
+            -8.25e-06
+          ],
+          "etabar": 0.125023666
+        },
+        "boundary": {
+          "shape": {
+            "kind": "fourier",
+            "nfp": 4,
+            "R": [
+              [
+                0,
+                0,
+                0.0
+              ],
+              [
+                1,
+                0,
+                1.0
+              ],
+              [
+                0,
+                1,
+                1.59944202
+              ],
+              [
+                0,
+                2,
+                0.251416335
+              ],
+              [
+                0,
+                3,
+                0.037380749
+              ],
+              [
+                0,
+                4,
+                0.004471964
+              ],
+              [
+                0,
+                5,
+                0.000263873
+              ],
+              [
+                0,
+                6,
+                -5.8702e-05
+              ],
+              [
+                0,
+                7,
+                -2.3064e-05
+              ],
+              [
+                0,
+                8,
+                -3.609e-06
+              ]
+            ],
+            "Z": [
+              [
+                -1,
+                0,
+                1.0
+              ],
+              [
+                0,
+                -1,
+                1.431059221
+              ],
+              [
+                0,
+                -2,
+                0.228781333
+              ],
+              [
+                0,
+                -3,
+                0.034419151
+              ],
+              [
+                0,
+                -4,
+                0.004226967
+              ],
+              [
+                0,
+                -5,
+                0.000281175
+              ],
+              [
+                0,
+                -6,
+                -4.7261e-05
+              ],
+              [
+                0,
+                -7,
+                -1.9156e-05
+              ],
+              [
+                0,
+                -8,
+                -5.5e-06
+              ]
+            ],
+            "axis_rc": [
+              12.040330115,
+              2.39916303,
+              0.377124502,
+              0.056071124,
+              0.006707946,
+              0.00039581,
+              -8.8053e-05,
+              -3.4596e-05,
+              -5.413e-06
+            ],
+            "axis_zs": [
+              0.0,
+              2.146588831,
+              0.343171999,
+              0.051628726,
+              0.00634045,
+              0.000421763,
+              -7.0892e-05,
+              -2.8734e-05,
+              -8.25e-06
+            ],
+            "source": "synthetic from axis Fourier near-axis"
+          },
+          "iota": 0.0,
+          "Vp_override": 0.0,
+          "Sw_override": 0.0,
+          "etabar": 0.125023666,
+          "source": "synthetic from axis Fourier near-axis"
+        }
+      }
     },
     "QH-nfp3": {
       "R0": 12.0,
@@ -782,7 +1821,215 @@
         -1.383e-06,
         -2.76e-07
       ],
-      "source": "pyQSC 2022 QH nfp3 vacuum near-axis (nfp=3); rc/zs scaled to R0, etabar=|etabar_pub|/R0. Solved natively by the near-axis engine (no DESC)."
+      "source": "pyQSC 2022 QH nfp3 vacuum near-axis (nfp=3); rc/zs scaled to R0, etabar=|etabar_pub|/R0. Solved natively by the near-axis engine (no DESC).",
+      "geometry_variants": {
+        "authority": "axis",
+        "simple": {
+          "delta_h": 7.17570351,
+          "etabar": 0.104425836,
+          "source": "synthetic from axis Fourier"
+        },
+        "axis": {
+          "rc": [
+            12.0,
+            5.321092568,
+            1.571914565,
+            0.441913218,
+            0.113670837,
+            0.026191071,
+            0.005256158,
+            0.000872411,
+            0.000106173,
+            5.837e-06,
+            -7.78e-07,
+            -1.57e-07
+          ],
+          "zs": [
+            0.0,
+            4.814217979,
+            1.494356121,
+            0.43110309,
+            0.112956862,
+            0.026426735,
+            0.005375247,
+            0.000901606,
+            0.000109116,
+            4.792e-06,
+            -1.383e-06,
+            -2.76e-07
+          ],
+          "etabar": 0.104425836
+        },
+        "boundary": {
+          "shape": {
+            "kind": "fourier",
+            "nfp": 3,
+            "R": [
+              [
+                0,
+                0,
+                0.0
+              ],
+              [
+                1,
+                0,
+                1.0
+              ],
+              [
+                0,
+                1,
+                3.547395045
+              ],
+              [
+                0,
+                2,
+                1.047943043
+              ],
+              [
+                0,
+                3,
+                0.294608812
+              ],
+              [
+                0,
+                4,
+                0.075780558
+              ],
+              [
+                0,
+                5,
+                0.017460714
+              ],
+              [
+                0,
+                6,
+                0.003504105
+              ],
+              [
+                0,
+                7,
+                0.000581607
+              ],
+              [
+                0,
+                8,
+                7.0782e-05
+              ],
+              [
+                0,
+                9,
+                3.891e-06
+              ],
+              [
+                0,
+                10,
+                -5.19e-07
+              ],
+              [
+                0,
+                11,
+                -1.05e-07
+              ]
+            ],
+            "Z": [
+              [
+                -1,
+                0,
+                1.0
+              ],
+              [
+                0,
+                -1,
+                3.209478653
+              ],
+              [
+                0,
+                -2,
+                0.996237414
+              ],
+              [
+                0,
+                -3,
+                0.28740206
+              ],
+              [
+                0,
+                -4,
+                0.075304575
+              ],
+              [
+                0,
+                -5,
+                0.017617823
+              ],
+              [
+                0,
+                -6,
+                0.003583498
+              ],
+              [
+                0,
+                -7,
+                0.000601071
+              ],
+              [
+                0,
+                -8,
+                7.2744e-05
+              ],
+              [
+                0,
+                -9,
+                3.195e-06
+              ],
+              [
+                0,
+                -10,
+                -9.22e-07
+              ],
+              [
+                0,
+                -11,
+                -1.84e-07
+              ]
+            ],
+            "axis_rc": [
+              12.0,
+              5.321092568,
+              1.571914565,
+              0.441913218,
+              0.113670837,
+              0.026191071,
+              0.005256158,
+              0.000872411,
+              0.000106173,
+              5.837e-06,
+              -7.78e-07,
+              -1.57e-07
+            ],
+            "axis_zs": [
+              0.0,
+              4.814217979,
+              1.494356121,
+              0.43110309,
+              0.112956862,
+              0.026426735,
+              0.005375247,
+              0.000901606,
+              0.000109116,
+              4.792e-06,
+              -1.383e-06,
+              -2.76e-07
+            ],
+            "source": "synthetic from axis Fourier near-axis"
+          },
+          "iota": 0.0,
+          "Vp_override": 0.0,
+          "Sw_override": 0.0,
+          "etabar": 0.104425836,
+          "source": "synthetic from axis Fourier near-axis"
+        }
+      }
     }
   },
   "_notes": {
