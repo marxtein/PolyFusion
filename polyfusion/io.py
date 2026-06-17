@@ -14,6 +14,16 @@ from typing import Any
 from .configs.base import get, REGISTRY
 
 
+def _normalize_params(config: str, params: dict) -> dict:
+    """Apply compatibility migrations at the public dict API boundary."""
+    out = dict(params or {})
+    if config == "stellarator":
+        if "a" not in out and "A" in out and "R0" in out:
+            out["a"] = out["R0"] / out["A"]
+        out.pop("A", None)
+    return out
+
+
 def run_case(params: dict, *, preset: str | None = None,
              config: str = "tokamak") -> dict[str, Any]:
     """Evaluate one operating point of a configuration.
@@ -35,6 +45,7 @@ def run_case(params: dict, *, preset: str | None = None,
     spec = get(config)
     base = dict(spec.presets[preset]) if preset else {}
     base.update(params or {})
+    base = _normalize_params(config, base)
     errors = spec.validate(base)
     if errors:
         return {"config": config, "errors": errors, "inputs": base}

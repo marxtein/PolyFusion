@@ -27,7 +27,7 @@ def ok(cond, msg):
 
 
 def _base(p):
-    keys = ["R0", "A", "N_fp", "Sn", "ST", "ni0", "Ti0", "fT", "fsig", "f1",
+    keys = ["R0", "a", "N_fp", "Sn", "ST", "ni0", "Ti0", "fT", "fsig", "f1",
             "B0", "tauE", "fHe", "fimp", "Zimp", "Rw", "g", "icase"]
     kw = {k: p[k] for k in keys if k in p}
     for o in ["delta_h", "iota", "f_ren", "etabar", "f_aux_e", "H_fac",
@@ -41,7 +41,7 @@ def main():
     presets, _ = load_presets("stellarator")
     p = presets["W7-X"]
     shape = p["shape"]
-    a = p["R0"] / p["A"]
+    a = p["a"]
     bfn, nfp = _shape_boundary_fn(p["R0"], a, shape)
     V_int, S_int, Sp_int = boundary_metrics(bfn, nfp, g=p["g"])
 

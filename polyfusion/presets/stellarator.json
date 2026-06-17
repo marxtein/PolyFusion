@@ -2,7 +2,7 @@
   "presets": {
     "HELIAS": {
       "R0": 18.0,
-      "A": 10.0,
+      "a": 1.8,
       "N_fp": 5,
       "delta_h": 0.32,
       "etabar": 0.05,
@@ -31,7 +31,7 @@
     },
     "NAE-QA": {
       "R0": 18.0,
-      "A": 10.0,
+      "a": 1.8,
       "N_fp": 3,
       "delta_h": 0.81,
       "etabar": 0.05,
@@ -60,7 +60,7 @@
     },
     "W7-X": {
       "R0": 5.5,
-      "A": 10.0,
+      "a": 0.55,
       "N_fp": 5,
       "delta_h": 0.25,
       "etabar": 0.119,
@@ -223,7 +223,7 @@
     },
     "LHD": {
       "R0": 3.9,
-      "A": 6.0,
+      "a": 0.65,
       "N_fp": 10,
       "delta_h": 0.0,
       "etabar": 0.405,
@@ -296,7 +296,7 @@
     },
     "HSX": {
       "R0": 1.2,
-      "A": 8.0,
+      "a": 0.15,
       "N_fp": 4,
       "delta_h": 0.1,
       "etabar": 0.948,
@@ -459,7 +459,7 @@
     },
     "CFQS": {
       "R0": 1.0,
-      "A": 4.0,
+      "a": 0.25,
       "N_fp": 2,
       "delta_h": 0.05,
       "etabar": 0.711,
@@ -622,7 +622,7 @@
     },
     "precise-QA": {
       "R0": 9.0,
-      "A": 6.0,
+      "a": 1.5,
       "N_fp": 2,
       "delta_h": 0.0,
       "etabar": 0.075376809,
@@ -676,7 +676,7 @@
     },
     "precise-QH": {
       "R0": 12.0,
-      "A": 8.0,
+      "a": 1.5,
       "N_fp": 4,
       "delta_h": 0.0,
       "etabar": 0.125023666,
@@ -728,7 +728,7 @@
     },
     "QH-nfp3": {
       "R0": 12.0,
-      "A": 8.0,
+      "a": 1.5,
       "N_fp": 3,
       "delta_h": 0.0,
       "etabar": 0.104425836,
@@ -787,7 +787,7 @@
   },
   "_notes": {
     "Sw_override": "Plasma-facing surface area [m^2] for real machines (APPROX, confirm vs published). W7-X ~128 and LHD ~120 from published plasma-surface estimates; HSX 9.1 and CFQS 12.6 estimated from 2*pi*R0 * 2*pi*a * sqrt((1+kappa^2)/2) with kappa~1.5. Anchors Pwall=(Pfus+Pheat)/Sw instead of the extreme near-axis elongation profile (e.g. HSX elongation ~384). Concept reactors (HELIAS, NAE-QA) keep Sw_override=0 (pure near-axis). See docs/39.",
-    "etabar": "For measured machines (W7-X/LHD/HSX/CFQS) etabar is chosen for a REPRESENTATIVE near-axis cross-section only (modest elongation); the transform/volume/wall come from measured iota/Vp_override/Sw_override, so etabar does not affect their power account. Single-harmonic near-axis cannot truly represent these devices.",
+    "etabar": "For measured machines (W7-X/LHD/HSX/CFQS) etabar only sizes a single-harmonic near-axis cross-section for the SHAPE cartoon; the transform/volume/wall come from measured iota/Vp_override/Sw_override, so etabar does not affect their power account. Single-harmonic near-axis cannot truly represent these devices, so the derived near-axis diagnostics (iota_geom/kappa_eff/elong_max/helicity) are UNRELIABLE for them — e.g. W7-X gives iota_geom~2.07 (real ~0.88) and elongation ~10-14 (real ~1), LHD gives iota_geom=0 (planar axis). The UI flags these as '近轴估/est'. Use measured iota/Vp/Sw, not these estimates.",
     "shape": "Real machines carry an explicit 'shape' = truncated (|m|,|n|<=2), normalized boundary Fourier harmonics from a PUBLIC equilibrium (DESC desc/examples: W7-X, HSX, ESTELL; canonical l=2 heliotron for LHD), evaluated in DESC double-Fourier product basis and rescaled to preset R0 and a=R0/A. Cross-section VIEW only; near-axis cannot represent bean/heliotron/QA. Does NOT affect power account (iota/Vp/Sw measured). Truncated cartoon, not a full equilibrium.",
     "near_axis_presets": "precise-QA/precise-QH/QH-nfp3 are published near-axis quasisymmetry configs (pyQSC/Landreman-Paul 2022). Stored as concept presets: explicit rc/zs (axis Fourier, scaled by R0) + etabar (=|etabar_pub|/R0); NO measured overrides, so the near-axis engine computes iota/Vp/Sw self-consistently (iota matches published). Rendered via the second-order near-axis bean path."
   },

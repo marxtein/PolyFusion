@@ -183,7 +183,9 @@ def main():
         ok(all(np.isfinite(s["R"])) and all(np.isfinite(s["Z"])),
            f"near-axis section {s['label']}: finite outline")
     # the 0-D power-account section area stays first-order pi*a^2 (unchanged)
-    gm = stellarator_geometry_metrics(18.0, 10.0, 3, [18.0, 0.81], [0.0, -0.81], 0.05)
+    gm = stellarator_geometry_metrics(R0=18.0, a=1.8, N_fp=3,
+                                      rc=[18.0, 0.81], zs=[0.0, -0.81],
+                                      etabar=0.05)
     ok(abs(gm["A_flux"] - math.pi * a**2) < 1e-9,
        f"power-account A_flux still pi*a^2 ({gm['A_flux']:.4f})")
 

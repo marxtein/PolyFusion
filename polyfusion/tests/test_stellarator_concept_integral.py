@@ -47,13 +47,13 @@ def _concave_frac(R, Z):
 
 
 def main():
-    # a near-axis CONCEPT (no shape): R0=18, A=10 (a=1.8), helical 3-period axis
-    cfg = dict(R0=18.0, A=10.0, N_fp=3, delta_h=0.9, etabar=0.05,
+    # a near-axis CONCEPT (no shape): R0=18, a=1.8, helical 3-period axis
+    cfg = dict(R0=18.0, a=1.8, N_fp=3, delta_h=0.9, etabar=0.05,
                Sn=0.5, ST=1.0, ni0=2e20, Ti0=15.0, fT=1.0, fsig=1.0, f1=0.5,
                B0=5.0, tauE=1.0, fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7, g=0.1,
                icase=1)
 
-    bfn, nfp = _nearaxis_boundary_fn(R0=18.0, A=10.0, N_fp=3,
+    bfn, nfp = _nearaxis_boundary_fn(R0=18.0, a=1.8, N_fp=3,
                                      delta_h=0.9, etabar=0.05)
     V_int, S_int, _ = boundary_metrics(bfn, nfp, g=0.1)
 
@@ -79,7 +79,7 @@ def main():
     Rb, Zb = bfn(0.0)
     cf_int = _concave_frac(Rb, Zb)
     disp = section_outlines(**{k: cfg[k] for k in
-                               ("R0", "A", "N_fp", "delta_h", "etabar", "g")})
+                               ("R0", "a", "N_fp", "delta_h", "etabar", "g")})
     Rd = disp["sections"][0]["R"]; Zd = disp["sections"][0]["Z"]
     cf_disp = _concave_frac(Rd, Zd)
     ok(cf_int < 0.5, f"integral boundary is simple (concave {cf_int:.2f} < 0.5)")

@@ -10,9 +10,10 @@ R = R0 + delta_h cos(N_fp phi), Z = -delta_h sin(N_fp phi) by default, or an
 explicit ``rc``/``zs`` Fourier list for a custom axis.  The periodic sigma
 equation is solved for the self-consistent on-axis transform, INCLUDING the
 axis-torsion contribution and the full elongation profile e(phi) (see
-polyfusion/nearaxis.py; validated to machine precision against pyQSC).  Volume
-follows Pappus with the flux-conserving section area pi*a^2; surface areas use
-the arclength-weighted elongation profile.
+polyfusion/nearaxis.py; validated to machine precision against pyQSC).  Geometry
+diagnostics still report the first-order flux-conserving section area pi*a^2.
+The solver's 0-D power account uses the exact boundary integral of the drawn
+rho=1 surface for Vp/Sw/Sp, with optional measured Vp/Sw overrides.
 
 (The legacy rotating-ellipse / ``kappa_s`` mode was removed in Scheme D: it
 left ``kappa_s`` inert in near-axis mode and ``delta_h`` blind to iota in
@@ -189,7 +190,7 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
     ``shape`` descriptor carries truncated, NORMALIZED boundary Fourier harmonics
     taken from a public DESC equilibrium (R00 removed, divided by the native
     minor radius), evaluated here in DESC's double-Fourier product basis and
-    rescaled to this preset's R0 and a = R0/A:
+    rescaled to this preset's R0 and direct minor radius a:
 
         R(theta, phi) = R0 + a * sum_{m,n} Rmn * A_m(theta) * B_n(phi)
         Z(theta, phi) =      a * sum_{m,n} Zmn * A_m(theta) * B_n(phi)
@@ -354,8 +355,8 @@ def _nearaxis_reconstruct(na, nfp, a, th):
     return rz
 
 
-def _nearaxis_boundary_fn(R0, A, N_fp, delta_h=0.0, etabar=0.05,
-                          rc=None, zs=None, B2c=0.0, n_theta=200):
+def _nearaxis_boundary_fn(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.05,
+                          rc=None, zs=None, B2c=0.0, n_theta=200, A=None):
     """``(boundary_fn, nfp)`` for a CONCEPT (near-axis, no explicit shape).
 
     ``boundary_fn(phi) -> (R[n_theta], Z[n_theta])`` is the rho=1 outline of the
@@ -364,7 +365,7 @@ def _nearaxis_boundary_fn(R0, A, N_fp, delta_h=0.0, etabar=0.05,
     the concept plasma volume / wall area by exact integration of the drawn
     boundary — frontend shape == backend power geometry for concepts too.
     """
-    a = R0 / A
+    a = _minor_radius(R0, a, A)
     nfp_i = int(round(N_fp))
     axis_rc = list(rc) if rc is not None else [R0, delta_h]
     axis_zs = list(zs) if zs is not None else [0.0, -delta_h]
@@ -378,8 +379,9 @@ def _nearaxis_boundary_fn(R0, A, N_fp, delta_h=0.0, etabar=0.05,
     return (lambda phi: rz(phi, 1.0)), nfp_i
 
 
-def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
+def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
                      rc=None, zs=None, n_theta=121, B2c=0.0, shape=None,
+                     A=None,
                      **_ignored) -> dict:
     """Flux-surface cross-section outlines for the UI shape view (Scheme D + r2).
 
@@ -420,7 +422,7 @@ def section_outlines(R0, A, N_fp, delta_h=0.0, etabar=0.0, g=0.1,
     Extra keyword arguments (the full parameter dict) are ignored so the caller
     can pass ``**params`` directly.
     """
-    a = R0 / A
+    a = _minor_radius(R0, a, A)
     # real-machine presets carry an explicit literature-calibrated boundary that
     # single-harmonic near-axis cannot represent (W7-X bean, LHD rotating
     # ellipse, ...).  Cosmetic only — the power account uses measured overrides.
@@ -544,8 +546,8 @@ def _ellipse_perimeter(amaj, amin):
     return math.pi * (amaj + amin) * (1 + 3 * h / (10 + np.sqrt(4 - 3 * h)))
 
 
-def stellarator_geometry_metrics(R0, A, N_fp, rc, zs, etabar, g=0.1,
-                                 n_rho=101) -> dict:
+def stellarator_geometry_metrics(R0, a=None, N_fp=1, rc=None, zs=None,
+                                 etabar=0.05, g=0.1, n_rho=101, A=None) -> dict:
     """Analytic stellarator geometry metrics shared by solver and UI.
 
     Single near-axis (Garren-Boozer) path (Scheme D): the axis is the custom
@@ -556,7 +558,7 @@ def stellarator_geometry_metrics(R0, A, N_fp, rc, zs, etabar, g=0.1,
     projections; their projected polygon area is diagnostic, not the volume
     integral.
     """
-    a = R0 / A
+    a = _minor_radius(R0, a, A)
     A_flux = math.pi * a**2
     na = solve_near_axis(rc, zs, int(round(N_fp)), etabar)
     L_ax = na.axis_length
@@ -619,7 +621,8 @@ class StellaratorResult:
     tau_ISS04: float  # ISS04 predicted confinement time [s]
     Sp: float
     Sw: float
-    A_flux: float     # analytic flux-section area [m^2]
+    A_flux: float     # effective flux-section area Vp/L_ax [m^2]
+    a_vol: float      # volume-equivalent minor radius for empirical closures [m]
     C_sec_mean: float # arclength-weighted plasma section perimeter [m]
     C_wall_mean: float # arclength-weighted wall section perimeter [m]
     Vp_geom: float    # plasma volume used [m^3] (= override for measured machines)
@@ -653,7 +656,16 @@ class StellaratorResult:
 _GEOM_CACHE: dict = {}
 
 
-def _stellarator_geometry(R0, A, N_fp, delta_h, etabar, g, rc, zs, shape,
+def _minor_radius(R0, a=None, A=None) -> float:
+    """Return physical minor radius, accepting legacy aspect ratio A."""
+    if a is not None:
+        return float(a)
+    if A is not None:
+        return float(R0) / float(A)
+    raise ValueError("minor radius a is required (legacy A is accepted for migration)")
+
+
+def _stellarator_geometry(R0, a, N_fp, delta_h, etabar, g, rc, zs, shape,
                           B2c=0.0):
     """Scan-invariant stellarator geometry (near-axis solves + exact boundary
     integral), MEMOIZED.
@@ -663,7 +675,7 @@ def _stellarator_geometry(R0, A, N_fp, delta_h, etabar, g, rc, zs, shape,
     near-axis r1+r2 solves and the boundary integral at every one of the
     ~nx*ny grid points (and at every step of the tauE/Te self-consistency
     recursion).  Keyed by the geometry parameters ONLY, this is computed once
-    and reused across the whole grid.  If a scan key IS geometric (R0, A, N_fp,
+    and reused across the whole grid.  If a scan key IS geometric (R0, a, N_fp,
     delta_h, etabar, g, or the axis/shape), the key changes and it recomputes —
     so the cache is always correct, never stale.
 
@@ -676,20 +688,19 @@ def _stellarator_geometry(R0, A, N_fp, delta_h, etabar, g, rc, zs, shape,
         int(shape.get("nfp", round(N_fp))),
         tuple(tuple(t) for t in shape["R"]),
         tuple(tuple(t) for t in shape["Z"]))
-    key = (R0, A, int(round(N_fp)), delta_h, etabar, g,
+    key = (R0, a, int(round(N_fp)), delta_h, etabar, g,
            rc_key, zs_key, shape_key, B2c)
     cached = _GEOM_CACHE.get(key)
     if cached is not None:
         return cached
 
-    a = R0 / A
     axis_rc = list(rc) if rc is not None else [R0, delta_h]
     axis_zs = list(zs) if zs is not None else [0.0, -delta_h]
-    geom = stellarator_geometry_metrics(R0, A, N_fp, axis_rc, axis_zs, etabar, g)
+    geom = stellarator_geometry_metrics(R0, a, N_fp, axis_rc, axis_zs, etabar, g)
     if shape is not None:
         bfn, nfp = _shape_boundary_fn(R0, a, shape)
     else:
-        bfn, nfp = _nearaxis_boundary_fn(R0, A, N_fp, delta_h, etabar,
+        bfn, nfp = _nearaxis_boundary_fn(R0, a, N_fp, delta_h, etabar,
                                          rc=rc, zs=zs, B2c=B2c)
     Vp_geom, Sw_geom, Sp_geom = boundary_metrics(bfn, nfp, g)
     res = dict(geom)
@@ -703,12 +714,12 @@ def _stellarator_geometry(R0, A, N_fp, delta_h, etabar, g, rc, zs, shape,
     return res
 
 
-def _check_inputs(R0, A, N_fp, delta_h, Sn, ST, fT, B0, tauE,
+def _check_inputs(R0, a, N_fp, delta_h, Sn, ST, fT, B0, tauE,
                   f1, fHe, fimp, Zimp, Rw, g, fsig, etabar):
     """Domain guards (audit P0).  Raise ValueError on unphysical inputs so
     that no complex/inf/NaN value can masquerade as a result."""
-    if R0 <= 0 or A <= 0:
-        raise ValueError(f"R0 and A must be > 0 (got R0={R0}, A={A})")
+    if R0 <= 0 or a <= 0:
+        raise ValueError(f"R0 and a must be > 0 (got R0={R0}, a={a})")
     if etabar == 0.0:
         raise ValueError("etabar must be != 0: near-axis shaping is required "
                          "(legacy rotating-ellipse mode was removed in Scheme D)")
@@ -737,13 +748,15 @@ def _check_inputs(R0, A, N_fp, delta_h, Sn, ST, fT, B0, tauE,
         raise ValueError(f"fsig must be >= 0 (got {fsig})")
 
 
-def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
-                      B0, tauE, fHe, fimp, Zimp, Rw, g, icase,
+def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
+                      Ti0=None, fT=None, fsig=None, f1=None,
+                      B0=None, tauE=None, fHe=None, fimp=None, Zimp=None,
+                      Rw=None, g=None, icase=None,
                       delta_h=0.0, iota=None, f_ren=1.0,
                       etabar=0.05, imp_name=None, f_aux_e=0.5,
                       H_fac=1.0, use_tauE=1.0,
                       rc=None, zs=None, Vp_override=0.0,
-                      Sw_override=0.0, shape=None) -> StellaratorResult:
+                      Sw_override=0.0, shape=None, a=None) -> StellaratorResult:
     """Evaluate the 0-D stellarator power balance at one operating point.
 
     Single near-axis (Garren-Boozer) geometry (Scheme D).  ``etabar`` [1/m] is
@@ -758,8 +771,18 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     ``Sw_override`` (> 0) override the geometric plasma volume / wall surface
     for measured machines.
     """
+    missing = [k for k, v in {
+        "R0": R0, "N_fp": N_fp, "Sn": Sn, "ST": ST, "ni0": ni0,
+        "Ti0": Ti0, "fT": fT, "fsig": fsig, "f1": f1, "B0": B0,
+        "tauE": tauE, "fHe": fHe, "fimp": fimp, "Zimp": Zimp,
+        "Rw": Rw, "g": g, "icase": icase,
+    }.items() if v is None]
+    if missing:
+        raise ValueError(f"missing required stellarator inputs: {', '.join(missing)}")
+    a = _minor_radius(R0, a, A)
+    icase = int(icase)
     rx = _REACTIONS[icase]
-    _check_inputs(R0, A, N_fp, delta_h, Sn, ST, fT, B0, tauE,
+    _check_inputs(R0, a, N_fp, delta_h, Sn, ST, fT, B0, tauE,
                   f1, fHe, fimp, Zimp, Rw, g, fsig, etabar)
     if iota is not None and iota != 0 and iota < 0:
         raise ValueError(f"explicit iota must be > 0 (got {iota})")
@@ -777,9 +800,11 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     # tauE such that H_ISS04 = H_fac (implicit: tau_ISS04 depends on P_L)
     if tauE == 0:
         def _eval_t(t):
-            return solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0,
-                                     fT, fsig, f1, B0, t, fHe, fimp, Zimp,
-                                     Rw, g, icase, delta_h=delta_h, iota=iota,
+            return solve_stellarator(R0=R0, a=a, N_fp=N_fp, Sn=Sn, ST=ST,
+                                     ni0=ni0, Ti0=Ti0, fT=fT, fsig=fsig,
+                                     f1=f1, B0=B0, tauE=t, fHe=fHe,
+                                     fimp=fimp, Zimp=Zimp, Rw=Rw, g=g,
+                                     icase=icase, delta_h=delta_h, iota=iota,
                                      f_ren=f_ren, etabar=etabar,
                                      imp_name=imp_name, f_aux_e=f_aux_e,
                                      H_fac=H_fac, use_tauE=1.0,
@@ -796,9 +821,11 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     # (docs/30 batch 2; same closure as the tokamak — shared loss structure)
     if fT == 0:
         def _eval(ft):
-            return solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0,
-                                     ft, fsig, f1, B0, tauE, fHe, fimp, Zimp,
-                                     Rw, g, icase, delta_h=delta_h, iota=iota,
+            return solve_stellarator(R0=R0, a=a, N_fp=N_fp, Sn=Sn, ST=ST,
+                                     ni0=ni0, Ti0=Ti0, fT=ft, fsig=fsig,
+                                     f1=f1, B0=B0, tauE=tauE, fHe=fHe,
+                                     fimp=fimp, Zimp=Zimp, Rw=Rw, g=g,
+                                     icase=icase, delta_h=delta_h, iota=iota,
                                      f_ren=f_ren, etabar=etabar,
                                      imp_name=imp_name, f_aux_e=f_aux_e,
                                      H_fac=H_fac, use_tauE=1.0,
@@ -815,20 +842,22 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         return _dc_replace(res, te_mode=1.0 if conv else 0.5, te_resid=r,
                            fT_used=ft, Te0=ft * Ti0)
 
-    a = R0 / A
     # scan-invariant geometry (near-axis solves + exact boundary integral),
     # memoized so a POPCON scan / the tauE recursion computes it ONCE.  The
     # boundary volume/wall is ALWAYS the exact integral of the EXACT boundary the
     # UI draws (shape Fourier for machines, near-axis capped-r2 bean for
     # concepts), so frontend shape and backend power geometry are identical.
-    geom = _stellarator_geometry(R0, A, N_fp, delta_h, etabar, g, rc, zs, shape)
+    geom = _stellarator_geometry(R0, a, N_fp, delta_h, etabar, g, rc, zs, shape)
     L_ax = geom["L_ax"]; iota_geom = geom["iota_geom"]
     helicity = geom["helicity"]; kappa_eff = geom["kappa_eff"]; elong_max = geom["elong_max"]
     Vp_geom = geom["Vp_integ"]; Sw_geom = geom["Sw_integ"]
     Vp = Vp_override if (Vp_override and Vp_override > 0) else Vp_geom
+    a_vol = math.sqrt(Vp / (2 * math.pi**2 * R0))
+    A_flux_eff = Vp / L_ax
     Sp = geom["Sp_integ"]
-    # Sw always from boundary integral — sp<sw by construction
-    Sw = Sw_geom
+    # Sw normally comes from the boundary integral; measured machine presets may
+    # override it for the wall-load account. Sp remains the integral surface.
+    Sw = Sw_override if (Sw_override and Sw_override > 0) else Sw_geom
     # measured machine: Vp AND Sw are measured overrides, so the near-axis
     # diagnostics (iota_geom/kappa_eff/elong_max) are estimates only; flag it.
     # Vp_geom/Sw_geom are reported as the (exact-integral or near-axis) geometry
@@ -867,7 +896,7 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     Pfus = rx["Y"] / (1 + d12) * n10 * n20 * Phi * Vp * 1e-6
     Pn = Pfus * (1 - rx["fion"])
 
-    # --- radiation (identical to funsc; a = area-equivalent radius) ---
+    # --- radiation (identical to funsc; a_vol = volume-equivalent radius) ---
     # NB grouping follows the JS/golden reference (tokamak.py): Zeff multiplies
     # only the leading e-i term; MATLAB groups the relativistic corrections
     # inside Zeff (~1% at Zeff~2) — documented in docs/27.
@@ -880,7 +909,7 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     neff = ne0 / 1e20 / (1 + Sn)
     Teff = Te0 * float(np.sum((1 - x**2) ** ST)) * dx
     Pcycl = (4.14e-7 * neff**0.5 * Teff**2.5 * B0**2.5 * (1 - Rw)**0.5
-             * a**-0.5 * (1 + 2.5 * Teff / 511) * Vp)
+             * a_vol**-0.5 * (1 + 2.5 * Teff / 511) * Vp)
 
     # --- impurity line radiation (Mavrin; opt-in, docs/30 P1-2) ---
     P_line = line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx)
@@ -902,10 +931,10 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
     # --- stellarator closure: ISS04 + Sudo (verified docs/23) ---
     PL = rx["fion"] * Pfus + Pheat
     if PL > 0:
-        tau_ISS04 = (0.134 * f_ren * a**2.28 * R0**0.64 * PL**-0.61
+        tau_ISS04 = (0.134 * f_ren * a_vol**2.28 * R0**0.64 * PL**-0.61
                      * (nbar / 1e19)**0.54 * B0**0.84 * iota_used**0.41)
         H_ISS04 = tauE / tau_ISS04
-        n_Sudo = 0.25 * math.sqrt(PL * B0 / (a**2 * R0)) * 1e20
+        n_Sudo = 0.25 * math.sqrt(PL * B0 / (a_vol**2 * R0)) * 1e20
         nbar_o_Sudo = nbar / n_Sudo
     else:
         # losses fully covered without external+alpha heating: outside the
@@ -926,7 +955,8 @@ def solve_stellarator(R0, A, N_fp, Sn, ST, ni0, Ti0, fT, fsig, f1,
         nbar_o_Sudo=nbar_o_Sudo, Pbrem=Pbrem, Pcycl=Pcycl, Ptrans=Pth, Vp=Vp,
         iota=iota_used, iota_geom=iota_geom, helicity=helicity, L_ax=L_ax,
         kappa_eff=kappa_eff, elong_max=elong_max, tau_ISS04=tau_ISS04,
-        Sp=Sp, Sw=Sw, A_flux=geom["A_flux"], C_sec_mean=geom["C_sec_mean"],
+        Sp=Sp, Sw=Sw, A_flux=A_flux_eff, a_vol=a_vol,
+        C_sec_mean=geom["C_sec_mean"],
         C_wall_mean=geom["C_wall_mean"], Vp_geom=Vp_geom_report,
         Sp_geom=geom["Sp_geom"], Sw_geom=Sw_geom_report,
         geom_is_measured=geom_is_measured,

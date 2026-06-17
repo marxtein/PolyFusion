@@ -12,6 +12,7 @@
 \newcommand{\Sp}{S_\mathrm{p}}
 \newcommand{\Aflux}{A_\mathrm{flux}}
 \newcommand{\Lax}{L_\mathrm{ax}}
+\newcommand{\nfp}{N_\mathrm{fp}}
 \newcommand{\Pfus}{P_\mathrm{fus}}
 \newcommand{\Pbrem}{P_\mathrm{brem}}
 \newcommand{\Pcycl}{P_\mathrm{cycl}}
@@ -29,18 +30,18 @@
 \maketitle
 
 \begin{abstract}
-本报告说明 PolyFusion 0-D 程序里仿星器的几何\textbf{当前到底怎么实现}，以及这套几何\textbf{以哪些量、按什么幂次进入功率账}。核心结论：功率公式只含一组\textbf{标量} $a,R_0,\Vp,\Sw,\Sp,\Lax,\iotabar$（没有显式"形状"项），\textbf{但} $\Vp,\Sw,\Sp$ 是\textbf{前端所画 $\rho{=}1$ 边界的精确积分}（\texttt{boundary\_metrics} 同一调用产出，$\Sp<\Sw$ 由构造保证）。$\Vp$ 可用实测覆写，$\Sw$ 和 $\Sp$ 不独立覆写。真正纯装饰、不进功率的只有\textbf{内面嵌套画法与相位帧}。
+本报告说明 PolyFusion 0-D 程序里仿星器的几何\textbf{当前到底怎么实现}，以及这套几何\textbf{以哪些量、按什么幂次进入功率账}。核心结论：功率公式只含一组\textbf{标量} $a_\mathrm{vol},R_0,\Vp,\Sw,\Sp,\Lax,\iotabar$（没有显式"形状"项），\textbf{但} $\Vp,\Sw,\Sp$ 是\textbf{前端所画 $\rho{=}1$ 边界的精确积分}（\texttt{boundary\_metrics} 同一调用产出，$\Sp<\Sw$ 由构造保证）。$\Vp$ 和 $\Sw$ 可用实测覆写，$\Sp$ 始终来自边界积分。真正纯装饰、不进功率的只有\textbf{内面嵌套画法与相位帧}。
 \end{abstract}
 
 \section{几何怎么进功率：一条边界，两个用途}
 
 \paragraph{(A) 功率账几何（后端，真正进功率）。}
-功率公式只需要一小组\textbf{标量}：等离子体体积 $\Vp$、等离子体表面积 $\Sp$、第一壁面积 $\Sw$、面积等效小半径 $a$、大半径 $R_0$、磁轴长 $\Lax$、旋转变换 $\iotabar$。\textbf{注意}：$\Vp,\Sw,\Sp$ 不是解析定值，而是\textbf{对前端所画 $\rho{=}1$ 边界做精确环向积分}得到的（\S\ref{sec:power} 的 \texttt{boundary\_metrics}，三者同一调用中产出）。$\Sp$ 和 $\Sw$ 积自同一条边界（$\Sp$ 不加壁间隙、$\Sw$ 加 $g$ 外扩），因此 $\Sp<\Sw$ 由构造保证。边界形状确实经 $\Vp,\Sw,\Sp$ 进功率。真机 $V_p$ 可用实测覆写替换，$\Sw$ 和 $\Sp$ 不再独立覆写，始终由边界积分保持一致。
+功率公式只需要一小组\textbf{标量}：等离子体体积 $\Vp$、等离子体表面积 $\Sp$、第一壁面积 $\Sw$、体积等效小半径 $a_\mathrm{vol}$、大半径 $R_0$、磁轴长 $\Lax$、旋转变换 $\iotabar$。\textbf{注意}：$\Vp,\Sw,\Sp$ 不是解析定值，而是\textbf{对前端所画 $\rho{=}1$ 边界做精确环向积分}得到的（\S\ref{sec:power} 的 \texttt{boundary\_metrics}，三者同一调用中产出）。$\Sp$ 和 $\Sw^{\mathrm{geom}}$ 积自同一条边界（$\Sp$ 不加壁间隙、$\Sw^{\mathrm{geom}}$ 加 $g$ 外扩），因此 $\Sp<\Sw^{\mathrm{geom}}$ 由构造保证。边界形状确实经 $\Vp,\Sw,\Sp$ 进功率。真机 $V_p$ 与 $\Sw$ 可用实测覆写替换；$\Sp$ 始终由边界积分给出。
 
 \paragraph{(B) 截面视图几何（前端）。}
 UI 在 $\varphi=0,\,T/4,\,T/2$ 切面画磁面截面 + 壁层 + 连续相位扫描。其中 $\rho{=}1$ \textbf{外边界}就是 (A) 积分的同一条曲线（前后端一致）；真正\textbf{纯装饰、不进功率}的是\textbf{内面嵌套画法}（$\rho^{1.5}$ 衰减）\textbf{与相位帧}——它们不改 $\rho{=}1$ 边界，故不影响 $\Vp/\Sw$。
 
-二者的绑定：\textbf{视图 $\rho{=}1$ 边界 $=$ 功率几何的积分边界}，且其一阶截面面积 $=\Aflux=\pi a^2$（见 \S\ref{sec:consistency}）。
+二者的绑定：\textbf{视图 $\rho{=}1$ 边界 $=$ 功率几何的积分边界}。一阶截面面积诊断为 $\pi a^2$；求解器输出的有效截面积为 $\Aflux=\Vp/\Lax$（见 \S\ref{sec:consistency}）。
 
 \section{UI 几何面板：每个输入参数干什么}\label{sec:inputs}
 
@@ -52,22 +53,22 @@ UI「几何」面板的输入与它们进入几何/功率的方式如下表，�
 \toprule
 输入 & 含义 & 作用（进入哪里）\\
 \midrule
-$R_0$ & 大半径 [m] & 磁轴平均大半径；定 $a=R_0/A$；进 ISS04（$R_0^{0.64}$）与 Sudo 限 \\
-$A$ & 环径比 & 唯一定小半径 $a=R_0/A$ \\
+$R_0$ & 大半径 [m] & 磁轴平均大半径；与 $a$ 一起定几何尺度；进 ISS04（$R_0^{0.64}$）与 Sudo 限 \\
+$a$ & 小半径 [m] & 直接输入的几何小半径；缩放近轴截面或真机边界 Fourier \\
 $N_\mathrm{fp}$ & 场周期数 & 磁轴/边界的环向周期数；切面间距 $2\pi/N_\mathrm{fp}$；定 helicity \\
 $\delta_h$ & 轴螺旋偏移 [m] & 默认螺旋轴的偏移幅度；改 $\Lax$、曲率/扭率$\to\iotabar_\mathrm{geom}$、拉长比 \\
 $\bar\eta$ & 近轴形参 [1/m] & 一阶近轴塑形量（$\ne0$ 必填）；定截面拉长比（导出量）；概念堆驱动几何，真机仅驱动显示 \\
 $g$ & 壁间隙 [m] & 壁 $=$ 边界外扩 $g$；定壁周长$\to\Sw$（概念堆） \\
 $rc,zs$ & 自定义轴傅里叶 & 覆写默认螺旋轴，给任意三维 Fourier 磁轴 \\
 \texttt{shape.R/Z} & 真机边界傅里叶 & W7-X/LHD/HSX/CFQS 的二维边界面谐波，格式为 $[m,n,c]$ 三元组；不同于 $rc/zs$ 磁轴 Fourier \\
-$\Vp^{*}$ & 体积实测覆写 [m$^3$] & $>0$ 时\textbf{直接替换} $\Vp$（真机）；$\Sw$ 和 $\Sp$ 始终由边界积分给出，不独立覆写 \\
-$\Sw$（诊断） & 壁面积（预设中的 $\Sw^\mathrm{override}$）& 不进功率——仅作诊断对比：边界积分 $\Sw$ vs 预设覆写 \\
+$\Vp^{*}$ & 体积实测覆写 [m$^3$] & $>0$ 时\textbf{直接替换} $\Vp$（真机），并改变 $a_\mathrm{vol}$ \\
+$\Sw^{*}$ & 壁面积实测覆写 [m$^2$] & $>0$ 时\textbf{直接替换} $\Sw$，进入 $\Pwall=(\Pfus+\Pheat)/\Sw$；$\Sw^{\mathrm{geom}}$ 仍报告边界积分估计 \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \paragraph{三类使用者。}
-UI 上有三种几何入口，但代码只有两条几何主路径。初学者/概念设计者用 $R_0,A,n_\mathrm{fp},\delta_h,\bar\eta$，程序自动生成默认螺旋磁轴并走近轴 r2；pyQSC / near-axis 用户用 $rc/zs+\bar\eta$ 给显式\textbf{磁轴} Fourier，仍走同一近轴 r2；DESC/VMEC 边界用户和真机预设用 \texttt{shape.R/Z} 的 $[m,n,c]$ 三元组给\textbf{边界面} Fourier，走真机边界路径。因此 precise-QA 的 $rc/zs$ 与 W7-X 的 \texttt{shape.R/Z} 不是同一类参数，前者是一条轴，后者是一张边界面。前端几何组顶部提供三档模式开关，选定后只显示该路径需要编辑的几何参数：默认近轴隐藏 $rc/zs$ 与真机覆写；磁轴 Fourier 隐藏 $\delta_h$ 与真机覆写；边界 Fourier 隐藏 $\delta_h,\bar\eta$，显示边界 $R/Z$ 与 $\iotabar,\Vp^*,\Sw^*$。
+UI 上有三种几何入口，但代码只有两条几何主路径。初学者/概念设计者用 $R_0,a,n_\mathrm{fp},\delta_h,\bar\eta$，程序自动生成默认螺旋磁轴并走近轴 r2；pyQSC / near-axis 用户用 $rc/zs+\bar\eta$ 给显式\textbf{磁轴} Fourier，仍走同一近轴 r2；DESC/VMEC 边界用户和真机预设用 \texttt{shape.R/Z} 的 $[m,n,c]$ 三元组给\textbf{边界面} Fourier，走真机边界路径。因此 precise-QA 的 $rc/zs$ 与 W7-X 的 \texttt{shape.R/Z} 不是同一类参数，前者是一条轴，后者是一张边界面。前端几何组顶部提供三档模式开关，选定后只显示该路径需要编辑的几何参数：默认近轴隐藏 $rc/zs$ 与真机覆写；磁轴 Fourier 隐藏 $\delta_h$ 与真机覆写；边界 Fourier 隐藏 $\delta_h,\bar\eta$，显示边界 $R/Z$ 与 $\iotabar,\Vp^*,\Sw^*$。
 
 \paragraph{磁轴怎么定（$R_0,\delta_h,N_\mathrm{fp},rc,zs$）。}
 默认磁轴是一条螺旋闭曲线
@@ -93,15 +94,15 @@ e=\frac{p+\sqrt{p^2-4}}{2},\quad p=X_{1c}^2+Y_{1s}^2+Y_{1c}^2,
 随 $\bar\eta$ 减小而增大（量级 $\sim(\kappa/\bar\eta)^2$）。故 $\bar\eta$ 太小给针状截面——真机预设的 $\bar\eta$ 仅为显示挑选，几何由实测覆写决定。
 
 \paragraph{$g,\Vp^{*}$。}
-壁层 $=$ 边界沿外法向外扩 $g$；$\Sw$ 和 $\Sp$ 均取该边界的精确环向积分（$\Sp$ 不加 $g$、$\Sw$ 加 $g$），三者在 \texttt{boundary\_metrics} 同一调用中产出，$\Sp<\Sw$ 由构造保证。真机给 $\Vp^{*}$（$>0$）后\textbf{直接替换} $\Vp$ 进功率账；$\Sw$ 和 $\Sp$ 不独立覆写。预设中的 $\Sw^\mathrm{override}$ 仅作诊断对照，不进功率。
+壁层 $=$ 边界沿外法向外扩 $g$；$\Sw^{\mathrm{geom}}$ 和 $\Sp$ 均取该边界的精确环向积分（$\Sp$ 不加 $g$、$\Sw^{\mathrm{geom}}$ 加 $g$），三者在 \texttt{boundary\_metrics} 同一调用中产出，$\Sp<\Sw^{\mathrm{geom}}$ 由构造保证。真机给 $\Vp^{*}$ 或 $\Sw^{*}$（$>0$）后分别\textbf{直接替换} $\Vp$、$\Sw$ 进功率账；$\Sp$ 不独立覆写。
 
 \section{功率账几何怎么取（后端）}\label{sec:backend}
 
 固定关系：
 \begin{equation}
-a = \frac{R_0}{A},\qquad \Aflux = \pi a^2 ,
+\Aflux^{(0)} = \pi a^2,\qquad \Aflux = \Vp/\Lax,\qquad a_\mathrm{vol}=\sqrt{\Vp/(2\pi^2R_0)} ,
 \end{equation}
-其中 $A$ 是环径比（aspect ratio）输入。$\Aflux$ 取\textbf{一阶近轴的通量守恒截面积}：一阶近轴椭圆拉长比 $\kappa$ 与 $1/\kappa$ 相乘抵消，面积恒为 $\pi a^2$（面积守恒），所以\textbf{拉长比不改体积}。
+其中 $a$ 是直接输入的几何小半径。$\Aflux^{(0)}=\pi a^2$ 是一阶近轴的通量守恒截面积诊断；求解器输出的 $\Aflux$ 为有效截面积 $\Vp/\Lax$，并用 $a_\mathrm{vol}$ 进入经验闭合。
 
 体积/壁面统一用边界积分（概念堆与真机同一条路）：
 \begin{itemize}
@@ -111,7 +112,7 @@ a = \frac{R_0}{A},\qquad \Aflux = \pi a^2 ,
     \mathcal{A} = \oint\!\!\int\big|\partial_\theta \bm P\times\partial_\varphi \bm P\big|\,d\theta\,d\varphi\times\nfp,
   \end{equation}
   $\Sw$ 用壁外扩后的边界算面积分（$+g$），$\Sp$ 用原始等离子体边界（不加 $g$），三者在 \texttt{boundary\_metrics} 同一调用中产出，$\Sp<\Sw$ 由构造保证。比解析 Pappus 估计 $\pi a^2\Lax$ 低约 $2$--$6\%$（bean/曲率修正）。
-\item 真机新增规则：$V_p$ 可用实测覆写 $V_p^\mathrm{override}$（$>0$）替换；$\Sw$ 和 $\Sp$ 不独立覆写，始终由边界积分保持一致。预设中的 $\Sw^\mathrm{override}$ 仅作诊断对照。
+\item 真机规则：$V_p$ 与 $\Sw$ 可分别用实测覆写 $V_p^\mathrm{override}$、$\Sw^\mathrm{override}$（$>0$）替换；$\Sp$ 始终由边界积分给出。$\Vp^{\mathrm{geom}}/\Sw^{\mathrm{geom}}$ 保留为截断边界的诊断估计。
 \end{itemize}
 
 \section{几何怎么进功率账（哪个量、什么幂次）}\label{sec:power}
@@ -131,11 +132,11 @@ a = \frac{R_0}{A},\qquad \Aflux = \pi a^2 ,
 聚变功率 & $\Pfus \propto n_{10}n_{20}\,\Phi\,\Vp$ & $\propto \Vp$（体积积分权重）\\
 中子功率 & $P_n=\Pfus(1-f_\mathrm{ion})$ & 经 $\Pfus$ 经 $\Vp$ \\
 轫致辐射 & $\Pbrem \propto n_e^2\sqrt{T_e}\,\Vp$ & $\propto \Vp$ \\
-回旋辐射 & $\Pcycl \propto B_0^{2.5}\,a^{-0.5}\,\Vp$ & $\propto \Vp\,a^{-1/2}$ \\
+回旋辐射 & $\Pcycl \propto B_0^{2.5}\,a_\mathrm{vol}^{-0.5}\,\Vp$ & $\propto \Vp\,a_\mathrm{vol}^{-1/2}$ \\
 储能/输运 & $\Eth \propto (n_iT_i+n_eT_e)\,\Vp$,\ \ $P_\mathrm{tr}=\Eth/\tau_E$ & $\propto \Vp$ \\
 第一壁负荷 & $\Pwall = (\Pfus+\Pheat)/\Sw$ & $\propto 1/\Sw$ \\
-ISS04 约束 & $\tau_\mathrm{ISS04}\propto a^{2.28}R_0^{0.64}P_L^{-0.61}\bar{n}^{0.54}B_0^{0.84}\iotabar^{0.41}$ & $a,R_0,\iotabar$ \\
-Sudo 密度限 & $n_\mathrm{Sudo}=0.25\sqrt{P_L B_0/(a^2R_0)}\cdot10^{20}$ & $a,R_0$ \\
+ISS04 约束 & $\tau_\mathrm{ISS04}\propto a_\mathrm{vol}^{2.28}R_0^{0.64}P_L^{-0.61}\bar{n}^{0.54}B_0^{0.84}\iotabar^{0.41}$ & $a_\mathrm{vol},R_0,\iotabar$ \\
+Sudo 密度限 & $n_\mathrm{Sudo}=0.25\sqrt{P_L B_0/(a_\mathrm{vol}^2R_0)}\cdot10^{20}$ & $a_\mathrm{vol},R_0$ \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -143,9 +144,9 @@ Sudo 密度限 & $n_\mathrm{Sudo}=0.25\sqrt{P_L B_0/(a^2R_0)}\cdot10^{20}$ & $a,
 要点：
 \begin{itemize}
 \item \textbf{体积 $\Vp$ 是最强权重}：$\Pfus,\Pbrem,\Pcycl,\Eth$ 全部线性正比于 $\Vp$。真机用实测 $\Vp$，所以聚变/辐射功率锚在实测体积上。
-\item \textbf{$\Sw$ 只进壁负荷}：$\Pwall=(\Pfus+\Pheat)/\Sw$。$\Sw$ 和 $\Sp$ 均来自边界积分（同一调用，$\Sp<\Sw$ 由构造保证），不再独立覆写。真机的 $\Sw^\mathrm{override}$ 仅作诊断对照。
-\item \textbf{$a,R_0,\iotabar$ 进约束闭合}：ISS04 约束时间与 Sudo 密度限。$\iotabar$ 仅在此以 $0.41$ 次幂出现；真机用实测 $\iotabar$。
-\item \textbf{边界形状经 $\Vp/\Sw/\Sp$ 进功率}：功率公式无显式形状项，但 $\Vp,\Sw,\Sp$ 是\textbf{所画边界的精确积分}，三者同一调用中产出。改边界形状会经它们改 $\Pfus,\Pbrem,\Pcycl,\Eth,\Pwall$。真机 $V_p$ 可用实测覆写替代，$\Sw,\Sp$ 始终由边界积分保持几何自洽。
+\item \textbf{$\Sw$ 只进壁负荷}：$\Pwall=(\Pfus+\Pheat)/\Sw$。概念堆 $\Sw$ 来自边界积分；真机 $\Sw^\mathrm{override}>0$ 时直接替换壁面积，$\Sw^{\mathrm{geom}}$ 仍作为边界积分诊断。
+\item \textbf{$a_\mathrm{vol},R_0,\iotabar$ 进约束闭合}：ISS04 约束时间与 Sudo 密度限。$\iotabar$ 仅在此以 $0.41$ 次幂出现；真机用实测 $\iotabar$。
+\item \textbf{边界形状经 $\Vp/\Sw/\Sp$ 进功率}：功率公式无显式形状项，但 $\Vp,\Sw,\Sp$ 是\textbf{所画边界的精确积分}，三者同一调用中产出。改边界形状会经它们改 $\Pfus,\Pbrem,\Pcycl,\Eth,\Pwall$。真机 $V_p$ 与 $\Sw$ 可用实测覆写替代，$\Sp$ 始终由边界积分给出。
 \end{itemize}
 
 \section{截面视图怎么画（前端）}\label{sec:view}
@@ -181,7 +182,7 @@ S(\rho)=\text{axis}+\rho\,(\text{低阶体})+\rho^{1.5}\,(\text{高阶塑形}),
 \renewcommand{\arraystretch}{1.25}
 \begin{tabular}{@{}lcccc@{}}
 \toprule
-预设 & $a$ & $\Aflux=\pi a^2$ & 前端截面面积 & 比值 \\
+预设 & $a$ & $\Aflux^{(0)}=\pi a^2$ & 前端截面面积 & 比值 \\
 \midrule
 HELIAS / NAE-QA & 1.80 & 10.18 & 10.1 & 0.99–1.00 \\
 W7-X & 0.55 & 0.950 & 0.946 & 1.00 \\
@@ -193,7 +194,7 @@ CFQS & 0.25 & 0.196 & 0.196 & 1.00 \\
 \end{center}
 
 \begin{itemize}
-\item \textbf{核心一致}：前端 $a,R_0,n_\mathrm{fp}$ $=$ 后端；\textbf{前端截面面积 $=$ 后端 $\Aflux=\pi a^2$（$\le1\%$，全部预设）}。真机谐波按原生小半径归一化使面积恒为 $\pi a^2$。
+\item \textbf{核心一致}：前端 $a,R_0,n_\mathrm{fp}$ $=$ 后端；一阶截面积诊断为 $\pi a^2$，求解器输出有效 $\Aflux=\Vp/\Lax$。真机谐波按原生小半径归一化，边界积分估计另以 $\Vp^{\mathrm{geom}}/\Sw^{\mathrm{geom}}$ 上报。
 \item \textbf{概念堆}：前端所画近轴边界与后端积分为\textbf{同一条曲线}，体积/壁面\textbf{恒等一致}（数值核对 $<10^{-6}$）；该精确积分比解析 Pappus 估计 $\pi a^2\Lax$ 低约 $2$–$6\%$（bean/曲率修正）。
 \item \textbf{新增近轴 QS 预设}（precise-QA/precise-QH/QH-nfp3）：取自公开近轴准对称库（pyQSC / Landreman--Paul 2022），由近轴展开\textbf{定义}，故本求解器\textbf{原生精确}复现其发表的轴上旋转变换（$\iota$：QA $0.42$、QH $1.24$、QH-nfp3 $1.25$），非代理。作为概念堆存储（显式 $rc/zs$ 缩放到 $R_0$、$\bar\eta=|\bar\eta_\mathrm{pub}|/R_0$，无覆写）。真机则需 DESC 双 Fourier 边界谐波（离线 DESC 管线），本环境不可复现，故未新增真机预设。
 \item \textbf{真机}：功率账用实测 $\Vp/\Sw$；前端真实形状的几何体积/壁面在其 $\sim10$–$25\%$ 内（W7-X $32.7$ vs $30$；$\Sw$ $141$ vs $128$），实测值为准。

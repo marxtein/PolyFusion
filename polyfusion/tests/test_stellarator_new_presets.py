@@ -30,7 +30,7 @@ def ok(cond, msg):
     PASS = PASS and cond
 
 
-SOLVE_KEYS = ["R0", "A", "N_fp", "Sn", "ST", "ni0", "Ti0", "fT", "fsig", "f1",
+SOLVE_KEYS = ["R0", "a", "A", "N_fp", "Sn", "ST", "ni0", "Ti0", "fT", "fsig", "f1",
               "B0", "tauE", "fHe", "fimp", "Zimp", "Rw", "g", "icase", "delta_h",
               "iota", "f_ren", "etabar", "f_aux_e", "H_fac", "use_tauE",
               "rc", "zs", "Vp_override", "Sw_override"]

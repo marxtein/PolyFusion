@@ -30,12 +30,12 @@ _MIRROR_PARAMS = ["use_tauE", "a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "
                   "Sn", "ST", "g", "fsig", "f_throat", "f_alpha", "B_expand", "Rw",
                   "icase", "f1", "fHe", "fimp", "Zimp", "phi_i_over_Te", "lnLambda",
                   "imp_name"]
-_FRC_PARAMS = ["use_tauE", "geom_weighted", "r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "f_shape", "fsig", "Rw",
+_FRC_PARAMS = ["use_tauE", "geom_weighted", "sep_model", "m", "r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "f_shape", "fsig", "Rw",
                "icase", "f1", "fHe", "fimp", "Zimp", "imp_name"]
 _DIPOLE_PARAMS = ["use_tauE", "r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
                   "L_in_fac", "fsig", "icase", "f1", "fHe", "fimp", "Zimp", "Rw",
                   "ring_model", "imp_name"]
-_STELL_PARAMS = ["use_tauE", "R0", "A", "N_fp", "delta_h", "etabar", "Sn", "ST",
+_STELL_PARAMS = ["use_tauE", "R0", "a", "N_fp", "delta_h", "etabar", "Sn", "ST",
                  "ni0", "Ti0", "fT", "fsig", "f1", "B0", "iota", "tauE", "fHe",
                  "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name",
                  "H_fac", "rc", "zs", "Vp_override", "Sw_override", "shape"]
@@ -284,6 +284,13 @@ def _frc_cross(p: dict) -> list[str]:
     if r_s is not None and r_w is not None and r_s >= r_w:
         errors.append(f"need r_s < r_w (got r_s={r_s}, r_w={r_w}): "
                       "separatrix must sit inside the wall (x_s < 1)")
+    sep_model = p.get("sep_model")
+    if sep_model is not None and sep_model not in ("superellipse", "mrr"):
+        errors.append(f"sep_model must be 'superellipse' or 'mrr' (got {sep_model!r})")
+    m, f_shape = _num(p, "m"), _num(p, "f_shape")
+    if m is not None and f_shape is not None and abs(m / (m + 1.0) - f_shape) > 1e-6:
+        errors.append(f"inconsistent m and f_shape: m={m} implies "
+                      f"f_shape={m / (m + 1.0):.6f}, but f_shape={f_shape} given")
     if _uses_tauE(p):
         tauE = _num(p, "tauE")
         if tauE is not None and tauE <= 0:
@@ -374,7 +381,7 @@ FRC = ConfigSpec(
     required=["r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "icase"],
     positive=["r_s", "l_s", "r_w", "B_e", "Ti", "Te", "Zimp"],
     bounds={**_COMMON_BOUNDS, "use_tauE": (0.0, 1.0),
-            "geom_weighted": (0.0, 1.0),
+            "geom_weighted": (0.0, 1.0), "m": (2.0, None),
             "tauE": (0.0, None), "f_shape": (2.0 / 3.0 - 1e-9, 1.0)},
     cross=_frc_cross,
     presets=FRC_PRESETS,
@@ -415,7 +422,7 @@ STELLARATOR = ConfigSpec(
     required=[p for p in _STELL_PARAMS
               if p not in ("f_ren", "iota", "delta_h", "imp_name", "H_fac",
                             "rc", "zs", "Vp_override", "Sw_override", "shape")],
-    positive=["R0", "A", "N_fp", "ni0", "Ti0", "B0",
+    positive=["R0", "a", "N_fp", "ni0", "Ti0", "B0",
               "Zimp", "f_ren"],
     bounds={**_COMMON_BOUNDS, "delta_h": (0.0, None), "N_fp": (1.0, None),
             "fT": (0.0, None), "tauE": (0.0, None), "use_tauE": (0.0, 1.0),
@@ -449,6 +456,9 @@ for _p in FRC_PRESETS.values():
     _p.setdefault("use_tauE", 1.0)
     _p.setdefault("geom_weighted", 0.0)
 for _p in STELL_PRESETS.values():
+    if "a" not in _p and "A" in _p and "R0" in _p:
+        _p["a"] = _p["R0"] / _p["A"]
+    _p.pop("A", None)
     _p.setdefault("use_tauE", 1.0)
     _p.setdefault("f_aux_e", 0.5)
     _p.setdefault("H_fac", 1.0)

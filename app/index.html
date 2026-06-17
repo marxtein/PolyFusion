@@ -51,9 +51,12 @@
   .cfg .ic{width:20px;height:20px;flex:0 0 20px;opacity:.7}
   .cfg.on{color:var(--ink);background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:var(--amber);box-shadow:var(--glow);font-weight:700}
   .cfg.on .ic *{stroke:var(--ink)!important}.cfg:nth-child(5){grid-column:1/-1}
-  select,input{width:100%;padding:7px 9px;background:var(--ink2);color:var(--fg);border:1px solid var(--line2);
+  select,input,textarea{width:100%;padding:7px 9px;background:var(--ink2);color:var(--fg);border:1px solid var(--line2);
     border-radius:6px;font:13px/1.2 "JetBrains Mono",monospace;transition:.15s;outline:none}
-  select:focus,input:focus{border-color:var(--amber);box-shadow:0 0 0 1px rgba(255,176,46,.25)}select{cursor:pointer}
+  select:focus,input:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 1px rgba(255,176,46,.25)}select{cursor:pointer}
+  textarea{min-height:104px;max-height:180px;resize:vertical;line-height:1.35;white-space:pre;overflow:auto;color:#dfe7f5;background:linear-gradient(180deg,#0a0f18,#080c14);box-shadow:inset 0 1px 0 rgba(255,255,255,.025),inset 0 0 0 1px rgba(8,11,18,.35);scrollbar-color:var(--line2) transparent}
+  textarea::-webkit-scrollbar{width:8px;height:8px}textarea::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}textarea::-webkit-scrollbar-corner{background:transparent}
+  textarea.fourierbox{font-size:12px;letter-spacing:0;border-color:#21304a;background-image:linear-gradient(180deg,rgba(14,19,32,.98),rgba(8,12,20,.98))}
   .grp-h{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin:12px 0 6px;
     padding-bottom:3px;border-bottom:1px dashed var(--line2);opacity:.85;display:flex;justify-content:space-between}
   .grp-h .a0{color:var(--amber);font-family:"JetBrains Mono";text-transform:none;font-size:11.5px}
@@ -63,6 +66,9 @@
   .advbar{margin-bottom:8px}
   .advbtn{width:100%;text-align:left;font-size:11px;color:var(--mut);background:var(--ink2);border:1px dashed var(--line2);border-radius:6px;padding:5px 9px;cursor:pointer}
   .advbtn:hover{border-color:var(--teal);color:var(--fg)}.advbtn.on{border-style:solid;border-color:var(--teal);color:var(--teal)}
+  .modefld{grid-column:1/-1}.modebar{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+  .modebtn{min-width:0;padding:6px 4px;border:1px solid var(--line2);border-radius:6px;background:var(--ink2);color:var(--mut);font:11px/1.15 "Chakra Petch",sans-serif;cursor:pointer}
+  .modebtn:hover{border-color:var(--teal);color:var(--fg)}.modebtn.on{border-color:var(--teal);color:var(--teal);background:rgba(54,226,196,.1);font-weight:700}
   .fld label{font-size:12px;color:var(--mut);margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help;display:flex;align-items:baseline;gap:6px}
   .fld label .nm{font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
   .fld label .u{color:var(--dim);font-size:10.5px;flex:0 0 auto}.fld.full{grid-column:1/-1}
@@ -182,8 +188,9 @@ const RX={1:'D-T',2:'D-D',3:'D-³He',4:'p-¹¹B(Nevins)',5:'p-¹¹B(Sikora)',6:'
 const META={
   use_tauE:['使用输入 τE (关闭=自洽损失)','use input tauE (off = self-consistent losses)','','conf','τ<sub>E</sub>'],
   geom_weighted:['FRC 有限长度几何加权','FRC finite-length geometry weighting','','geo','geom'],
+  sep_model:['FRC 分离面几何模型','FRC separatrix geometry model','','geo','sep'],
   icase:['反应类型','Reaction','','rx',''],
-  R0:['大半径','major radius','m','geo','R<sub>0</sub>'],A:['环径比','aspect ratio','','geo','A'],kappa:['拉长比','elongation','','geo','κ'],
+  R0:['大半径','major radius','m','geo','R<sub>0</sub>'],A:['环径比','aspect ratio','','geo','A'],a:['小半径','minor radius','m','geo','a'],kappa:['拉长比','elongation','','geo','κ'],
   delta:['三角形变','triangularity','','geo','δ'],g:['壁间隙','wall gap','m','geo','g'],
   a_c:['等离子体半径','plasma radius','m','geo','a<sub>c</sub>'],L_c:['中心室长','cell length','m','geo','L<sub>c</sub>'],R_mirror:['镜比','mirror ratio','','geo','R<sub>m</sub>'],
   r_s:['分离面半径','separatrix radius','m','geo','r<sub>s</sub>'],l_s:['分离面长','separatrix length','m','geo','l<sub>s</sub>'],r_w:['壁半径','wall radius','m','geo','r<sub>w</sub>'],
@@ -226,8 +233,8 @@ const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub
   beta_in:'β<sub>in</sub>',beta_out:'β<sub>out</sub>',U_ratio:'U<sub>out</sub>/U<sub>in</sub>',p_slope:'dlnp/dlnL',B_in:'B<sub>in</sub>',B_out:'B<sub>out</sub>',L_in:'L<sub>in</sub>',P_coll_flux:'q<sub>coll</sub>',P_alpha_loss:'P<sub>α,loss</sub>',Past_domain:'Past⊂dom',flux_p:'Φ<sub>p</sub>',K_rr:'K',A_throat:'A<sub>th</sub>',P_end_flux:'q<sub>end</sub>',iota_geom:'ι<sub>geom</sub>',L_ax:'L<sub>ax</sub>',N_fp:'N<sub>fp</sub>',tau_ISS04:'τ<sub>ISS04</sub>',lambda_ii:'λ<sub>ii</sub>',beta_avg:'⟨β⟩',beta_null:'β<sub>null</sub>',beta_o_limit:'β/β<sub>lim</sub>',betap:'β<sub>p</sub>',q:'q',nbar_o_nGw:'n̄/n<sub>Gw</sub>',
   nbar_o_Sudo:'n̄/n<sub>Sudo</sub>',x_s:'x<sub>s</sub>',s_param:'s',elongation:'ε',R_mc:'R<sub>mc</sub>',ne0:'n<sub>e0</sub>',
   ni0:'n<sub>i0</sub>',Vp:'V<sub>p</sub>',Zeff:'Z<sub>eff</sub>',M:'M',B0:'B<sub>0</sub>',B_int:'B<sub>int</sub>',
-  G1:'G<sub>1</sub>',G2:'G<sub>2</sub>',GB:'G<sub>B</sub>',p_shape:'p<sub>shape</sub>',f_shape_calc:'f<sub>V,calc</sub>',geom_weighted:'geom',
-  A_flux:'A<sub>flux</sub>',C_sec_mean:'C<sub>sec</sub>',C_wall_mean:'C<sub>wall</sub>',Vp_geom:'V<sub>geom</sub>',Sp_geom:'S<sub>p,geom</sub>',Sw_geom:'S<sub>w,geom</sub>',
+  G1:'G<sub>1</sub>',G2:'G<sub>2</sub>',GB:'G<sub>B</sub>',p_shape:'p<sub>shape</sub>',f_shape_calc:'f<sub>V,calc</sub>',geom_weighted:'geom',m_shape:'m',sep_model:'sep',
+  A_flux:'A<sub>flux</sub>',a_vol:'a<sub>vol</sub>',C_sec_mean:'C<sub>sec</sub>',C_wall_mean:'C<sub>wall</sub>',Vp_geom:'V<sub>geom</sub>',Sp_geom:'S<sub>p,geom</sub>',Sw_geom:'S<sub>w,geom</sub>',
   phi_i:'φ<sub>i</sub>',phi_e:'φ<sub>e</sub>',fTavg:'f<sub>T,avg</sub>',fnavg:'f<sub>n,avg</sub>',Sp:'S<sub>p</sub>',Sw:'S<sub>w</sub>',iota:'ι',
   Qfus_raw:'Q<sub>raw</sub>',ignited:'ignited',valid:'valid',kappa_eff:'κ<sub>eff</sub>',elong_max:'e<sub>max</sub>',helicity:'N<sub>hel</sub>',etabar:'η̄',coll_ratio:'λ<sub>ii</sub>/RL',
   P_line:'P<sub>line</sub>',tau_eta:'τ<sub>η</sub>',tauN_o_taueta:'τ<sub>N</sub>/τ<sub>η</sub>',ring_model:'ring',
@@ -238,11 +245,11 @@ const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub
 const pk=k=>PR[k]?`<span class="sym">${PR[k]}</span>`:k;
 const chipLab=s=>{const u=(s.label.match(/\[[^\]]+\]/)||[''])[0];return (PR[s.f]?`<span class="sym">${PR[s.f]}</span>`:s.f)+(u?' '+u:'');};
 const GROUPS=[['rx','反应','Reaction'],['geo','几何','Geometry'],['prof','剖面','Profile'],['plasma','等离子体','Plasma'],['field','场·电流','Field·Current'],['fuel','燃料·杂质','Fuel·Impurity'],['conf','约束·修正','Confinement·Factors']];
-const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',A_flux:'m²',C_sec_mean:'m',C_wall_mean:'m',Vp_geom:'m³',Sp_geom:'m²',Sw_geom:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',tau_eta:'s',Te0:'keV',tauE_used:'s',P_LH:'MW',tau_ITPA20:'s',tau_classical:'s',tau_Bohm:'s'};
+const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',A_flux:'m²',a_vol:'m',C_sec_mean:'m',C_wall_mean:'m',Vp_geom:'m³',Sp_geom:'m²',Sw_geom:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',tau_eta:'s',Te0:'keV',tauE_used:'s',P_LH:'MW',tau_ITPA20:'s',tau_classical:'s',tau_Bohm:'s'};
 const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','Pth','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth']],
   ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ITPA20','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tau_ITPA20','tauE_used','taue_mode','tau_eta','tauN_o_taueta','tau_classical','tau_Bohm','ntau']],
   ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_avg','beta_null','beta_o_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain','P_LH','LH_ratio','a_over_rhoi']],
-  ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','fTavg','fnavg','Sp','Sw','L_ax','L_in','A_throat','flux_p','G1','G2','GB','p_shape','f_shape_calc','geom_weighted','A_flux','C_sec_mean','C_wall_mean','Vp_geom','Sp_geom','Sw_geom','lambda_ii','coll_ratio','nbar','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
+  ['等离子体 Plasma',['ne0','ni0','Vp','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','fTavg','fnavg','Sp','Sw','L_ax','L_in','A_throat','flux_p','G1','G2','GB','p_shape','f_shape_calc','geom_weighted','sep_model','m_shape','A_flux','a_vol','C_sec_mean','C_wall_mean','Vp_geom','Sp_geom','Sw_geom','lambda_ii','coll_ratio','nbar','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
 const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_c','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','beta_o_limit']);
 const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 28 40 28 32 28 24 30 14 40 8Z"/>',
   mirror:'<path d="M10 20Q32 30 54 20M10 44Q32 34 54 44"/><circle cx="12" cy="32" r="8"/><circle cx="52" cy="32" r="8"/>',
@@ -262,7 +269,7 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null;
 let STELL_STASH={};
 const ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override']);  // expert-only inputs
-const OPAQUE_PARAMS={shape:1};  // parameters never sent to the backend directly
+const OPAQUE_PARAMS=new Set(['shape']);  // opaque JSON objects intentionally sent to backend
 
 function isPlainObject(v){return v&&typeof v==='object'&&!Array.isArray(v);}
 function cloneJson(v){return JSON.parse(JSON.stringify(v));}
@@ -279,11 +286,13 @@ function stashStellGeom(){
   const mode=VALS._geom_mode||inferStellGeomMode();
   if(mode==='boundary'&&isPlainObject(VALS.shape))STELL_STASH.shape=cloneJson(VALS.shape);
   if(mode==='axis'){if(Array.isArray(VALS.rc))STELL_STASH.rc=VALS.rc.slice();if(Array.isArray(VALS.zs))STELL_STASH.zs=VALS.zs.slice();}
-  STELL_STASH.iota=VALS.iota;STELL_STASH.Vp_override=VALS.Vp_override;STELL_STASH.Sw_override=VALS.Sw_override;
+  ['iota','Vp_override','Sw_override'].forEach(k=>{if(typeof VALS[k]==='number'&&isFinite(VALS[k])&&VALS[k]>0)STELL_STASH[k]=VALS[k];});
   STELL_STASH.etabar=VALS.etabar;STELL_STASH.delta_h=VALS.delta_h;
 }
 
 function stellGeomMode(){return VALS._geom_mode||inferStellGeomMode();}
+function stellGeomModeHtml(){const m=stellGeomMode();const item=(k,zh,en)=>`<button type="button" class="modebtn${m===k?' on':''}" data-gmode="${k}">${L(zh,en)}</button>`;return `<div class="fld full modefld"><label><span class="sym">geo</span><span class="nm">${L('几何输入方式','geometry input mode')}</span></label><div class="modebar">${item('simple','默认近轴','simple near-axis')}${item('axis','磁轴 Fourier','axis Fourier')}${item('boundary','边界 Fourier','boundary Fourier')}</div></div>`;}
+function migrateStellRadius(){if(CUR==='stellarator'&&VALS&&!('a'in VALS)&&'A'in VALS&&'R0'in VALS){VALS.a=VALS.R0/VALS.A;delete VALS.A;}}
 
 function setStellGeomMode(mode){
   stashStellGeom();VALS._geom_mode=mode;
@@ -324,7 +333,7 @@ const RANGES={
   Ti0:[1,200],Ti:[1,200],Te0:[0.1,120],Te:[0.1,120],fT:[0.2,2.0],
   ni0:[0.1e20,6e20],n0:[0.1e20,20e20],tauE:[1e-4,10],
   B0:[0.5,12],BT0:[0.5,12],B_vac:[0.1,12],B_e:[0.5,12],B_ring:[0.5,15],
-  R0:[1,25],A:[2,15],kappa:[1,3.5],a_c:[0.05,1.5],L_c:[1,30],
+  R0:[1,25],A:[2,15],a:[0.05,3],kappa:[1,3.5],a_c:[0.05,1.5],L_c:[1,30],
   r_s:[0.05,1.5],l_s:[0.5,10],r_w:[0.1,2],R_mirror:[2,50],
   r_ring:[0.1,3],R_p:[1,20],etabar:[0.01,0.2],N_fp:[1,10],delta_h:[0,3],
   Sn:[0,2],ST:[0,3],fsig:[0.1,2],fimp:[0,0.05],fHe:[0,0.2],Zimp:[1,74]
@@ -433,6 +442,7 @@ async function loadPreset(){
     const name=pv.slice(UMARK.length);const stored=upGet(CUR)[name];
     if(!stored){await selectConfig(CUR);return;}   // gone (e.g. cleared) -> reset
     VALS=JSON.parse(JSON.stringify(stored));
+    if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();}
     buildParams();buildThresh();buildPlotOpts();fitScanRanges();
     await recompute();setView(VIEW);
     return;
@@ -440,8 +450,8 @@ async function loadPreset(){
   const r=await jpost('/api/run',{config:CUR,preset:pv});
   VALS=Object.assign({},r.inputs);
   // auto-reveal advanced inputs if this preset carries any (measured machines)
-  VALS._geom_mode=inferStellGeomMode();stashStellGeom();
-  ADVANCED=(VALS.Vp_override>0)||(VALS.Sw_override>0)||Array.isArray(VALS.rc)||Array.isArray(VALS.zs);
+  if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();}
+  ADVANCED=(VALS.Vp_override>0)||(VALS.Sw_override>0)||Array.isArray(VALS.rc)||Array.isArray(VALS.zs)||isPlainObject(VALS.shape);
   buildParams();buildThresh();buildPlotOpts();applyRun(r);fitScanRanges();setView(VIEW);
 }
 function savePreset(){
@@ -479,27 +489,28 @@ function fitAxis(key,minEl,maxEl){
 function fitScanRanges(){fitAxis(xkey.value,xmin,xmax);fitAxis(ykey.value,ymin,ymax);}
 function buildParams(){
   const groups={};for(const p of CONFIGS[CUR].params){
+    if(CUR==='stellarator'&&!showParamForMode(p))continue;
     const m=META[p];if(!m)continue;  // skip backend-only params (e.g. 'shape')
     (groups[m[3]]=groups[m[3]]||[]).push(p);}
   let html='';
   for(const[gk,gz,ge]of GROUPS){if(!groups[gk])continue;
-    let a0='';if(gk==='geo'&&'R0'in VALS&&'A'in VALS)a0=`<span class="a0"><i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m</span>`;
+    let a0='';
+    if(gk==='geo'&&CUR==='stellarator'&&'a'in VALS){
+      const av=LASTRUN&&LASTRUN.outputs&&typeof LASTRUN.outputs.a_vol==='number'?` · <i>a<sub>vol</sub></i> = ${LASTRUN.outputs.a_vol.toFixed(3)} m`:'';
+      a0=`<span class="a0"><i>a</i> = ${(+VALS.a).toFixed(3)} m${av}</span>`;
+    }else if(gk==='geo'&&'R0'in VALS&&'A'in VALS)a0=`<span class="a0"><i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m</span>`;
     html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div>`;
-    // mode switch for stellarator geometry (simple / axis Fourier / boundary Fourier)
-    if(gk==='geo'&&CUR==='stellarator'){
-      const modes=[['simple','item(\'simple\'),L(\'默认近轴\',\'default near-axis\')'],['axis','item(\'axis\'),L(\'磁轴 Fourier\',\'axis Fourier\')'],['boundary','item(\'boundary\'),L(\'边界 Fourier\',\'boundary Fourier\')']];
-      const cur=VALS._geom_mode||inferStellGeomMode();
-      html+='<div class="geomodes">';
-      modes.forEach(([k,lab])=>html+=`<button class="gmodebtn${k===cur?' on':''}" data-gmode="${k}">${lab.slice(lab.indexOf(')')+1)}</button>`);
-      html+='</div>';
-    }
     html+=`<div class="pgrid" data-grp="${gk}">`;
+    if(CUR==='stellarator'&&gk==='geo')html+=stellGeomModeHtml();
     for(const p of groups[gk]){const m=META[p];const desc=L(m[0],m[1]);
       // stellarator: hide params that don't apply to current geom mode
       if(CUR==='stellarator'&&gk==='geo'&&!showParamForMode(p))continue;
       if(BOOLS.has(p)){const onTxt=p==='use_tauE'?L('开启：输入 τE','on: input tauE'):L('开启','on');
         const offTxt=p==='use_tauE'?L('关闭：自洽损失','off: self-consistent losses'):L('关闭','off');
         html+=`<div class="fld full"><label title="${desc}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span></label><select data-p="${p}" data-bool="1"><option value="1" ${VALS[p]!==0?'selected':''}>${onTxt}</option><option value="0" ${VALS[p]===0?'selected':''}>${offTxt}</option></select></div>`;}
+      else if(p==='m'){continue;}  // FRC paper shape index: derived from f_shape (API-only input); m_shape is shown as output
+      else if(p==='sep_model'){const SM=[['superellipse',L('超椭圆(默认)','superellipse (default)')],['mrr',L('MRR 论文分离面','MRR paper separatrix')]];const cur=VALS.sep_model||'superellipse';
+        html+=`<div class="fld full"><label title="${desc}"><span class="sym">sep</span><span class="nm">${desc}</span></label><select data-p="sep_model">${SM.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${t}</option>`).join('')}</select></div>`;}
       else if(p==='icase'){html+=`<div class="fld full"><label title="${desc}">${desc}</label><select data-p="icase">${Object.entries(RX).map(([k,v])=>`<option value="${k}" ${+VALS.icase===+k?'selected':''}>${k} · ${v}</option>`).join('')}</select></div>`;}
       else if(p==='imp_name'){const SP=['','He','Li','Be','C','N','O','Ne','Ar','Kr','Xe','W'];
         html+=`<div class="fld"><label title="${desc}"><span class="sym">imp</span><span class="nm">${desc}</span></label><select data-p="imp_name">${SP.map(s=>`<option value="${s}" ${(VALS.imp_name||'')===s?'selected':''}>${s||L('关闭(默认)','off (default)')}</option>`).join('')}</select></div>`;}
@@ -508,7 +519,7 @@ function buildParams(){
           const mk=p==='rc'?'R':'Z';const arr=VALS.shape[mk]||[];
           const val=arr.map(([m,n,c])=>`[${m},${n},${c}]`).join(',\n');
           const tftip=(p==='rc'?L('边界 R Fourier [m,n,c]','boundary R Fourier [m,n,c]'):L('边界 Z Fourier [m,n,c]','boundary Z Fourier [m,n,c]'));
-          html+=`<div class="fld full"><label title="${tftip}"><span class="sym">${mk}</span><span class="nm">${mk} Fourier</span></label><textarea data-p="${p}" placeholder="[m,n,c] triplets" rows="6">${val}</textarea></div>`;}
+          html+=`<div class="fld full"><label title="${tftip}"><span class="sym">${mk}</span><span class="nm">${tftip}</span></label><textarea class="fourierbox" data-p="${p}" placeholder="[m,n,c] triplets" rows="5" spellcheck="false" wrap="off">${val}</textarea></div>`;}
         else{
           const cur=Array.isArray(VALS[p])?VALS[p].join(','):'';
           html+=`<div class="fld full"><label title="${tip}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span></label><input type="text" data-p="${p}" placeholder="e.g. 18,0.9,0.1" value="${cur}"></div>`;}}
@@ -518,16 +529,18 @@ function buildParams(){
     }html+='</div>';}
   const box=document.getElementById('params');box.innerHTML=html;
   // ADVANCED (expert) inputs: custom Fourier axis + measured Vp/Sw overrides.
-  // Normal mode shows only R0/A/N_fp/delta_h/etabar/g and computes volume/area
+  // Normal mode shows only R0/a/N_fp/delta_h/etabar/g and computes volume/area
   // self-consistently from the geometry; advanced mode reveals the overrides.
   box.querySelectorAll('[data-p]').forEach(el=>{const f=el.closest('.fld');
-    if(f&&ADV_PARAMS.has(el.dataset.p))f.classList.add('advfld');});
+    if(CUR!=='stellarator'&&f&&ADV_PARAMS.has(el.dataset.p))f.classList.add('advfld');});
   box.classList.toggle('show-adv',!!ADVANCED);
   // stellarator geometry mode switch handlers
-  box.querySelectorAll('.gmodebtn').forEach(b=>b.onclick=()=>{
-    setStellGeomMode(b.dataset.gmode);buildParams();
+  box.querySelectorAll('[data-gmode]').forEach(b=>b.onclick=()=>{
+    setStellGeomMode(b.dataset.gmode);
+    buildParams();buildThresh();buildPlotOpts();fitScanRanges();
+    recompute();
   });
-  if(CONFIGS[CUR].params.some(p=>ADV_PARAMS.has(p))){
+  if(CUR!=='stellarator'&&CONFIGS[CUR].params.some(p=>ADV_PARAMS.has(p))){
     const bar=document.createElement('div');bar.className='advbar';
     bar.innerHTML=`<button id="advBtn" class="advbtn${ADVANCED?' on':''}">`+
       `${ADVANCED?'▾ ':'▸ '}${L('高级输入（自定义轴 / 实测体积·面积覆写）','Advanced (custom axis / measured Vp·Sw)')}</button>`;
@@ -561,6 +574,7 @@ function buildParams(){
         const arr=(el.value||'').split(',').map(s=>parseFloat(s.trim())).filter(x=>isFinite(x));
         if(arr.length)VALS[el.dataset.p]=arr;else delete VALS[el.dataset.p];}}
     else if(el.dataset.bool)VALS[el.dataset.p]=+el.value;
+    else if(el.dataset.p==='sep_model')VALS.sep_model=el.value;
     else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
     applyModeLocks();
     clearTimeout(timer);timer=setTimeout(()=>{updateA0();fitScanRanges();recompute();},280);});
@@ -586,7 +600,11 @@ function applyModeLocks(){
     });
   }
 }
-function updateA0(){const h=[...document.querySelectorAll('.grp-h .a0')][0];if(h&&'R0'in VALS&&'A'in VALS)h.innerHTML=`<i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m`;}
+function updateA0(){const h=[...document.querySelectorAll('.grp-h .a0')][0];if(!h)return;
+  if(CUR==='stellarator'&&'a'in VALS){
+    const av=LASTRUN&&LASTRUN.outputs&&typeof LASTRUN.outputs.a_vol==='number'?` · <i>a<sub>vol</sub></i> = ${LASTRUN.outputs.a_vol.toFixed(3)} m`:'';
+    h.innerHTML=`<i>a</i> = ${(+VALS.a).toFixed(3)} m${av}`;
+  }else if('R0'in VALS&&'A'in VALS)h.innerHTML=`<i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m`;}
 function buildThresh(){
   const w=CONFIGS[CUR].best_window||{ge:{},le:{}};
   const ow=CONFIGS[CUR].optional_window||{ge:{},le:{}};
@@ -624,7 +642,7 @@ function buildPlotOpts(){
   box.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{const f=o.dataset.f;PLOTSEL.has(f)?PLOTSEL.delete(f):PLOTSEL.add(f);buildPlotOpts();if(VIEW==='popcon')drawPopcon();});
 }
 function fmtIn(v){if(typeof v!=='number'||!isFinite(v))return '';const a=Math.abs(v);if(a!==0&&(a<1e-3||a>=1e5))return v.toExponential(3);return +v.toFixed(6);}
-function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(Array.isArray(v)){const a=v.filter(x=>typeof x==='number'&&isFinite(x));if(a.length)o[k]=a;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return o;}
+function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='sep_model'){if(typeof v==='string'&&v)o[k]=v;}else if(OPAQUE_PARAMS.has(k)&&isPlainObject(v))o[k]=v;else if(Array.isArray(v)){const a=v.filter(x=>typeof x==='number'&&isFinite(x));if(a.length)o[k]=a;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return o;}
 async function recompute(){const r=await jpost('/api/run',{config:CUR,overrides:clean()});applyRun(r);if(VIEW!=='popcon')setView(VIEW);}
 function applyRun(r){
   LASTRUN=r;const box=document.getElementById('results');
@@ -638,9 +656,9 @@ function applyRun(r){
     if(k==='Qfus'&&o.ignited===1)return `<div class="kv hot"><span class="k">${pk(k)}</span><span class="v">∞ ⚡${L('点火','ignited')}</span></div>`;
     // measured-machine geometry: near-axis iota_geom/kappa_eff/elong_max are
     // ESTIMATES only (the real geometry is the measured Vp/Sw override), flag them
-    const estK=(CUR==='stellarator'&&o.geom_is_measured===1&&(k==='iota_geom'||k==='kappa_eff'||k==='elong_max'));
+    const estK=(CUR==='stellarator'&&o.geom_is_measured===1&&(k==='iota_geom'||k==='kappa_eff'||k==='elong_max'||k==='helicity'));
     const est=estK?` <span class="u" title="${L('单谐波近轴估计；真机几何由实测 Vp/Sw 覆写决定','single-harmonic near-axis estimate; real geometry set by measured Vp/Sw override')}">~${L('近轴估','est')}</span>`:'';
-    return `<div class="kv ${cls}"><span class="k">${pk(k)}</span><span class="v">${fmt(val)}${u}${est}</span></div>`;}).join('');
+    return `<div class="kv ${cls}"><span class="k">${pk(k)}</span><span class="v">${typeof val==='string'?val:fmt(val)}${u}${est}</span></div>`;}).join('');
     if(rows)html+=`<div class="grp"><div class="grp-t">${g}</div>${rows}</div>`;}
   box.innerHTML=html;
   if(VIEW==='popcon')document.getElementById('plotMeta').innerHTML=`<span>P_fus <b>${fmt(o.Pfus)}</b> MW</span><span>Q <b>${fmt(o.Qfus)}</b></span>`;
@@ -833,14 +851,26 @@ function drawShape(){
     add(lin(ar[0],ar[1],'#ffb02e',2.4,true),'boundary');
     add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
     add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[-v.r_w,-v.r_w],GC('wall'),2.2),'wall');
-    [-1,1].forEach(sgn=>[0.30,0.48,0.66,0.84].forEach(q=>{const X=[],Y=[];for(let i=0;i<=180;i++){const th=2*Math.PI*i/180;
-        X.push((v.l_s/2)*0.78*q*Math.cos(th));Y.push(sgn*rn+sgn*(v.r_s-rn)*0.86*q*Math.sin(th));}
-      add(cv(X,Y,GC('flux'),1.18,'dash'),'flux');}));
+    // nested poloidal flux surfaces: real backend psi=const loops (audit docs/42
+    // P0) when a run is present, else a schematic fallback.
+    if(sh&&Array.isArray(sh.surfaces)&&sh.surfaces.length){
+      sh.surfaces.forEach(srf=>add(cv(srf.z,srf.r,GC('flux'),1.18,'dash'),'flux'));
+    }else{
+      [-1,1].forEach(sgn=>[0.30,0.48,0.66,0.84].forEach(q=>{const X=[],Y=[];for(let i=0;i<=180;i++){const th=2*Math.PI*i/180;
+          X.push((v.l_s/2)*0.78*q*Math.cos(th));Y.push(sgn*rn+sgn*(v.r_s-rn)*0.86*q*Math.sin(th));}
+        add(cv(X,Y,GC('flux'),1.18,'dash'),'flux');}));
+    }
     [-0.72,-0.48,0.48,0.72].forEach(yy=>add(cv([-v.l_s/2*1.15,-v.l_s/2*0.95,-v.l_s/2*0.72,v.l_s/2*0.72,v.l_s/2*0.95,v.l_s/2*1.15],
       [yy*v.r_w,yy*v.r_w,yy*v.r_s*0.86,yy*v.r_s*0.86,yy*v.r_w,yy*v.r_w],GC('open'),1.05,'dot'),'open'));
-    add({type:'scatter',mode:'markers+text',x:[0,0],y:[rn,-rn],text:[L('O 点','O-point'),L('O 点','O-point')],
+    // O point (magnetic axis / field null) and X points (separatrix on axis)
+    const opR=sh?sh.o_points.r:[rn,-rn],opZ=sh?sh.o_points.z:[0,0];
+    add({type:'scatter',mode:'markers+text',x:opZ,y:opR,text:[L('O 点','O-point'),L('O 点','O-point')],
       textposition:['top center','bottom center'],textfont:{color:'#c792ff',size:10},
       marker:{color:'#c792ff',size:9,symbol:'circle-open',line:{width:2,color:'#c792ff'}}},'annot');
+    const xpZ=sh?sh.x_points.z:[v.l_s/2,-v.l_s/2],xpR=sh?sh.x_points.r:[0,0];
+    add({type:'scatter',mode:'markers+text',x:xpZ,y:xpR,text:[L('X 点','X-point'),L('X 点','X-point')],
+      textposition:['middle right','middle left'],textfont:{color:'#ff9f43',size:10},
+      marker:{color:'#ff9f43',size:9,symbol:'x-thin',line:{width:2,color:'#ff9f43'}}},'annot');
     add(seg(-0.38*v.l_s,0.18*v.r_s,-0.05*v.l_s,0.18*v.r_s,'#ff6b6b',L('B←','B←')),'annot');
     add(seg(-0.50*v.l_s,1.08*v.r_s,-0.15*v.l_s,1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');
     add(seg(-0.50*v.l_s,-1.08*v.r_s,-0.15*v.l_s,-1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');

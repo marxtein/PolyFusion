@@ -69,6 +69,8 @@ class FRCResult:
     nbar: float       # line-averaged electron density [m^-3]
     # geometry
     Vp: float; Sp: float; Sw: float
+    sep_model: str    # separatrix geometry family used ("superellipse" | "mrr")
+    m_shape: float    # paper shape index (m=2 ellipse, large m racetrack)
     Zeff: float; M: float
     # flux & channel physics (docs/30 P1)
     tau_eta: float    # classical (Spitzer) flux-diffusion time mu0 r_s^2/eta [s]
@@ -180,38 +182,298 @@ def _frc_profile_factors(x_s: float, f_shape: float, n: int = 801) -> tuple[floa
     return p, K, G1, G2, GB
 
 
-def frc_shape_outlines(r_s, l_s, r_w, f_shape=0.85, n_theta=181, **_ignored) -> dict:
-    """JSON-able FRC separatrix geometry for front-end shape views."""
+# ---------------------------------------------------------------------------
+# MRR (paper) separatrix geometry — Ma/Xie et al. GSEQ-FRC, arXiv:2103.00839.
+# The FRC separatrix is the revolution about the z axis of
+#     r(z) = r_s * (1 - |z/(l_s/2)|^m)^(1/2),   z in [-l_s/2, l_s/2],
+# with shape index m: m=2 is an ellipse, large m is racetrack-like.  The volume
+# factor is m/(m+1), identical to the existing f_shape via f_shape = m/(m+1).
+# Added as an OPTIONAL geometry mode (sep_model="mrr"); the symmetric-
+# superellipse path above is the default and stays numerically unchanged.
+# ---------------------------------------------------------------------------
+
+_M_MAX = 1.0e6   # racetrack limit; matches the superellipse p_max convention
+
+
+def _f_shape_from_m(m: float) -> float:
+    """Paper volume factor f_shape = m/(m+1)  (m=2 -> 2/3, m->inf -> 1)."""
+    return m / (m + 1.0)
+
+
+def _m_from_f_shape(f_shape: float, m_max: float = _M_MAX) -> float:
+    """Invert f_shape = m/(m+1).  f_shape -> 1 is capped at a finite m_max."""
+    if f_shape >= 1.0 - 1e-12:
+        return m_max
+    return f_shape / (1.0 - f_shape)
+
+
+def _resolve_shape(f_shape, m, m_max: float = _M_MAX) -> tuple[float, float]:
+    """Resolve the (f_shape, m) shape pair, MODE-INDEPENDENT (plan rev. D).
+
+    ``m`` (paper shape index) takes precedence when given; an explicitly given
+    ``f_shape`` must then agree with ``m/(m+1)``.  When only ``f_shape`` is
+    given it sets ``m = f_shape/(1-f_shape)``.  When neither is given the FRC
+    default ``f_shape=0.85`` is used.  Raises on ``m<2`` or an inconsistent pair.
+    """
+    if m is not None:
+        if m < 2.0:
+            raise ValueError(f"m must be >= 2 (ellipse floor m=2); got {m}")
+        fm = _f_shape_from_m(float(m))
+        if f_shape is not None and abs(float(f_shape) - fm) > 1e-6:
+            raise ValueError(
+                f"inconsistent m and f_shape: m={m} implies f_shape={fm:.6f}, "
+                f"but f_shape={f_shape} was given")
+        return fm, float(m)
+    fs = 0.85 if f_shape is None else float(f_shape)
+    if not 2.0 / 3.0 - 1e-9 <= fs <= 1.0:
+        raise ValueError(f"f_shape must be in [2/3, 1] (got {fs})")
+    return fs, _m_from_f_shape(fs, m_max)
+
+
+def _mrr_separatrix(r_s: float, l_s: float, m: float, n: int = 4001):
+    """(z, r) arrays of the paper separatrix on a uniform z grid in [-b, b]."""
+    b = l_s / 2.0
+    z = np.linspace(-b, b, n)
+    r = r_s * np.sqrt(np.clip(1.0 - np.abs(z / b) ** m, 0.0, 1.0))
+    return z, r
+
+
+def _mrr_volume(r_s: float, l_s: float, m: float, n: int = 4001) -> float:
+    """Numeric revolution volume int pi r(z)^2 dz (validates the closed form
+    pi r_s^2 l_s m/(m+1))."""
+    z, r = _mrr_separatrix(r_s, l_s, m, n)
+    return float(np.trapezoid(math.pi * r * r, z))
+
+
+def _mrr_surface(r_s: float, l_s: float, m: float, n: int = 4001) -> float:
+    """Exact separatrix surface of revolution int 2 pi r sqrt(1 + r'^2) dz.
+
+    The endpoints taper to points (r -> 0 at z = +-b) where r' -> inf, but the
+    integrand is finite because r*r' stays finite.  Using r*r' in closed form
+    avoids the 0*inf = nan a bare finite difference would produce (plan rev. E):
+        r*r' = -(r_s^2 m / 2b) * sign(z) * |z/b|^(m-1).
+    """
+    b = l_s / 2.0
+    z = np.linspace(-b, b, n)
+    zb = np.abs(z / b)
+    r = r_s * np.sqrt(np.clip(1.0 - zb ** m, 0.0, 1.0))
+    rrp = -(r_s ** 2 * m / (2.0 * b)) * np.sign(z) * zb ** (m - 1.0)
+    integrand = 2.0 * math.pi * np.sqrt(r * r + rrp * rrp)
+    return float(np.trapezoid(integrand, z))
+
+
+def _mrr_profile_factors(x_s: float, m: float, n: int = 801):
+    """Rigid-rotor profile factors weighted by the MRR volume shell.
+
+    Same structure as ``_frc_profile_factors`` but the volume element is the
+    paper-separatrix shell ``w(x) ~ x (1 - x^2)^(1/m)`` (x = r/r_s) instead of
+    the symmetric superellipse one.  K is solved so the volume-averaged beta is
+    still ``1 - x_s^2/2``; G1/G2/GB therefore differ from the superellipse path,
+    which is what changes the MRR-mode power account.
+    """
+    x = np.linspace(0.0, 1.0, n)
+    shell = np.clip(1.0 - x ** 2, 0.0, 1.0)
+    weight = 2.0 * x * shell ** (1.0 / m)
+    norm = float(np.trapezoid(weight, x))
+    if norm <= 0.0:
+        raise ValueError("invalid MRR volume weight")
+    weight /= norm
+
+    beta_avg = 1.0 - x_s ** 2 / 2.0
+    u = 2.0 * x ** 2 - 1.0
+
+    def avg_sech2(k: float) -> float:
+        return float(np.trapezoid(weight / np.cosh(k * u) ** 2, x))
+
+    lo, hi = 1e-4, 25.0
+    if avg_sech2(lo) < beta_avg:
+        K = lo
+    else:
+        for _ in range(80):
+            mid = 0.5 * (lo + hi)
+            if avg_sech2(mid) > beta_avg:
+                lo = mid
+            else:
+                hi = mid
+        K = 0.5 * (lo + hi)
+
+    nrel = 1.0 / np.cosh(K * u) ** 2
+    brel = np.abs(np.tanh(K * u))
+    G1 = float(np.trapezoid(weight * nrel, x))
+    G2 = float(np.trapezoid(weight * nrel * nrel, x))
+    GB = float(np.trapezoid(weight * brel, x))
+    return K, G1, G2, GB
+
+
+# ---------------------------------------------------------------------------
+# Nested poloidal flux surfaces (audit docs/42 P0+P1).
+# The rigid-rotor MIDPLANE flux is analytic (integrate B_z/B_e = tanh(K u),
+# u = 2 x^2 - 1, x = r/r_s):
+#     psi_tilde(x) = ln[ cosh(K (2 x^2 - 1)) / cosh(K) ]     (drop the
+# B_e r_s^2 / 4K prefactor; only the shape matters for labeling surfaces).
+# psi=0 on the magnetic axis (x=0) and the separatrix radius (x=1); the minimum
+# psi_o = -ln cosh K is the O point at x = 1/sqrt(2).  Interior flux surfaces
+# are the level sets psi=const in (psi_o, 0); each level has TWO midplane radii
+# x_in < 1/sqrt2 < x_out (closed form below).  For the 0-D shape view they are
+# closed into cartoon loops around the O-point ring, radially anchored at their
+# true flux radii (NOT a pure geometric guess); the rho=1 boundary is the drawn
+# separatrix, so this never touches the power account.
+# ---------------------------------------------------------------------------
+
+
+def _rr_flux_norm(x, K: float):
+    """Normalized rigid-rotor midplane flux psi_tilde(x) (0 at axis/separatrix,
+    minimum -ln cosh K at the O point x=1/sqrt2)."""
+    u = 2.0 * np.asarray(x, dtype=float) ** 2 - 1.0
+    out = np.log(np.cosh(K * u) / math.cosh(K))
+    return float(out) if np.ndim(x) == 0 else out
+
+
+def _rr_flux_radii(psi_star: float, K: float) -> tuple[float, float]:
+    """Two midplane radii (x_in, x_out) with psi_tilde = psi_star.
+
+    Closed-form inverse of psi_tilde:  cosh(K(2x^2-1)) = cosh(K) e^{psi_star},
+    so  2x^2 - 1 = +- arccosh(cosh K e^{psi_star}) / K.  Valid for
+    psi_star in [psi_o, 0] (psi_o = -ln cosh K); clamped at the endpoints."""
+    C = math.cosh(K) * math.exp(psi_star)
+    A = math.acosh(max(C, 1.0)) / K           # in [0, 1]; 0 at O point, 1 at sep
+    A = min(A, 1.0)
+    x_out = math.sqrt(0.5 * (1.0 + A))
+    x_in = math.sqrt(max(0.5 * (1.0 - A), 0.0))
+    return x_in, x_out
+
+
+def _frc_nested_surfaces(z_arch, r_arch, r_s: float, K: float,
+                         n_levels: int = 8, n_theta: int = 161) -> list:
+    """Closed interior flux-surface loops: rounded ovals around the O point ring.
+
+    Real psi=const<0 surfaces are smooth ovals encircling the O point
+    (r_o = r_s/sqrt2, z=0); they stay OFF the axis (psi=0 lives on r=0) — so a
+    flat bottom on the axis would be unphysical.  We draw SELF-SIMILAR ellipses
+    around the O point:
+
+        r(phi) = r_o + a_r sin(phi),   z(phi) = a_z cos(phi).
+
+    The bounding ellipse (level s=1) has a_r0 = r_s - r_o (top tangent to the
+    arch at the midplane) and the largest a_z0 that still fits strictly inside
+    the drawn arch ``r_arch(z_arch)`` (found by bisection).  Inner levels are
+    scaled copies s*(a_r0, a_z0), so they are nested by construction and each is
+    a subset of the bounding ellipse -> GUARANTEED inside the separatrix and
+    never flat-bottomed.  The level fraction s is set from the analytic flux so
+    the oval's midplane top radius equals the true flux radius x_out(psi)."""
+    z_arch = np.asarray(z_arch, dtype=float)
+    r_arch = np.asarray(r_arch, dtype=float)
+    r_o = r_s / math.sqrt(2.0)
+    b = float(np.max(np.abs(z_arch)))
+    psi_o = -math.log(math.cosh(K))
+    phi = np.linspace(0.0, 2.0 * math.pi, n_theta)
+    cphi, sphi = np.cos(phi), np.sin(phi)
+    a_r0 = r_s - r_o
+
+    # largest a_z that keeps the bounding ellipse (a_r0) inside the arch
+    def _fits(a_z: float) -> bool:
+        z = a_z * cphi
+        r = r_o + a_r0 * sphi
+        return bool(np.all(r <= np.interp(z, z_arch, r_arch) + 1e-12))
+
+    lo, hi = 0.0, b
+    for _ in range(48):
+        mid = 0.5 * (lo + hi)
+        if _fits(mid):
+            lo = mid
+        else:
+            hi = mid
+    a_z0 = 0.97 * lo                      # small margin so it reads as interior
+
+    out = []
+    for t in np.linspace(0.0, 1.0, n_levels + 2)[1:-1]:
+        psi_star = psi_o * (1.0 - t)
+        _x_in, x_out = _rr_flux_radii(psi_star, K)
+        s = (x_out * r_s - r_o) / a_r0    # midplane top radius = flux x_out
+        s = min(max(s, 1e-3), 1.0)
+        z = s * a_z0 * cphi
+        r = r_o + s * a_r0 * sphi
+        out.append({"psi": float(psi_star), "z": z.tolist(), "r": r.tolist()})
+    return out
+
+
+def frc_shape_outlines(r_s, l_s, r_w, f_shape=None, n_theta=181,
+                       sep_model="superellipse", m=None, **_ignored) -> dict:
+    """JSON-able FRC separatrix geometry for front-end shape views.
+
+    ``sep_model="superellipse"`` (default) draws the symmetric superellipse;
+    ``sep_model="mrr"`` draws the paper (Ma/Xie) separatrix.
+    """
+    if sep_model not in ("superellipse", "mrr"):
+        raise ValueError(f"sep_model must be 'superellipse' or 'mrr' (got {sep_model!r})")
+    f_shape, m_shape = _resolve_shape(f_shape, m)
+    rn = r_s / math.sqrt(2.0)
+    b = l_s / 2.0
+    wall = {
+        "z": [-b * 1.15, b * 1.15],
+        "r_upper": [r_w, r_w],
+        "r_lower": [-r_w, -r_w],
+    }
+    # O point (magnetic axis / field null) at the null radius r_s/sqrt2; X points
+    # where the separatrix meets the axis at z = +- l_s/2 (audit docs/42 P1).
+    nulls = {"z": [0.0, 0.0], "r": [rn, -rn]}
+    o_points = {"z": [0.0, 0.0], "r": [rn, -rn]}
+    x_points = {"z": [b, -b], "r": [0.0, 0.0]}
+    # nested interior flux surfaces around the O point (audit docs/42 P0).  K is
+    # the rigid-rotor parameter at this x_s.  The ovals fit inside the SAME
+    # separatrix arch the mode draws.  The upper (+r_o) and lower (-r_o) O-point
+    # families are emitted as SEPARATE closed curves (merging them into one
+    # polyline drew a spurious vertical connector across the axis).
+    K = _solve_K(1.0 - (r_s / r_w) ** 2 / 2.0)
+    za = np.linspace(-b, b, 91)
+    if sep_model == "mrr":
+        ra = r_s * np.sqrt(np.clip(1.0 - np.abs(za / b) ** m_shape, 0.0, 1.0))
+    else:
+        p_arch = _frc_p_from_f_shape(float(f_shape))
+        ra = r_s * np.clip(1.0 - np.abs(za / b) ** p_arch, 0.0, 1.0) ** (1.0 / p_arch)
+    half = _frc_nested_surfaces(za, ra, r_s, K)
+    surfaces = []
+    for srf in half:
+        zr = srf["z"]; rr = np.asarray(srf["r"])
+        surfaces.append({"psi": srf["psi"], "z": zr, "r": rr.tolist()})          # upper +r_o
+        surfaces.append({"psi": srf["psi"], "z": zr, "r": (-rr).tolist()})       # lower -r_o
+    common = {
+        "type": "frc", "m_shape": float(m_shape), "f_shape_calc": f_shape,
+        "wall": wall, "null_points": nulls,
+        "o_points": o_points, "x_points": x_points, "surfaces": surfaces,
+    }
+    if sep_model == "mrr":
+        zt, rt = _mrr_separatrix(r_s, l_s, m_shape, n_theta)
+        z = np.concatenate([zt, zt[::-1]])
+        r = np.concatenate([rt, -rt[::-1]])
+        return {**common, "mode": "mrr",
+                "separatrix": {"z": z.tolist(), "r": r.tolist()}}
     p = _frc_p_from_f_shape(float(f_shape))
     th = np.linspace(0.0, 2.0 * math.pi, n_theta)
     c, s = np.cos(th), np.sin(th)
-    z = (l_s / 2.0) * np.sign(c) * np.abs(c) ** (2.0 / p)
+    z = b * np.sign(c) * np.abs(c) ** (2.0 / p)
     r = r_s * np.sign(s) * np.abs(s) ** (2.0 / p)
-    rn = r_s / math.sqrt(2.0)
-    return {
-        "type": "frc",
-        "mode": "superellipse",
-        "p_shape": p,
-        "f_shape_calc": _frc_shape_factor_from_p(p),
-        "separatrix": {"z": z.tolist(), "r": r.tolist()},
-        "wall": {
-            "z": [-(l_s / 2.0) * 1.15, (l_s / 2.0) * 1.15],
-            "r_upper": [r_w, r_w],
-            "r_lower": [-r_w, -r_w],
-        },
-        "null_points": {"z": [0.0, 0.0], "r": [rn, -rn]},
-    }
+    return {**common, "mode": "superellipse", "p_shape": p,
+            "f_shape_calc": _frc_shape_factor_from_p(p),
+            "separatrix": {"z": z.tolist(), "r": r.tolist()}}
 
 
 def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
-              f_shape=0.85, fsig=1.0, geom_weighted=0.0,
+              f_shape=None, fsig=1.0, geom_weighted=0.0,
               Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
-              imp_name=None) -> FRCResult:
+              imp_name=None, sep_model="superellipse", m=None) -> FRCResult:
     """Evaluate the 0-D FRC power balance at one operating point.
 
     Parameters (SI / keV); see docs/25 §3.  ``f_shape`` interpolates the
-    separatrix volume between ellipse (2/3) and racetrack (1).
+    separatrix volume between ellipse (2/3) and racetrack (1).  ``sep_model``
+    selects the separatrix geometry family: ``"superellipse"`` (default, the
+    symmetric superellipse) or ``"mrr"`` (the Ma/Xie GSEQ-FRC paper separatrix,
+    arXiv:2103.00839).  ``m`` is the paper shape index (>=2), interchangeable
+    with ``f_shape`` via ``f_shape = m/(m+1)``.
     """
+    if sep_model not in ("superellipse", "mrr"):
+        raise ValueError(f"sep_model must be 'superellipse' or 'mrr' (got {sep_model!r})")
+    f_shape, m_shape = _resolve_shape(f_shape, m)
     rx = _REACTIONS[icase]
 
     # --- input-domain guards (audit P0: x_s >= 1 gives negative <beta>) ---
@@ -242,23 +504,37 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
     # ---------- geometry ----------
     x_s = r_s / r_w
     elongation = l_s / (2 * r_s)
-    p_shape = _frc_p_from_f_shape(f_shape)
-    f_shape_calc = _frc_shape_factor_from_p(p_shape)
-    Vp = f_shape * math.pi * r_s**2 * l_s
-    Sp = 2 * math.pi * r_s * l_s * (0.5 + 0.5 * f_shape)   # ellipse<->racetrack side area
+    # wall surface is the same cylinder + endcaps for either separatrix model
+    # (the first-wall load Pwall = (Pfus+Pheat)/Sw uses the WALL, not Sp).
     Sw = 2 * math.pi * r_w * l_s + 2 * math.pi * r_w**2
-
-    # ---------- rigid-rotor profile from the average-beta theorem ----------
     beta_avg = 1.0 - x_s**2 / 2.0
-    if use_geom_weight:
-        p_shape, K, G1, G2, GB = _frc_profile_factors(x_s, f_shape)
-        f_shape_calc = _frc_shape_factor_from_p(p_shape)
+
+    if sep_model == "mrr":
+        # paper (Ma/Xie) separatrix: one boundary supplies Vp, Sp and the
+        # volume-weighted profile factors.  Vp closed form == f_shape volume;
+        # G1/G2/GB use the paper-shell weight (differs from the superellipse).
+        Vp = math.pi * r_s**2 * l_s * m_shape / (m_shape + 1.0)
+        Sp = _mrr_surface(r_s, l_s, m_shape)
+        K, G1, G2, GB = _mrr_profile_factors(x_s, m_shape)
+        # p_shape is a NOMINAL compatibility value only (the paper geometry is
+        # NOT a symmetric superellipse, so no exact equivalent p exists).
+        p_shape = _frc_p_from_f_shape(f_shape)
+        f_shape_calc = f_shape
     else:
-        K = _solve_K(beta_avg)
-        tK = math.tanh(K)
-        G1 = tK / K                          # <n>/n_m   (== beta_avg by construction)
-        G2 = (tK - tK**3 / 3.0) / K          # <n^2>/n_m^2
-        GB = math.log(math.cosh(K)) / K      # <|B|>/B_e
+        p_shape = _frc_p_from_f_shape(f_shape)
+        f_shape_calc = _frc_shape_factor_from_p(p_shape)
+        Vp = f_shape * math.pi * r_s**2 * l_s
+        Sp = 2 * math.pi * r_s * l_s * (0.5 + 0.5 * f_shape)   # ellipse<->racetrack side area
+        # ---------- rigid-rotor profile from the average-beta theorem ----------
+        if use_geom_weight:
+            p_shape, K, G1, G2, GB = _frc_profile_factors(x_s, f_shape)
+            f_shape_calc = _frc_shape_factor_from_p(p_shape)
+        else:
+            K = _solve_K(beta_avg)
+            tK = math.tanh(K)
+            G1 = tK / K                          # <n>/n_m   (== beta_avg by construction)
+            G2 = (tK - tK**3 / 3.0) / K          # <n^2>/n_m^2
+            GB = math.log(math.cosh(K)) / K      # <|B|>/B_e
     GB_flux = math.log(math.cosh(K)) / K     # cross-section factor for trapped flux
 
     # ---------- composition (tokamak block) at the field null ----------
@@ -365,7 +641,7 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
         beta=beta_avg, beta_null=1.0, x_s=x_s, elongation=elongation,
         s_param=s_param, flux_p=flux_p,
         B_int=B_int, ni0=ni_m, ne0=ne_m, nbar=nbar,
-        Vp=Vp, Sp=Sp, Sw=Sw, Zeff=Zeff, M=M,
+        Vp=Vp, Sp=Sp, Sw=Sw, sep_model=sep_model, m_shape=m_shape, Zeff=Zeff, M=M,
         tau_eta=tau_eta, tauN_o_taueta=tau_E / tau_eta,
         tau_classical=tau_classical, tau_Bohm=tau_Bohm, P_line=P_line,
         Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq, P_ei=P_ei,

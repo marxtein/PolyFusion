@@ -75,8 +75,9 @@ def main():
     ok(d > 1e-4, f"B2c alters the boundary shape (max dR {d:.2e})")
 
     # POWER ACCOUNT UNTOUCHED: geometry metrics stay first-order area-preserving
-    g = stellarator_geometry_metrics(18.0, 10.0, 3, [18.0, 0.81], [0.0, -0.81],
-                                     0.08)
+    g = stellarator_geometry_metrics(R0=18.0, a=1.8, N_fp=3,
+                                     rc=[18.0, 0.81], zs=[0.0, -0.81],
+                                     etabar=0.08)
     a = 18.0 / 10.0
     ok(abs(g["A_flux"] - math.pi * a**2) < 1e-9,
        "A_flux still first-order pi a^2 (0-D power account unchanged)")
