@@ -24,3 +24,16 @@ def test_miller_boundary_volume_matches_known_torus():
     assert R.min() == pytest.approx(4.2, rel=1e-6)        # R0 - a
     assert Z.max() == pytest.approx(1.7 * 2.0, rel=1e-6)  # kappa * a
     assert 700.0 < Vp < 820.0                              # validated CF/Miller ~786 m^3
+
+
+def test_cf_limiter_matches_miller_and_double_null_smaller():
+    R0, a, kappa, delta = 6.2, 1.984, 1.7, 0.33     # eps = a/R0 = 0.32
+    Rl, Zl, shaf_l = tg.cf_boundary(R0, a, kappa, delta, divertor=0, n_theta=600)
+    Rd, Zd, shaf_d = tg.cf_boundary(R0, a, kappa, delta, divertor=1, n_theta=600)
+    Vl, _ = tg.revolution_metrics(Rl, Zl)
+    Vd, _ = tg.revolution_metrics(Rd, Zd)
+    Rm, Zm = tg.miller_boundary(R0, a, kappa, delta, n_theta=600)
+    Vm, _ = tg.revolution_metrics(Rm, Zm)
+    assert Vl == pytest.approx(Vm, rel=0.02)         # limiter ~ Miller (validated 786 vs 786)
+    assert Vd < 0.95 * Vl                            # X-point cuts volume (validated ~718 vs 786)
+    assert 0.0 < shaf_l < a                          # outward Shafranov shift, sub-minor-radius
