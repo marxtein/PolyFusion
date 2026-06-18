@@ -17,6 +17,7 @@ the same machinery the stellarator/FRC configs use for their drawn boundaries.
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 
 import numpy as np
 
@@ -192,6 +193,7 @@ def _cf_psi_value(x, y, coeffs, A=_CF_A):
     return psi
 
 
+@lru_cache(maxsize=256)
 def cf_boundary(R0, a, kappa, delta, n_theta=360):
     """Cerfon-Freidberg equilibrium LCFS (R, Z) [m] and Shafranov shift [m].
 
@@ -199,6 +201,12 @@ def cf_boundary(R0, a, kappa, delta, n_theta=360):
     normalized geometric centre (x=1, y=0). Returns (R, Z, shaf_shift) where
     shaf_shift = R(magnetic axis) - R0 (outward shift of the flux minimum).
     The bisection runs on the whole ray bundle at once (vectorized).
+
+    Memoized: a POPCON scan over non-geometry axes (Ti0, ni0, ...) keeps the
+    boundary fixed, so 1000s of identical calls collapse to one.  The returned
+    R/Z arrays are made read-only so the shared cache entry can't be mutated by
+    a caller (every consumer treats them read-only — revolution_metrics/offset
+    build new arrays).
     """
     if R0 <= 0 or a <= 0 or kappa <= 0:
         raise ValueError(f"R0, a, kappa must be > 0 (got {R0}, {a}, {kappa})")
@@ -233,6 +241,8 @@ def cf_boundary(R0, a, kappa, delta, n_theta=360):
     psi_mid = _cf_psi_value(xs, np.zeros_like(xs), coeffs)
     x_axis = xs[int(np.argmin(psi_mid))]
     shaf_shift = (x_axis - 1.0) * R0
+    R.flags.writeable = False           # shared cache entry: read-only to callers
+    Z.flags.writeable = False
     return R, Z, shaf_shift
 
 
