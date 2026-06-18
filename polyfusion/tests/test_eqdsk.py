@@ -52,3 +52,13 @@ def test_equilibrium_geometry_rejects_empty_boundary():
     g["zbbbs"] = np.array([])
     with pytest.raises(ValueError):
         eqdsk.equilibrium_geometry(g)
+
+
+def test_equilibrium_geometry_exposes_bt0_ip():
+    g = eqdsk.parse_geqdsk(open(FIXTURE).read())
+    assert "current" in g
+    eq = eqdsk.equilibrium_geometry(g)
+    assert eq["bt0"] == pytest.approx(abs(g["bcentr"]), rel=1e-9)
+    assert eq["bt0"] > 0
+    assert eq["ip"] == pytest.approx(abs(g["current"]) / 1e6, rel=1e-9)
+    assert eq["ip"] > 0

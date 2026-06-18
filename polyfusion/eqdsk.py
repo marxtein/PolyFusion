@@ -47,7 +47,7 @@ def parse_geqdsk(text: str) -> dict:
     take = lambda n: [next(it) for _ in range(n)]
     rdim, zdim, rcentr, rleft, zmid = take(5)
     rmaxis, zmaxis, simag, sibry, bcentr = take(5)
-    take(5)            # current, simag(dup), xdum, rmaxis(dup), xdum
+    current = take(5)[0]   # current, simag(dup), xdum, rmaxis(dup), xdum
     take(5)            # zmaxis(dup), xdum, sibry(dup), xdum, xdum
     take(nw)           # fpol
     take(nw)           # pres
@@ -75,7 +75,8 @@ def parse_geqdsk(text: str) -> dict:
     return {
         "nw": nw, "nh": nh, "rdim": rdim, "zdim": zdim, "rcentr": rcentr,
         "rleft": rleft, "zmid": zmid, "rmaxis": rmaxis, "zmaxis": zmaxis,
-        "simag": simag, "sibry": sibry, "bcentr": bcentr, "psirz": psirz,
+        "simag": simag, "sibry": sibry, "bcentr": bcentr, "current": current,
+        "psirz": psirz,
         "rbbbs": np.array(bnd[0::2]), "zbbbs": np.array(bnd[1::2]),
     }
 
@@ -174,4 +175,6 @@ def equilibrium_geometry(g: dict) -> dict:
         "flux_surfaces": flux,
         "R0": R0, "a": a, "kappa": kappa, "delta": delta,
         "shaf_shift": shaf_shift, "Vp": Vp, "Sp": Sp,
+        "bt0": abs(float(g["bcentr"])),          # vacuum toroidal field [T]
+        "ip": abs(float(g["current"])) / 1e6,    # plasma current [MA]
     }

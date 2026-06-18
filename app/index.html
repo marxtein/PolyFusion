@@ -674,13 +674,21 @@ function buildParams(){
       const wrap=document.createElement('div');wrap.className='fld full';
       const loaded=isPlainObject(VALS.eq);
       wrap.innerHTML=`<label><span class="sym">eq</span><span class="nm">${L('平衡文件 G-EQDSK','equilibrium file G-EQDSK')}</span></label>`+
-        `<input type="file" id="eqFile" accept=".geqdsk,.eqdsk,.g,.txt"><div class="u" id="eqStat">${loaded?L('已加载 ✓ ','loaded ✓ ')+`Vp=${(+VALS.eq.Vp).toFixed(1)} a=${(+VALS.eq.a).toFixed(2)}`:L('未加载（用解析估计）','none (analytic estimate)')}</div>`;
+        `<input type="file" id="eqFile" accept=".geqdsk,.eqdsk,.g,.txt"><div class="u" id="eqStat">${loaded?L('已加载 ✓ 已覆盖 R0/A/κ/δ/BT0/Ip · ','loaded ✓ overrode R0/A/κ/δ/BT0/Ip · ')+`Vp=${(+VALS.eq.Vp).toFixed(1)}`:L('未加载（用解析估计）','none (analytic estimate)')}</div>`;
       geoGrid.appendChild(wrap);
       const fi=document.getElementById('eqFile');
       fi.onchange=()=>{const f=fi.files[0];if(!f)return;const rd=new FileReader();
         rd.onload=async()=>{try{
           const r=await jpost('/api/tokamak/parse_eqdsk',{eqdsk:String(rd.result)});
-          if(r&&r.eq){VALS.eq=r.eq;buildParams();buildPlotOpts();recompute();}
+          if(r&&r.eq){const e=r.eq;VALS.eq=e;
+            // override machine inputs from the loaded equilibrium (self-consistent)
+            if(isFiniteNum(e.R0))VALS.R0=+e.R0;
+            if(isFiniteNum(e.R0)&&isFiniteNum(e.a)&&+e.a>0)VALS.A=+e.R0/+e.a;
+            if(isFiniteNum(e.kappa))VALS.kappa=+e.kappa;
+            if(isFiniteNum(e.delta))VALS.delta=+e.delta;
+            if(isFiniteNum(e.bt0)&&+e.bt0>0)VALS.BT0=+e.bt0;
+            if(isFiniteNum(e.ip)&&+e.ip>0)VALS.Ip=+e.ip;
+            buildParams();buildPlotOpts();fitScanRanges();recompute();}
           else document.getElementById('eqStat').textContent=L('解析失败：','parse failed: ')+((r&&r.error)||'?');
         }catch(e){document.getElementById('eqStat').textContent=L('解析失败：','parse failed: ')+e;}};
         rd.readAsText(f);};
