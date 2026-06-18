@@ -5,8 +5,7 @@ Model selector ``geom_model``:
                compatible default, ``kappa**0.65`` surface fudge internal.
   1  miller  — Miller parametric LCFS, exact axisymmetric revolution integrals.
   2  equilib — Cerfon-Freidberg analytic Grad-Shafranov equilibrium boundary
-               (Phys. Plasmas 17, 032502 (2010)); ``divertor`` selects
-               limiter (0) or double-null X-point (1); reports Shafranov shift.
+               (limiter). (Phys. Plasmas 17, 032502 (2010)); reports Shafranov shift.
 
 Boundary metrics for models 1/2 use the exact axisymmetric identities for the
 surface of revolution of a closed poloidal contour (R,Z):
@@ -136,8 +135,8 @@ def _cf_particular(x, y, A):
     ], dtype=float)
 
 
-def _cf_coeffs(eps, kappa, delta, divertor, A=_CF_A):
-    """Solve the 7x7 linear system for the homogeneous coefficients c_1..c_7."""
+def _cf_coeffs(eps, kappa, delta, A=_CF_A):
+    """Solve the 7x7 linear system for the homogeneous coefficients c_1..c_7 (limiter)."""
     alpha = math.asin(delta)
     N1 = -(1 + alpha)**2 / (eps * kappa**2)
     N2 = (1 - alpha)**2 / (eps * kappa**2)
@@ -157,17 +156,11 @@ def _cf_coeffs(eps, kappa, delta, divertor, A=_CF_A):
     add(1, pin, lambda r: r[0])                         # psi = 0 inner
     add(4, po, lambda r: r[4] + N1 * r[1])              # curvature outer
     add(5, pin, lambda r: r[4] + N2 * r[1])             # curvature inner
-    if divertor:                                        # double-null: X-point conditions
-        xpt = (1 - 1.1 * delta * eps, 1.1 * kappa * eps)
-        add(2, xpt, lambda r: r[0])                     # psi = 0 at X-point
-        add(3, xpt, lambda r: r[1])                     # B_Z = 0 (d/dx)
-        add(6, xpt, lambda r: r[2])                     # B_R = 0 (d/dy)
-    else:                                               # limiter: smooth high point
-        ph = (1 - delta * eps, kappa * eps)
-        N3 = -kappa / (eps * math.cos(alpha)**2)
-        add(2, ph, lambda r: r[0])                      # psi = 0 high point
-        add(3, ph, lambda r: r[1])                      # d/dx = 0 (maximum)
-        add(6, ph, lambda r: r[3] + N3 * r[2])          # curvature high
+    ph = (1 - delta * eps, kappa * eps)                 # limiter: smooth high point
+    N3 = -kappa / (eps * math.cos(alpha)**2)
+    add(2, ph, lambda r: r[0])                          # psi = 0 high point
+    add(3, ph, lambda r: r[1])                          # d/dx = 0 (maximum)
+    add(6, ph, lambda r: r[3] + N3 * r[2])              # curvature high
     return np.linalg.solve(M, b)
 
 
@@ -177,7 +170,7 @@ def _cf_psi(x, y, coeffs, A=_CF_A):
     return P[0] + float(np.dot(coeffs, H[:, 0]))
 
 
-def cf_boundary(R0, a, kappa, delta, divertor=0, n_theta=360):
+def cf_boundary(R0, a, kappa, delta, n_theta=360):
     """Cerfon-Freidberg equilibrium LCFS (R, Z) [m] and Shafranov shift [m].
 
     The boundary is the psi = 0 contour, traced by bisection along rays from the
@@ -189,7 +182,7 @@ def cf_boundary(R0, a, kappa, delta, divertor=0, n_theta=360):
     if not -1.0 < delta < 1.0:
         raise ValueError(f"triangularity delta must be in (-1, 1) (got {delta})")
     eps = a / R0
-    coeffs = _cf_coeffs(eps, kappa, delta, int(divertor))
+    coeffs = _cf_coeffs(eps, kappa, delta)
     xc = 1.0
     th = np.linspace(0.0, 2 * math.pi, int(n_theta), endpoint=False)
     R = np.empty_like(th)
@@ -234,7 +227,7 @@ def tokamak_shape_outlines(R0, A, kappa, delta, g=0.0, geom_model=1,
     shaf = 0.0
     gm = int(geom_model)
     if gm == 2:
-        R, Z, shaf = cf_boundary(R0, a, kappa, delta, int(divertor), n_theta)
+        R, Z, shaf = cf_boundary(R0, a, kappa, delta, n_theta)
     else:
         R, Z = miller_boundary(R0, a, kappa, delta, n_theta)
     Rw, Zw = offset_outward(np.append(R, R[0]), np.append(Z, Z[0]), g)
@@ -273,7 +266,7 @@ def tokamak_geometry(geom_model, R0, A, kappa, delta, g, divertor,
         if geom_model == 1:
             R, Z = miller_boundary(R0, a, kappa, delta, n_theta)
         elif geom_model == 2:
-            R, Z, shaf = cf_boundary(R0, a, kappa, delta, divertor, n_theta)
+            R, Z, shaf = cf_boundary(R0, a, kappa, delta, n_theta)
         else:
             raise ValueError(f"geom_model must be 0, 1 or 2 (got {geom_model})")
         Vp_g, Sp_g = revolution_metrics(R, Z)
