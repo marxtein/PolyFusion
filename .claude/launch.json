@@ -5,8 +5,8 @@
       "name": "polyfusion",
       "runtimeExecutable": "python",
       "runtimeArgs": ["app/server.py"],
-      "port": 8788,
-      "autoPort": true
+      "port": 8765,
+      "autoPort": false
     }
   ]
 }
