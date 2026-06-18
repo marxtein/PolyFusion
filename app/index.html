@@ -1080,16 +1080,17 @@ function drawShape(){
   Plotly.react('plot',tr,lay,{responsive:true,displayModeBar:false});
 }
 function drawProfiles(){
-  const isStell=CUR==='stellarator';
-  document.getElementById('plotTitle').innerHTML=`${L('剖面','Profiles')} ${isStell?'n(ρ), T(ρ)':'n(x), T(x)'} · <b>${cfgL(CUR)}</b>`;document.getElementById('plotMeta').innerHTML='';
+  // profile radial coordinate is the volume-averaged radius rho = sqrt(V/Vp)
+  // for every closed config (docs/04); dipole keeps its own ring->edge radius.
+  document.getElementById('plotTitle').innerHTML=`${L('剖面','Profiles')} n(ρ), T(ρ) · <b>${cfgL(CUR)}</b>`;document.getElementById('plotMeta').innerHTML='';
   const v=VALS,X=[],N=[],TT=[];
-  for(let i=0;i<=100;i++){const x=i/100;X.push(x);
-    if('Sn'in v){N.push(Math.pow(1-x*x,v.Sn));TT.push(Math.pow(1-x*x,v.ST));}
-    else if(CUR==='dipole'){const Li=(v.L_in_fac!=null?v.L_in_fac:1.5);const r=1+x*(v.R_p/(Li*v.r_ring)-1);N.push(Math.pow(1/r,4));TT.push(Math.pow(1/r,8/3));}
+  for(let i=0;i<=100;i++){const rho=i/100;X.push(rho);
+    if('Sn'in v){N.push(Math.pow(1-rho*rho,v.Sn));TT.push(Math.pow(1-rho*rho,v.ST));}
+    else if(CUR==='dipole'){const Li=(v.L_in_fac!=null?v.L_in_fac:1.5);const r=1+rho*(v.R_p/(Li*v.r_ring)-1);N.push(Math.pow(1/r,4));TT.push(Math.pow(1/r,8/3));}
     else{N.push(1);TT.push(1);}}
   const xl=CUR==='dipole'?L('归一化半径 (环→外)','normalized radius'):
-    CUR==='stellarator'?L('体积半径 ρ=√(V/Vp)','volume radius ρ=√(V/Vp)'):
-    L('归一化小半径 x=r/a','normalized x=r/a');
+    (CUR==='stellarator'||CUR==='tokamak')?L('体积半径 ρ=√(V/Vp)','volume radius ρ=√(V/Vp)'):
+    L('归一化半径 ρ','normalized radius ρ');
   Plotly.react('plot',[{type:'scatter',mode:'lines',x:X,y:N,name:'n/n<sub>0</sub>',line:{color:'#ffb02e',width:2.6}},
     {type:'scatter',mode:'lines',x:X,y:TT,name:'T/T<sub>0</sub>',line:{color:'#36e2c4',width:2.6}}],LAYOUT(xl,L('归一化值','normalized')),{responsive:true,displayModeBar:false});
 }
