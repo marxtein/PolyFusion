@@ -257,12 +257,15 @@ def tokamak_shape_outlines(R0, A, kappa, delta, g=0.0, geom_model=1,
 
 
 # Flux-surface shaping taper, fitted to real ITER-hybrid and MAST equilibria
-# (G-EQDSK ray-cast surfaces): the magnetic axis keeps ~0.74 of the edge
-# elongation (NOT a circular axis), the core is nearly flat, and the elongation
-# rises near the edge as rho^4.  kappa(rho)=kappa_e*(c+(1-c)*rho^4) fits both
-# machines' kappa(rho) to ~1%.  Triangularity vanishes at the axis (a point has
-# no triangularity) and rises as rho^2.
-_KAPPA_AXIS_FRAC = 0.74
+# (G-EQDSK ray-cast surfaces): the EXCESS elongation (kappa-1) tapers toward the
+# axis, the magnetic axis keeping ~0.44 of the edge excess (so for ITER
+# kappa_e=1.88 the axis kappa~1.39 -- still prolate, never oblate), the core is
+# nearly flat, and the elongation rises near the edge as rho^4.  The excess form
+# kappa(rho)=1+(kappa_e-1)*(f+(1-f)*rho^4) keeps kappa>=1 for any kappa_e (a
+# multiplicative kappa_e*(...) form would push a near-circular boundary oblate)
+# and fits both machines' kappa(rho) to ~1%.  Triangularity vanishes at the axis
+# (a point has no triangularity) and rises as rho^2.
+_KAPPA_EXCESS_AXIS_FRAC = 0.44
 
 
 def miller_flux_surfaces(R0, a, kappa, delta, shaf=0.0,
@@ -270,20 +273,21 @@ def miller_flux_surfaces(R0, a, kappa, delta, shaf=0.0,
     """Nested Miller flux surfaces with a physically-tapered shaping profile.
 
     Each surface at flux label ``rho`` is a Miller curve whose elongation
-    follows ``kappa(rho)=kappa*(c+(1-c)*rho**4)`` (c=_KAPPA_AXIS_FRAC: finite
-    axis elongation, flat core, edge rise) and whose triangularity follows
-    ``delta(rho)=delta*rho**2`` (-> 0 at the axis).  Centres shift outward by a
-    parabolic Shafranov term ``shaf*(1-rho^2)`` (shaf=0 => concentric).  At
-    rho=1 the surface coincides with the Miller LCFS.  This replaces naive
-    self-similar scaling of the boundary and is fitted to real ITER/MAST
-    equilibria; mirrors the stellarator's rho-built nested surfaces.
+    follows ``kappa(rho)=1+(kappa-1)*(f+(1-f)*rho**4)``
+    (f=_KAPPA_EXCESS_AXIS_FRAC: finite, always-prolate axis elongation, flat
+    core, edge rise) and whose triangularity follows ``delta(rho)=delta*rho**2``
+    (-> 0 at the axis).  Centres shift outward by a parabolic Shafranov term
+    ``shaf*(1-rho^2)`` (shaf=0 => concentric).  At rho=1 the surface coincides
+    with the Miller LCFS.  This replaces naive self-similar scaling of the
+    boundary and is fitted to real ITER/MAST equilibria; mirrors the
+    stellarator's rho-built nested surfaces.
     """
-    c = _KAPPA_AXIS_FRAC
+    f = _KAPPA_EXCESS_AXIS_FRAC
     t = np.linspace(0.0, 2 * math.pi, int(n_theta))
     out = []
     for rho in levels:
         ar = a * rho
-        kr = kappa * (c + (1.0 - c) * rho**4)
+        kr = 1.0 + (kappa - 1.0) * (f + (1.0 - f) * rho**4)
         dr = max(-0.999, min(0.999, delta * rho**2))
         cR = R0 + shaf * (1.0 - rho**2)
         R = cR + ar * np.cos(t + math.asin(dr) * np.sin(t))
