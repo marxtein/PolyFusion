@@ -242,9 +242,11 @@ def tokamak_shape_outlines(R0, A, kappa, delta, g=0.0, geom_model=1,
     elif gm == 2:
         R, Z, shaf = cf_boundary(R0, a, kappa, delta, n_theta)
         ax = {"R": [R0 + shaf], "Z": [0.0]}
+        flux = miller_flux_surfaces(R0, a, kappa, delta, shaf)
     else:
         R, Z = miller_boundary(R0, a, kappa, delta, n_theta)
         ax = {"R": [R0], "Z": [0.0]}
+        flux = miller_flux_surfaces(R0, a, kappa, delta, 0.0)
     Rw, Zw = offset_outward(np.append(R, R[0]), np.append(Z, Z[0]), g)
     return {
         "lcfs": {"R": R.tolist(), "Z": Z.tolist()},
@@ -252,6 +254,30 @@ def tokamak_shape_outlines(R0, A, kappa, delta, g=0.0, geom_model=1,
         "axis": {"R": list(ax["R"]), "Z": list(ax["Z"])},
         "flux": flux, "geom_model": gm, "shaf_shift": shaf,
     }
+
+
+def miller_flux_surfaces(R0, a, kappa, delta, shaf=0.0,
+                         levels=(0.2, 0.4, 0.6, 0.8), n_theta=121):
+    """Nested Miller flux surfaces with shaping that relaxes toward the axis.
+
+    Each surface at flux label ``rho`` is a Miller curve whose elongation and
+    triangularity taper to a round circular core (kappa->1, delta->0 as rho->0)
+    and whose centre shifts outward by a parabolic Shafranov term
+    ``shaf*(1-rho^2)`` (shaf=0 => concentric).  At rho=1 the surface coincides
+    with the Miller LCFS.  This replaces naive self-similar scaling of the
+    boundary, mirroring the stellarator's rho-built nested surfaces.
+    """
+    t = np.linspace(0.0, 2 * math.pi, int(n_theta))
+    out = []
+    for rho in levels:
+        ar = a * rho
+        kr = 1.0 + (kappa - 1.0) * rho
+        dr = max(-0.999, min(0.999, delta * rho))
+        cR = R0 + shaf * (1.0 - rho**2)
+        R = cR + ar * np.cos(t + math.asin(dr) * np.sin(t))
+        Z = kr * ar * np.sin(t)
+        out.append({"R": R.tolist(), "Z": Z.tolist()})
+    return out
 
 
 def legacy_metrics(R0, A, kappa, delta, g):

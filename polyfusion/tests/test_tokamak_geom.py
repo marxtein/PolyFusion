@@ -195,3 +195,15 @@ def test_geom_model_switch_changes_power_account():
     assert vps[0] != pytest.approx(vps[1], rel=1e-6)   # legacy fit != Miller integral
     pf = [spec.solve({**p, "geom_model": gm})["Pfus"] for gm in (0, 1)]
     assert pf[0] != pytest.approx(pf[1], rel=1e-6)      # geometry drives fusion power
+
+
+def test_miller_flux_surfaces_nested_and_rounder_inward():
+    fs = tg.miller_flux_surfaces(6.2, 2.0, 1.8, 0.5)
+    assert len(fs) >= 3
+    widths = [max(s["R"]) - min(s["R"]) for s in fs]
+    assert widths == sorted(widths)                        # nested, growing outward
+    elong = lambda s: (max(s["Z"]) - min(s["Z"])) / (max(s["R"]) - min(s["R"]))
+    assert elong(fs[0]) < elong(fs[-1])                    # inner rounder than outer
+    # Miller shape_fn now returns constructed flux surfaces (not naive scaling)
+    out = tg.tokamak_shape_outlines(R0=6.2, A=3.1, kappa=1.8, delta=0.5, geom_model=1)
+    assert len(out["flux"]) >= 3
