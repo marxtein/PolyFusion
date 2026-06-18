@@ -165,7 +165,6 @@ class Result:
     geom_wall_ratio: float    # Sw_geom / Sw (1.0 unless Sw_override set)
     shaf_shift: float     # Shafranov shift [m] (CF model only; 0 otherwise)
     geom_model: float     # geometry model actually used (0/1/2)
-    divertor: float       # divertor topology echo (0 limiter / 1 double-null)
     strcase: str    # reaction label
 
     def as_dict(self) -> dict:
@@ -175,7 +174,7 @@ class Result:
 def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
           BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
           imp_name=None, f_aux_e=0.5, H_fac=1.0, use_tauE=1.0,
-          geom_model=0.0, divertor=0.0, Vp_override=0.0, Sw_override=0.0) -> Result:
+          geom_model=0.0, eq=None, Vp_override=0.0, Sw_override=0.0) -> Result:
     """Evaluate the 0-D power balance for one operating point.
 
     See parameter table in ``docs/01_托卡马克代码说明文档.md`` (§3) for units.
@@ -213,7 +212,7 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
                          BT0, Ip, t, fHe, fimp, Zimp, Rw, g, icase,
                          imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac,
                          use_tauE=1.0,
-                         geom_model=geom_model, divertor=divertor,
+                         geom_model=geom_model, eq=eq,
                          Vp_override=Vp_override, Sw_override=Sw_override)
 
         def _resid_t(t, res):
@@ -229,7 +228,7 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
                          BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
                          imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac,
                          use_tauE=1.0,
-                         geom_model=geom_model, divertor=divertor,
+                         geom_model=geom_model, eq=eq,
                          Vp_override=Vp_override, Sw_override=Sw_override)
 
         def _resid(ft, res):
@@ -267,7 +266,7 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
 
     # --- geometry (three selectable models; docs/04) ---
     geom = tokamak_geometry(int(geom_model), R0, A, kappa, delta, g,
-                            int(divertor), Vp_override, Sw_override)
+                            eq, Vp_override, Sw_override)
     a = geom["a"]
     Vp = geom["Vp"]
     Sp = geom["Sp"]
@@ -406,6 +405,6 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         Vp_geom=geom["Vp_geom"], Sw_geom=geom["Sw_geom"],
         geom_volume_ratio=geom["geom_volume_ratio"],
         geom_wall_ratio=geom["geom_wall_ratio"], shaf_shift=geom["shaf_shift"],
-        geom_model=float(int(geom_model)), divertor=float(int(divertor)),
+        geom_model=float(int(geom_model)),
         strcase=rx["name"],
     )

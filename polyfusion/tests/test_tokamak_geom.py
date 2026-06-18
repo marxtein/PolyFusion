@@ -68,7 +68,7 @@ def test_funsc_legacy_default_unchanged_and_models_differ():
     r0b = funsc(**base, geom_model=0)
     assert r0.Vp == pytest.approx(r0b.Vp, abs=1e-9)      # default == explicit legacy
     r1 = funsc(**base, geom_model=1)
-    r2 = funsc(**base, geom_model=2, divertor=0)
+    r2 = funsc(**base, geom_model=2)
     assert r1.Vp != pytest.approx(r0.Vp, rel=1e-6)        # Miller differs from fit
     assert r2.Vp == pytest.approx(r1.Vp, rel=0.02)        # CF limiter ~ Miller
     assert r2.shaf_shift > 0.0
@@ -91,7 +91,7 @@ def test_shape_outlines_closed_and_wall_outside():
 def test_config_spec_accepts_geom_params():
     from polyfusion.configs.base import get
     spec = get("tokamak")
-    for k in ("geom_model", "divertor", "Vp_override", "Sw_override"):
+    for k in ("geom_model", "Vp_override", "Sw_override"):
         assert k in spec.params
     # bounds reject out-of-range model
     errs = spec.validate({**spec.presets["ITER"], "geom_model": 5})
@@ -154,3 +154,20 @@ def test_shape_outlines_eq_has_flux_surfaces():
     assert len(out["lcfs"]["R"]) >= 100
     assert len(out["flux"]) >= 4
     assert out["axis"]["R"][0] == pytest.approx(eq["axis"]["R"][0])
+
+
+def test_funsc_eq_drives_volume_and_no_divertor_kwarg():
+    import os
+    from polyfusion.tokamak import funsc
+    from polyfusion import eqdsk
+    fx = os.path.join(os.path.dirname(__file__), "data", "test_1.geqdsk")
+    eq = eqdsk.equilibrium_geometry(eqdsk.parse_geqdsk(open(fx).read()))
+    base = dict(R0=6.35, A=3.43, kappa=1.86, delta=0.5, Sn=0.5, ST=1.0,
+                ni0=6.81e19, Ti0=25, fT=1.0, fsig=1.0, f1=0.5, BT0=5.18,
+                Ip=9.2, tauE=2.0, fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7,
+                g=0.05, icase=1)
+    r2 = funsc(**base, geom_model=2, eq=eq)
+    assert r2.Vp == pytest.approx(eq["Vp"], rel=1e-6)
+    assert r2.shaf_shift == pytest.approx(eq["shaf_shift"], rel=1e-6)
+    with pytest.raises(TypeError):
+        funsc(**base, divertor=1)
