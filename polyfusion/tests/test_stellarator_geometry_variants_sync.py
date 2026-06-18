@@ -10,7 +10,12 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from polyfusion.configs.stellarator import section_outlines, sync_geometry_variants  # noqa: E402
+from polyfusion.configs.stellarator import (  # noqa: E402
+    _nearaxis_boundary_fn_with_rho,
+    _shape_boundary_fn_with_rho,
+    section_outlines,
+    sync_geometry_variants,
+)
 from polyfusion.io import run_case  # noqa: E402
 from polyfusion.presets_io import load_presets  # noqa: E402
 
@@ -118,6 +123,45 @@ def test_every_preset_mode_runs_case_and_section_outlines(mode):
         _assert_outline_sane(section_outlines(**payload))
 
 
+def test_shape_view_uses_same_200_point_boundary_sampling_as_integral_path():
+    presets, _ = load_presets("stellarator")
+    cases = [
+        _payload_for_mode(presets["HELIAS"], "simple"),
+        _payload_for_mode(presets["W7-X"], "boundary"),
+    ]
+    for payload in cases:
+        outline = section_outlines(**payload)
+        sec = outline["sections"][0]
+        display_R = sec["R"][:-1]
+        display_Z = sec["Z"][:-1]
+        assert len(sec["R"]) == 201
+        assert sec["R"][0] == pytest.approx(sec["R"][-1])
+        assert sec["Z"][0] == pytest.approx(sec["Z"][-1])
+        if "shape" in payload:
+            boundary_fn, _ = _shape_boundary_fn_with_rho(
+                payload["R0"], payload["a"], payload["shape"])
+        else:
+            boundary_fn, _ = _nearaxis_boundary_fn_with_rho(
+                payload["R0"], payload["a"], payload["N_fp"],
+                payload.get("delta_h", 0.0), payload["etabar"],
+                rc=payload.get("rc"), zs=payload.get("zs"))
+        integ_R, integ_Z = boundary_fn(0.0, 1.0)
+        assert display_R == pytest.approx(integ_R.tolist())
+        assert display_Z == pytest.approx(integ_Z.tolist())
+
+
+def test_posterior_perimeters_use_exact_boundary_integral_surface_areas():
+    presets, _ = load_presets("stellarator")
+    for name in ("HELIAS", "NAE-QA", "W7-X", "LHD", "HSX", "CFQS"):
+        mode = presets[name]["geometry_variants"]["authority"]
+        payload = _payload_for_mode(presets[name], mode)
+        run = run_case(payload, config="stellarator")
+        assert "errors" not in run, f"{name}: {run.get('errors')}"
+        out = run["outputs"]
+        assert out["C_sec_mean"] * out["L_ax"] == pytest.approx(out["Sp_geom"])
+        assert out["C_wall_mean"] * out["L_ax"] == pytest.approx(out["Sw_geom"])
+
+
 def test_synthetic_boundary_variants_do_not_claim_measured_values():
     presets, _ = load_presets("stellarator")
     for name, preset in presets.items():
@@ -191,6 +235,14 @@ async function jpost(url, body){{
     assert "rc" not in data[2]["call"]["body"]["params"]
 
 
+def test_frontend_iota_text_and_estimate_marker_match_authority_semantics():
+    src = open(INDEX, encoding="utf-8").read()
+    assert "0=用几何值" not in src
+    assert "0=使用权威/拟合几何值" in src
+    assert "iota_geom_authoritative" in src
+    assert "k==='iota_geom'||k==='kappa_eff'" not in src
+
+
 def test_frontend_mode_switch_prefers_geometry_variants():
     src = open(INDEX, encoding="utf-8").read()
     support = [
@@ -254,6 +306,16 @@ def test_boundary_mode_reports_authoritative_iota_geom():
         assert "errors" not in run, f"{name}: {run.get('errors')}"
         assert run["outputs"]["iota"] == pytest.approx(payload["iota"])
         assert run["outputs"]["iota_geom"] == pytest.approx(payload["iota"])
+
+
+def test_boundary_mode_iota_zero_uses_matching_authoritative_variant():
+    presets, _ = load_presets("stellarator")
+    payload = _payload_for_mode(presets["W7-X"], "boundary")
+    payload["iota"] = 0.0
+    run = run_case(payload, config="stellarator")
+    assert "errors" not in run, run.get("errors")
+    assert run["outputs"]["iota"] == pytest.approx(0.88)
+    assert run["outputs"]["iota_geom"] == pytest.approx(0.88)
 
 
 def test_sw_override_derives_sp_from_uniform_wall_gap():

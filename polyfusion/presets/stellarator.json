@@ -1369,9 +1369,10 @@
       "geometry_variants": {
         "authority": "axis",
         "simple": {
-          "delta_h": 2.183497059,
-          "etabar": 0.075376809,
-          "source": "synthetic from axis Fourier"
+          "delta_h": 1.09174853,
+          "etabar": 0.075,
+          "source": "synthetic from axis Fourier fitted iota",
+          "iota_fit": 0.43040919686214824
         },
         "axis": {
           "rc": [
@@ -1601,9 +1602,10 @@
       "geometry_variants": {
         "authority": "axis",
         "simple": {
-          "delta_h": 3.219289806,
-          "etabar": 0.125023666,
-          "source": "synthetic from axis Fourier"
+          "delta_h": 1.5,
+          "etabar": 0.15,
+          "source": "synthetic from axis Fourier fitted iota",
+          "iota_fit": 1.2499809103484396
         },
         "axis": {
           "rc": [
@@ -1825,9 +1827,10 @@
       "geometry_variants": {
         "authority": "axis",
         "simple": {
-          "delta_h": 7.17570351,
-          "etabar": 0.104425836,
-          "source": "synthetic from axis Fourier"
+          "delta_h": 2.4,
+          "etabar": 0.1,
+          "source": "synthetic from axis Fourier fitted iota",
+          "iota_fit": 1.2346542106138945
         },
         "axis": {
           "rc": [

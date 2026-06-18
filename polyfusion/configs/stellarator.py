@@ -40,6 +40,7 @@ Rep. Prog. Phys. 77, 087001 (2014); Garren & Boozer, Phys. Fluids B 3 (1991)
 from __future__ import annotations
 
 import math
+import json
 from dataclasses import dataclass, asdict
 
 import numpy as np
@@ -70,6 +71,14 @@ _N_PHASE_FRAMES = 120     # fine toroidal cuts over one period for the phase sli
 _SHAPE_FADE = 1.5
 _NEST_RHOS = (0.18, 0.344, 0.508, 0.672, 0.836, 1.0)
 _PROFILE_N_RHO = 21
+_BOUNDARY_N_THETA = 200
+
+
+def _closed_list(arr):
+    xs = np.asarray(arr, dtype=float)
+    if xs.size == 0:
+        return []
+    return np.append(xs, xs[0]).tolist()
 
 
 def _offset_closed_curve_normal(boundary_R, boundary_Z, gap):
@@ -122,11 +131,9 @@ def boundary_metrics(boundary_fn, nfp, g=0.0, n_phi=120):
     [0,2pi] integration; see tests/test_geometry_integral.py).
 
     Volume: dV = R dR dZ dphi, with the cross-section integral
-    ``∬_S R dR dZ = ∮ (1/2) R^2 dZ`` (Green's theorem).  Surface: the area of the
-    WALL boundary (section centroid + (1 + g/max_radius)*(boundary - centroid)),
-    ``∬ |∂theta P × ∂phi P| dtheta dphi`` with P = (R cos phi, R sin phi, Z),
-    using central differences.  Matches the analytic torus V=2*pi^2*R0*a^2,
-    S=4*pi^2*R0*a to 0.004%.
+    ``∬_S R dR dZ = ∮ (1/2) R^2 dZ`` (Green's theorem).  Wall surface uses the
+    same per-vertex outward-normal offset convention as ``section_outlines``:
+    wall = boundary + g * outward normal.
     """
     nfp = int(nfp)
     phs = np.linspace(0.0, 2 * math.pi / nfp, n_phi, endpoint=False)
@@ -181,7 +188,7 @@ def boundary_metrics(boundary_fn, nfp, g=0.0, n_phi=120):
     return float(V), float(S), float(Sp_int)
 
 
-def _shape_boundary_fn_with_rho(R0, a, shape, n_theta=200):
+def _shape_boundary_fn_with_rho(R0, a, shape, n_theta=_BOUNDARY_N_THETA):
     """Return ``(boundary_fn(phi, rho), nfp)`` for an explicit Fourier shape.
 
     The rho scaling mirrors the machine-boundary display: m=0 terms locate the
@@ -218,7 +225,7 @@ def _shape_boundary_fn_with_rho(R0, a, shape, n_theta=200):
     return boundary_fn, nfp
 
 
-def _shape_boundary_fn(R0, a, shape, n_theta=200):
+def _shape_boundary_fn(R0, a, shape, n_theta=_BOUNDARY_N_THETA):
     """Return ``(boundary_fn, nfp)`` for an explicit Fourier ``shape`` descriptor.
 
     ``boundary_fn(phi) -> (R[n_theta], Z[n_theta])`` evaluates the DESC
@@ -337,6 +344,32 @@ def _fit_axis_etabar_to_iota(rc, zs, N_fp, target_iota, etabar_hint=0.05):
     return best[1], best[2]
 
 
+def _same_shape(a, b):
+    if not (isinstance(a, dict) and isinstance(b, dict)):
+        return False
+    try:
+        return json.dumps(a, sort_keys=True, separators=(",", ":")) == json.dumps(
+            b, sort_keys=True, separators=(",", ":"))
+    except TypeError:
+        return False
+
+
+def _boundary_variant_iota(params, shape):
+    gv = params.get("geometry_variants") if isinstance(params, dict) else None
+    if not isinstance(gv, dict):
+        return None
+    bv = gv.get("boundary")
+    if not isinstance(bv, dict):
+        return None
+    val = bv.get("iota")
+    if not (isinstance(val, (int, float)) and val > _IOTA_MIN):
+        return None
+    bshape = bv.get("shape")
+    if _same_shape(shape, bshape):
+        return float(val)
+    return None
+
+
 def _fit_simple_to_iota(R0, a, N_fp, target_iota, etabar_hint=0.05,
                         delta_hint=0.0):
     """Small deterministic search for a runnable simple near-axis proxy."""
@@ -419,12 +452,20 @@ def sync_geometry_variants(params, source_mode=None):
         rc = _round_list(p.get("rc") or [R0, p.get("delta_h", 0.0)])
         zs = _round_list(p.get("zs") or [0.0, -float(p.get("delta_h", 0.0) or 0.0)])
         axis = {"rc": rc, "zs": zs, "etabar": etabar}
-        delta_h = _dominant_axis_delta(rc, zs, p.get("delta_h", 0.0))
+        try:
+            target_iota = _axis_iota(rc, zs, N_fp, etabar)
+        except Exception:
+            target_iota = 0.0
+        delta_hint = _dominant_axis_delta(rc, zs, p.get("delta_h", 0.0))
+        delta_h, eta_fit, iota_fit = _fit_simple_to_iota(
+            R0, a, N_fp, target_iota, etabar, delta_hint)
         simple = {
             "delta_h": round(delta_h, 9),
-            "etabar": etabar,
-            "source": "synthetic from axis Fourier",
+            "etabar": float(eta_fit),
+            "source": "synthetic from axis Fourier fitted iota",
         }
+        if iota_fit is not None:
+            simple["iota_fit"] = float(iota_fit)
         boundary = _boundary_variant_from_axis(
             R0, a, N_fp, rc, zs, etabar,
             "synthetic from axis Fourier near-axis")
@@ -433,6 +474,8 @@ def sync_geometry_variants(params, source_mode=None):
         if not isinstance(shape, dict):
             raise ValueError("boundary sync requires a Fourier shape object")
         target_iota = float(p.get("iota", 0.0) or 0.0)
+        if target_iota <= _IOTA_MIN:
+            target_iota = _boundary_variant_iota(p, shape) or 0.0
         rc0, zs0 = _axis_from_shape(R0, a, shape)
         delta_hint = _dominant_axis_delta(rc0, zs0, p.get("delta_h", 0.0)) if rc0 and zs0 else float(p.get("delta_h", 0.0) or 0.15 * a)
         delta_h, eta_fit, iota_fit = _fit_simple_to_iota(
@@ -513,7 +556,7 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
     nfp = int(shape.get("nfp", round(N_fp)))
     R_modes = [(int(m), int(n), float(c)) for m, n, c in shape["R"]]
     Z_modes = [(int(m), int(n), float(c)) for m, n, c in shape["Z"]]
-    th = np.linspace(0.0, 2 * math.pi, n_theta)
+    th = np.linspace(0.0, 2 * math.pi, n_theta, endpoint=False)
     cos_m = {}; sin_m = {}
     for m, _, _ in R_modes + Z_modes:
         if m not in cos_m:
@@ -549,11 +592,13 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
         surfaces = []
         for rho in rhos:
             Rr, Zr = _shape_RZ(phi, rho)
-            surfaces.append({"rho": float(rho), "R": Rr.tolist(), "Z": Zr.tolist()})
+            surfaces.append({"rho": float(rho), "R": _closed_list(Rr),
+                             "Z": _closed_list(Zr)})
         elong = float((Zb.max() - Zb.min()) / (Rb.max() - Rb.min()))
-        wR, wZ = _offset_closed_curve_normal(Rb, Zb, g)
+        Rclosed, Zclosed = _closed_list(Rb), _closed_list(Zb)
+        wR, wZ = _offset_closed_curve_normal(Rclosed, Zclosed, g)
         return {"label": label, "elong": elong, "frac": float(frac),
-                "R": Rb.tolist(), "Z": Zb.tolist(), "surfaces": surfaces,
+                "R": Rclosed, "Z": Zclosed, "surfaces": surfaces,
                 "wall": {"R": wR.tolist(), "Z": wZ.tolist()}}
 
     sections = [_build_cut(frac, label) for frac, label in cuts]
@@ -662,7 +707,8 @@ def _nearaxis_reconstruct(na, nfp, a, th):
 
 
 def _nearaxis_boundary_fn_with_rho(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.05,
-                                   rc=None, zs=None, B2c=0.0, n_theta=200,
+                                   rc=None, zs=None, B2c=0.0,
+                                   n_theta=_BOUNDARY_N_THETA,
                                    A=None):
     """``(boundary_fn(phi, rho), nfp)`` for a near-axis concept."""
     a = _minor_radius(R0, a, A)
@@ -680,7 +726,8 @@ def _nearaxis_boundary_fn_with_rho(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.05,
 
 
 def _nearaxis_boundary_fn(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.05,
-                          rc=None, zs=None, B2c=0.0, n_theta=200, A=None):
+                          rc=None, zs=None, B2c=0.0,
+                          n_theta=_BOUNDARY_N_THETA, A=None):
     """``(boundary_fn, nfp)`` for a CONCEPT (near-axis, no explicit shape).
 
     ``boundary_fn(phi) -> (R[n_theta], Z[n_theta])`` is the rho=1 outline of the
@@ -696,7 +743,7 @@ def _nearaxis_boundary_fn(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.05,
 
 
 def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
-                     rc=None, zs=None, n_theta=121, B2c=0.0, shape=None,
+                     rc=None, zs=None, n_theta=_BOUNDARY_N_THETA, B2c=0.0, shape=None,
                      A=None,
                      **_ignored) -> dict:
     """Flux-surface cross-section outlines for the UI shape view (Scheme D + r2).
@@ -747,12 +794,12 @@ def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
     if etabar == 0.0:
         raise ValueError("etabar must be != 0 for section outlines "
                          "(legacy mode removed)")
-    th = np.linspace(0.0, 2 * math.pi, n_theta)
+    th = np.linspace(0.0, 2 * math.pi, n_theta, endpoint=False)
     rhos = _NEST_RHOS
     cuts = [(0.0, "φ=0"), (0.25, "φ=T/4"), (0.5, "φ=T/2")]
     sections = []
 
-    def _wall_offset(boundary_R, boundary_Z, center_R, center_Z, gap):
+    def _wall_offset(boundary_R, boundary_Z, gap):
         """Offset a closed boundary polygon outward by ``gap`` along its own
         outward normal.  The polygon is closed (last point == first); we work
         on the unique vertices, build per-vertex normals by averaging the two
@@ -796,7 +843,8 @@ def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
         out = []
         for rho in rhos:
             Rr, Zr = surf(rho)
-            out.append({"rho": float(rho), "R": Rr.tolist(), "Z": Zr.tolist()})
+            out.append({"rho": float(rho), "R": _closed_list(Rr),
+                        "Z": _closed_list(Zr)})
         return out
 
     for (frac, label), j in zip(cuts, cut_j):
@@ -805,7 +853,7 @@ def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
         Rsec, Zsec = surfaces[-1]["R"], surfaces[-1]["Z"]
         sec = {"label": label, "elong": float(na.elongation[j]),
                "R": Rsec, "Z": Zsec, "surfaces": surfaces}
-        sec["wall"] = _wall_offset(Rsec, Zsec, na.R0_arr[j], na.Z0_arr[j], g)
+        sec["wall"] = _wall_offset(Rsec, Zsec, g)
         sections.append(sec)
 
     # fine phi frames over one field period for the continuous phase slider (UI
@@ -828,7 +876,7 @@ def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
         elong = float((np.max(Zb) - np.min(Zb)) / (np.max(Rb) - np.min(Rb)))
         frames.append({"label": "φ=%.3fT" % frac, "frac": float(frac),
                        "elong": elong, "R": Rb, "Z": Zb, "surfaces": surfs,
-                       "wall": _wall_offset(Rb, Zb, aR, aZ, g)})
+                       "wall": _wall_offset(Rb, Zb, g)})
 
     axis = {"R": na.R0_arr[::6].tolist(), "Z": na.Z0_arr[::6].tolist()}
     return {"mode": "near-axis", "metric_mode": metric_mode,
@@ -915,6 +963,7 @@ class StellaratorResult:
     Vp: float
     iota: float       # rotational transform actually used in the closure
     iota_geom: float  # transform from the analytic geometry
+    iota_geom_authoritative: float # 1 if iota_geom is a matched boundary authority value
     helicity: float   # near-axis helicity (0 in rotating-ellipse mode)
     L_ax: float       # magnetic-axis length [m]
     kappa_eff: float  # effective section elongation used for areas
@@ -1043,6 +1092,8 @@ def _stellarator_geometry(R0, a, N_fp, delta_h, etabar, g, rc, zs, shape,
     Vp_geom, Sw_geom, Sp_geom = boundary_metrics(bfn, nfp, g)
     profile_rho, profile_vfrac = _profile_volume_fraction(boundary_rho_fn, nfp)
     res = dict(geom)
+    res["C_sec_mean"] = Sp_geom / geom["L_ax"] if geom["L_ax"] > 0 else float("nan")
+    res["C_wall_mean"] = Sw_geom / geom["L_ax"] if geom["L_ax"] > 0 else float("nan")
     res["Vp_integ"] = Vp_geom
     res["Sw_integ"] = Sw_geom
     res["Sp_integ"] = Sp_geom
@@ -1097,7 +1148,8 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
                       etabar=0.05, imp_name=None, f_aux_e=0.5,
                       H_fac=1.0, use_tauE=1.0,
                       rc=None, zs=None, Vp_override=0.0,
-                      Sw_override=0.0, shape=None, a=None) -> StellaratorResult:
+                      Sw_override=0.0, shape=None, a=None,
+                      geometry_variants=None) -> StellaratorResult:
     """Evaluate the 0-D stellarator power balance at one operating point.
 
     Single near-axis (Garren-Boozer) geometry (Scheme D).  ``etabar`` [1/m] is
@@ -1150,7 +1202,8 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
                                      imp_name=imp_name, f_aux_e=f_aux_e,
                                      H_fac=H_fac, use_tauE=1.0,
                                      rc=rc, zs=zs, Vp_override=Vp_override,
-                                     Sw_override=Sw_override, shape=shape)
+                                     Sw_override=Sw_override, shape=shape,
+                                     geometry_variants=geometry_variants)
 
         def _resid_t(t, res):
             return H_fac - res.H_ISS04
@@ -1171,7 +1224,8 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
                                      imp_name=imp_name, f_aux_e=f_aux_e,
                                      H_fac=H_fac, use_tauE=1.0,
                                      rc=rc, zs=zs, Vp_override=Vp_override,
-                                     Sw_override=Sw_override, shape=shape)
+                                     Sw_override=Sw_override, shape=shape,
+                                     geometry_variants=geometry_variants)
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
@@ -1211,9 +1265,14 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     Vp_geom_report = Vp_geom
     Sw_geom_report = Sw_geom
     explicit_iota = iota is not None and iota > 0
-    iota_used = iota if explicit_iota else iota_geom
-    if shape is not None and explicit_iota:
-        iota_geom = float(iota)
+    variant_iota = _boundary_variant_iota(
+        {"geometry_variants": geometry_variants}, shape) if shape is not None else None
+    iota_source = float(iota) if explicit_iota else variant_iota
+    iota_used = iota_source if iota_source is not None else iota_geom
+    iota_geom_authoritative = 0.0
+    if shape is not None and iota_source is not None:
+        iota_geom = float(iota_source)
+        iota_geom_authoritative = 1.0
     if iota_used <= _IOTA_MIN:
         raise ValueError("rotational transform is ~0: give an explicit iota "
                          "override (measured machine) or shaping that produces "
@@ -1314,7 +1373,9 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
         nbar_o_Sudo=nbar_o_Sudo, n_Sudo=n_Sudo,
         beta_soft_limit=_BETA_SOFT_LIMIT,
         Pbrem=Pbrem, Pcycl=Pcycl, Ptrans=Pth, PL_ISS04=PL, Vp=Vp,
-        iota=iota_used, iota_geom=iota_geom, helicity=helicity, L_ax=L_ax,
+        iota=iota_used, iota_geom=iota_geom,
+        iota_geom_authoritative=iota_geom_authoritative,
+        helicity=helicity, L_ax=L_ax,
         kappa_eff=kappa_eff, elong_max=elong_max, tau_ISS04=tau_ISS04,
         Sp=Sp, Sw=Sw, A_flux=A_flux_eff, a_vol=a_vol,
         aspect_geom=aspect_geom, aspect_vol=aspect_vol,

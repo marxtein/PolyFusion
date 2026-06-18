@@ -204,7 +204,7 @@ const META={
   fT:['T<sub>e0</sub>/T<sub>i0</sub> 比','T<sub>e0</sub>/T<sub>i0</sub> ratio','','plasma','f<sub>T</sub>'],
   BT0:['环向场','toroidal field','T','field','B<sub>T0</sub>'],B0:['磁场','field','T','field','B<sub>0</sub>'],B_vac:['中心真空场','central vacuum field','T','field','B<sub>vac</sub>'],
   B_e:['外加轴向场','external field','T','field','B<sub>e</sub>'],B_ring:['环表面场','coil field','T','field','B<sub>ring</sub>'],
-  Ip:['等离子体电流','plasma current','MA','field','I<sub>p</sub>'],iota:['旋转变换 (0=用几何值)','rotational transform (0 = geometric)','','field','ι'],
+  Ip:['等离子体电流','plasma current','MA','field','I<sub>p</sub>'],iota:['旋转变换 (0=使用权威/拟合几何值；自定义边界需同步或显式输入)','rotational transform (0 = authority/fitted geometry; custom boundary needs sync or explicit input)','','field','ι'],
   f1:['燃料配比','fuel mix','','fuel','f<sub>1</sub>'],fHe:['氦灰份额','helium ash','','fuel','f<sub>He</sub>'],fimp:['杂质份额','impurity','','fuel','f<sub>imp</sub>'],Zimp:['杂质电荷','impurity charge','','fuel','Z<sub>imp</sub>'],
   imp_name:['线辐射元素 (Mavrin; 关闭=只算轫致)','line-radiation species (off = brems only)','','fuel','imp'],
   tauE:['能量约束时间','energy confinement time','s','conf','τ<sub>E</sub>'],
@@ -223,7 +223,12 @@ const META={
   ring_model:['有限环几何 (0=点偶极,1=载流环)','finite-ring geometry (0=point,1=loop)','','geo','ring'],
   f_alpha:['α沉积份额 (留空=损失锥自动)','alpha deposit fraction (blank = loss-cone auto)','','conf','f<sub>α</sub>'],
   B_expand:['端部扩张比','expander ratio','','conf','B<sub>exp</sub>'],
-  phi_i_over_Te:['电势比 (0=自动 T<sub>e</sub>·lnR)','potential ratio (0 = auto Te lnR)','','conf','φ<sub>i</sub>/T<sub>e</sub>'],lnLambda:['库仑对数','Coulomb log','','conf','ln Λ']};
+  phi_i_over_Te:['电势比 (0=自动 T<sub>e</sub>·lnR)','potential ratio (0 = auto Te lnR)','','conf','φ<sub>i</sub>/T<sub>e</sub>'],lnLambda:['库仑对数','Coulomb log','','conf','ln Λ'],
+  geometry:['几何模型','geometry model','','geo','geom'],
+  L_th:['喉部半长 (multi_zone)','throat half-length (multi_zone)','m','geo','L<sub>th</sub>'],
+  profile:['B(z) 剖面','B(z) profile','','geo','prof'],
+  f_axial:['端损轴向衰减','axial attenuation factor','','conf','f<sub>ax</sub>'],
+  L_expand:['扩张器半长','expander half-length','m','geo','L<sub>exp</sub>']};
 // config display names per language
 const CFGN={tokamak:['托卡马克','Tokamak'],mirror:['磁镜','Mirror'],frc:['场反位形','FRC'],dipole:['偶极场','Dipole'],stellarator:['仿星器','Stellarator']};
 const cfgL=n=>{const c=CFGN[n]||[n,n];return LANG==='zh'?c[0]:c[1];};
@@ -374,6 +379,7 @@ function stashStellGeom(){
 
 function stellGeomMode(){return VALS._geom_mode||inferStellGeomMode();}
 function stellGeomModeHtml(){const m=stellGeomMode();const item=(k,zh,en)=>`<button type="button" class="modebtn${m===k?' on':''}" data-gmode="${k}">${L(zh,en)}</button>`;return `<div class="fld full modefld"><label><span class="sym">geo</span><span class="nm">${L('几何输入方式','geometry input mode')}</span></label><div class="modebar">${item('simple','默认近轴','simple near-axis')}${item('axis','磁轴 Fourier','axis Fourier')}${item('boundary','边界 Fourier','boundary Fourier')}</div></div>`;}
+function mirrorGeomModeHtml(){const g=VALS.geometry||'sin2_simple';const item=(k,zh,en)=>`<button type="button" class="modebtn${g===k?' on':''}" data-mgmode="${k}">${L(zh,en)}</button>`;return `<div class="fld full modefld"><label><span class="sym">geo</span><span class="nm">${L('几何模型','geometry model')}</span></label><div class="modebar">${item('sin2_simple','经典 sin²','classic sin²')}${item('multi_zone','多区几何','multi-zone')}</div></div>`;}
 function migrateStellRadius(){if(CUR==='stellarator'&&VALS&&!('a'in VALS)&&'A'in VALS&&'R0'in VALS){VALS.a=VALS.R0/VALS.A;delete VALS.A;}}
 
 function stellVariant(mode){const gv=VALS.geometry_variants;return isPlainObject(gv)&&isPlainObject(gv[mode])?gv[mode]:null;}
@@ -599,15 +605,29 @@ function buildParams(){
     html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div>`;
     html+=`<div class="pgrid" data-grp="${gk}">`;
     if(CUR==='stellarator'&&gk==='geo')html+=stellGeomModeHtml();
+    if(CUR==='mirror'&&gk==='geo')html+=mirrorGeomModeHtml();
     for(const p of groups[gk]){const m=META[p];const desc=L(m[0],m[1]);
       // stellarator: hide params that don't apply to current geom mode
       if(CUR==='stellarator'&&gk==='geo'&&!showParamForMode(p))continue;
+      // mirror: hide geometry-specific params that don't apply to current mode
+      if(CUR==='mirror'&&gk==='geo'){
+        const mg=VALS.geometry||'sin2_simple';
+        const mzOnly=new Set(['L_th','profile','L_expand']);
+        const s2Only=new Set(['f_throat']);
+        if(mg==='sin2_simple'&&mzOnly.has(p))continue;
+        if(mg==='multi_zone'&&s2Only.has(p))continue;
+      }
+      if(CUR==='mirror'&&p==='f_axial'&&(VALS.geometry||'sin2_simple')!=='multi_zone')continue;
+      // mirror: 'geometry' is rendered as mode buttons, not a regular input
+      if(CUR==='mirror'&&p==='geometry')continue;
       if(BOOLS.has(p)){const onTxt=p==='use_tauE'?L('开启：输入 τE','on: input tauE'):L('开启','on');
         const offTxt=p==='use_tauE'?L('关闭：自洽损失','off: self-consistent losses'):L('关闭','off');
         html+=`<div class="fld full"><label title="${desc}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span></label><select data-p="${p}" data-bool="1"><option value="1" ${VALS[p]!==0?'selected':''}>${onTxt}</option><option value="0" ${VALS[p]===0?'selected':''}>${offTxt}</option></select></div>`;}
       else if(p==='m'){continue;}  // FRC paper shape index: derived from f_shape (API-only input); m_shape is shown as output
       else if(p==='sep_model'){const SM=[['superellipse',L('超椭圆(默认)','superellipse (default)')],['mrr',L('MRR 论文分离面','MRR paper separatrix')]];const cur=VALS.sep_model||'superellipse';
         html+=`<div class="fld full"><label title="${desc}"><span class="sym">sep</span><span class="nm">${desc}</span></label><select data-p="sep_model">${SM.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${t}</option>`).join('')}</select></div>`;}
+      else if(p==='profile'){const PR=[['hermite',L('Hermite 三次 (默认)','Hermite cubic (default)')],['sin2',L('sin² (经典)','sin² (classic)')]];const cur=VALS.profile||'hermite';
+        html+=`<div class="fld full"><label title="${desc}"><span class="sym">prof</span><span class="nm">${desc}</span></label><select data-p="profile">${PR.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${t}</option>`).join('')}</select></div>`;}
       else if(p==='icase'){html+=`<div class="fld full"><label title="${desc}">${desc}</label><select data-p="icase">${Object.entries(RX).map(([k,v])=>`<option value="${k}" ${+VALS.icase===+k?'selected':''}>${k} · ${v}</option>`).join('')}</select></div>`;}
       else if(p==='imp_name'){const SP=['','He','Li','Be','C','N','O','Ne','Ar','Kr','Xe','W'];
         html+=`<div class="fld"><label title="${desc}"><span class="sym">imp</span><span class="nm">${desc}</span></label><select data-p="imp_name">${SP.map(s=>`<option value="${s}" ${(VALS.imp_name||'')===s?'selected':''}>${s||L('关闭(默认)','off (default)')}</option>`).join('')}</select></div>`;}
@@ -646,6 +666,11 @@ function buildParams(){
     setStellGeomMode(b.dataset.gmode);
     buildParams();buildThresh();buildPlotOpts();fitScanRanges();
     recompute();
+  });
+  // mirror geometry mode switch handlers
+  box.querySelectorAll('[data-mgmode]').forEach(b=>b.onclick=()=>{
+    VALS.geometry=b.dataset.mgmode;
+    buildParams();recompute();
   });
   if(CUR!=='stellarator'&&CONFIGS[CUR].params.some(p=>ADV_PARAMS.has(p))){
     const bar=document.createElement('div');bar.className='advbar';
@@ -765,7 +790,7 @@ function cleanStellOverrides(o){
   }
   return o;
 }
-function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='sep_model'){if(typeof v==='string'&&v)o[k]=v;}else if(OPAQUE_PARAMS.has(k)&&isPlainObject(v))o[k]=v;else if(Array.isArray(v)){const a=v.filter(x=>typeof x==='number'&&isFinite(x));if(a.length)o[k]=a;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return cleanStellOverrides(o);}
+function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='sep_model'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='geometry'||k==='profile'){if(typeof v==='string'&&v)o[k]=v;}else if(OPAQUE_PARAMS.has(k)&&isPlainObject(v))o[k]=v;else if(Array.isArray(v)){const a=v.filter(x=>typeof x==='number'&&isFinite(x));if(a.length)o[k]=a;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return cleanStellOverrides(o);}
 async function recompute(){const r=await jpost('/api/run',{config:CUR,overrides:clean()});applyRun(r);if(VIEW!=='popcon')setView(VIEW);}
 function applyRun(r){
   r._geom_mode=CUR==='stellarator'?stellGeomMode():null;LASTRUN=r;const box=document.getElementById('results');
@@ -777,10 +802,12 @@ function applyRun(r){
     const u=uu?` <span class="u">${uu}</span>`:'';
     // audit P1: Q=1000 cap must read as ignition/self-sustain, not a number
     if(k==='Qfus'&&o.ignited===1)return `<div class="kv hot"><span class="k">${pk(k)}</span><span class="v">∞ ⚡${L('点火','ignited')}</span></div>`;
-    // measured-machine geometry: near-axis iota_geom/kappa_eff/elong_max are
-    // ESTIMATES only (the real geometry is the measured Vp/Sw override), flag them
-    const estK=(CUR==='stellarator'&&o.geom_is_measured===1&&(k==='iota_geom'||k==='kappa_eff'||k==='elong_max'||k==='helicity'));
-    const est=estK?` <span class="u" title="${L('单谐波近轴估计；真机几何由实测 Vp/Sw 覆写决定','single-harmonic near-axis estimate; real geometry set by measured Vp/Sw override')}">~${L('近轴估','est')}</span>`:'';
+    // measured-machine geometry: iota_geom is authoritative when it came from
+    // a matched boundary variant/input; other near-axis diagnostics remain estimates.
+    const iotaEst=(k==='iota_geom'&&o.iota_geom_authoritative!==1);
+    const geomEst=(k==='kappa_eff'||k==='elong_max'||k==='helicity');
+    const estK=(CUR==='stellarator'&&o.geom_is_measured===1&&(iotaEst||geomEst));
+    const est=estK?` <span class="u" title="${L('近轴几何估计；真机几何由权威边界/实测 Vp/Sw 覆写决定','near-axis geometry estimate; real-machine geometry set by authoritative boundary / measured Vp/Sw override')}">~${L('近轴估','est')}</span>`:'';
     return `<div class="kv ${cls}"><span class="k">${pk(k)}</span><span class="v">${typeof val==='string'?val:fmt(val)}${u}${est}</span></div>`;}).join('');
     if(rows)html+=`<div class="grp"><div class="grp-t">${g}</div>${rows}</div>`;}
   box.innerHTML=html;
@@ -943,7 +970,7 @@ function drawShape(){
         };
       }
       document.getElementById('plotMeta').innerHTML=
-        `<span>${L('后端解析磁面：','backend flux surfaces: ')}${sh.mode} · ${L('壁面 = 边界 + g','wall = boundary + g')}</span>`;
+        `<span>${L('后端解析磁面：','backend flux surfaces: ')}${sh.mode} · ${L('壁面 = 边界沿外法向偏移 g','wall = boundary normal offset by g')}</span>`;
     }else{document.getElementById('plotMeta').innerHTML=`<span>${L('等待后端解析磁面','waiting for backend flux surfaces')}</span>`;document.getElementById('phControls').innerHTML='';}
   }else if(CUR==='mirror'){
     const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;

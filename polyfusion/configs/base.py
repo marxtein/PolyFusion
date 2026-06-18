@@ -38,7 +38,8 @@ _DIPOLE_PARAMS = ["use_tauE", "r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "ta
 _STELL_PARAMS = ["use_tauE", "R0", "a", "N_fp", "delta_h", "etabar", "Sn", "ST",
                  "ni0", "Ti0", "fT", "fsig", "f1", "B0", "iota", "tauE", "fHe",
                  "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name",
-                 "H_fac", "rc", "zs", "Vp_override", "Sw_override", "shape"]
+                 "H_fac", "rc", "zs", "Vp_override", "Sw_override", "shape",
+                 "geometry_variants"]
 
 # Machine presets for every non-tokamak configuration now live in JSON data
 # files (``polyfusion/presets/<config>.json``, with any
