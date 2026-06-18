@@ -145,6 +145,8 @@ def equilibrium_geometry(g: dict) -> dict:
     R0, a, kappa, delta, shaf_shift, Vp, Sp.
     """
     Rb, Zb = g["rbbbs"], g["zbbbs"]
+    if Rb.size < 3:
+        raise ValueError("EQDSK has no usable plasma boundary (nbbbs < 3)")
     R0 = 0.5 * (float(Rb.max()) + float(Rb.min()))
     a = 0.5 * (float(Rb.max()) - float(Rb.min()))
     kappa = (float(Zb.max()) - float(Zb.min())) / (2 * a) if a > 0 else 1.0

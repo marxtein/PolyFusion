@@ -44,3 +44,11 @@ def test_equilibrium_geometry_jsonable():
     g = eqdsk.parse_geqdsk(open(FIXTURE).read())
     eq = eqdsk.equilibrium_geometry(g)
     json.dumps(eq)
+
+
+def test_equilibrium_geometry_rejects_empty_boundary():
+    g = eqdsk.parse_geqdsk(open(FIXTURE).read())
+    g["rbbbs"] = np.array([])
+    g["zbbbs"] = np.array([])
+    with pytest.raises(ValueError):
+        eqdsk.equilibrium_geometry(g)
