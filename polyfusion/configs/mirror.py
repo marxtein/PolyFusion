@@ -371,3 +371,96 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, geometry="sin2_simple
         P_ei=P_ei, f_alpha_used=f_alpha_used, Te0_used=Te0,
         te_mode=0.0, te_resid=0.0, strcase=rx["name"],
     )
+
+
+def _compute_beta(params: dict) -> float:
+    """Peak diamagnetic beta from raw params (shared by solve_mirror and mirror_shape)."""
+    rx = _REACTIONS[int(params.get("icase", 1))]
+    ni0 = float(params["ni0"])
+    Ti0 = float(params["Ti0"])
+    Te0 = float(params.get("Te0", 0.0)) or float(params.get("Te", 0.0))
+    if Te0 == 0:
+        Te0 = 0.01
+    B_vac = float(params["B_vac"])
+    f1 = 1.0 if rx["like"] else float(params.get("f1", 0.5))
+    fHe = float(params.get("fHe", 0.0))
+    fimp = float(params.get("fimp", 0.0))
+    Zimp = float(params.get("Zimp", 10))
+    d12 = rx["d12"]
+    x1 = 1.0 if rx["like"] else f1
+    x2 = 1.0 if rx["like"] else (1.0 - f1)
+    Z1, Z2, ZHe = rx["Z1"], rx["Z2"], 2
+    f12 = 1.0 - fHe - fimp
+    n120 = f12 * ni0
+    n10, n20 = x1 * n120, x2 * n120
+    nHe0, nimp0 = fHe * ni0, fimp * ni0
+    ne0 = (n10 * Z1 + n20 * Z2) / (1 + d12) + nHe0 * ZHe + nimp0 * Zimp
+    p_peak = (ni0 * Ti0 + ne0 * Te0) * _KEV_J
+    return min(2 * MU0 * p_peak / B_vac ** 2, 0.99)
+
+
+def mirror_shape(params: dict) -> dict:
+    """Axial geometry sampling for the frontend shape view.
+
+    Reconstructs the same geometry object that ``solve_mirror`` uses, then
+    samples ``B(z)`` and ``a(z)`` along the full axial extent.  The frontend
+    ``drawShape()`` consumes this dict directly — no JS-side geometry math.
+    """
+    geometry = params.get("geometry", "sin2_simple")
+    a_c = float(params["a_c"])
+    L_c = float(params["L_c"])
+    B_vac = float(params["B_vac"])
+    R_mirror = float(params["R_mirror"])
+    g = float(params.get("g", 0.0))
+    beta = _compute_beta(params)
+
+    geom_cls = get_geometry(geometry)
+    geom_kwargs = dict(a_c=a_c, L_c=L_c, B_vac=B_vac, R_mirror=R_mirror, beta=beta)
+
+    if geometry == "sin2_simple":
+        geom_kwargs.update(f_throat=float(params.get("f_throat", 0.1)), g=g)
+        L_th = float(params.get("f_throat", 0.1)) * L_c
+        z_extent = L_c / 2 + L_th
+    elif geometry == "multi_zone":
+        L_th_val = (float(params.get("f_throat", 0.1)) * L_c
+                     if params.get("L_th") is None else float(params["L_th"]))
+        L_expand = float(params.get("L_expand", 2.0))
+        geom_kwargs.update(
+            L_th=L_th_val, g=g,
+            profile=params.get("profile", "hermite"),
+            f_axial=float(params.get("f_axial", 0.8)),
+            L_expand=L_expand,
+            B_expand=float(params.get("B_expand", 100.0)),
+        )
+        z_extent = L_c / 2 + L_th_val + L_expand
+    else:
+        return {"type": "mirror", "mode": geometry, "axial": None, "throat": None}
+
+    geom = geom_cls(**geom_kwargs)
+
+    N = 200
+    z_vals = [-z_extent + 2 * z_extent * i / (N - 1) for i in range(N)]
+    r_vals = [geom.a(z) for z in z_vals]
+    B_vals = [geom.B(z) for z in z_vals]
+    r_wall_vals = [r + g for r in r_vals]
+
+    throat_z = z_extent
+    if geometry == "sin2_simple":
+        throat_z = L_c / 2 + L_th
+    elif geometry == "multi_zone":
+        throat_z = L_c / 2 + geom_kwargs.get("L_th", L_th_val)
+
+    return {
+        "type": "mirror",
+        "mode": geometry,
+        "axial": {
+            "z": z_vals,
+            "r": r_vals,
+            "B": B_vals,
+            "r_wall": r_wall_vals,
+        },
+        "throat": {
+            "z": throat_z,
+            "r": geom.throat_radius(),
+        },
+    }

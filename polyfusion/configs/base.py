@@ -20,7 +20,7 @@ from ..tokamak import funsc
 from ..presets import (PRESETS as TOKAMAK_PRESETS, PARAM_ORDER as TOKAMAK_PARAMS,
                        PRESET_GROUPS as TOKAMAK_GROUPS)
 from ..presets_io import load_presets
-from .mirror import solve_mirror
+from .mirror import solve_mirror, mirror_shape
 from .frc import solve_frc, frc_shape_outlines
 from .dipole import solve_dipole
 from .stellarator import solve_stellarator, section_outlines
@@ -382,6 +382,7 @@ MIRROR = ConfigSpec(
     contour_spec=MIRROR_CONTOURS,
     preset_groups=MIRROR_GROUPS,
     _solve=solve_mirror,
+    shape_fn=lambda params: mirror_shape(params),
 )
 
 FRC = ConfigSpec(
