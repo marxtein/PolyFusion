@@ -171,3 +171,17 @@ def test_funsc_eq_drives_volume_and_no_divertor_kwarg():
     assert r2.shaf_shift == pytest.approx(eq["shaf_shift"], rel=1e-6)
     with pytest.raises(TypeError):
         funsc(**base, divertor=1)
+
+
+def test_config_spec_has_eq_param():
+    from polyfusion.configs.base import get
+    spec = get("tokamak")
+    assert "eq" in spec.params
+    assert "divertor" not in spec.params
+    import os
+    from polyfusion import eqdsk
+    fx = os.path.join(os.path.dirname(__file__), "data", "test_1.geqdsk")
+    eq = eqdsk.equilibrium_geometry(eqdsk.parse_geqdsk(open(fx).read()))
+    out = spec.solve({**spec.presets["ITER"], "geom_model": 2, "eq": eq})
+    assert out["valid"] == 1.0
+    assert out["Vp"] == pytest.approx(eq["Vp"], rel=1e-6)

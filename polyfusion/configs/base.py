@@ -345,7 +345,7 @@ def _stell_cross(p: dict) -> list[str]:
 TOKAMAK = ConfigSpec(
     name="tokamak", label="托卡马克 Tokamak",
     params=["use_tauE"] + TOKAMAK_PARAMS + ["imp_name", "H_fac",
-            "geom_model", "Vp_override", "Sw_override"],
+            "geom_model", "eq", "Vp_override", "Sw_override"],
     required=TOKAMAK_PARAMS,
     positive=["R0", "A", "kappa", "ni0", "Ti0", "BT0", "Ip", "Zimp"],
     bounds={**_COMMON_BOUNDS, "delta": (-0.999, 0.999),

@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from polyfusion.io import run_case, list_configs   # noqa: E402
 from polyfusion.configs.base import get             # noqa: E402
 from polyfusion.scan import scan2d, best_region_mask  # noqa: E402
+from polyfusion import eqdsk                          # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOST = "0.0.0.0"
@@ -118,7 +119,10 @@ class Handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError as e:
             return self._send(400, json.dumps({"error": f"bad json: {e}"}))
         try:
-            if self.path == "/api/run":
+            if self.path == "/api/tokamak/parse_eqdsk":
+                g = eqdsk.parse_geqdsk(req.get("eqdsk") or "")
+                out = {"config": "tokamak", "eq": eqdsk.equilibrium_geometry(g)}
+            elif self.path == "/api/run":
                 out = run_case(_floatify(req.get("overrides")), preset=req.get("preset"),
                                config=req.get("config", "tokamak"))
             elif self.path == "/api/scan":
