@@ -81,7 +81,10 @@ def parse_geqdsk(text: str) -> dict:
     }
 
 
-_PSI_N_LEVELS = (0.2, 0.4, 0.6, 0.8, 0.9)   # nested flux surfaces for display
+# nested flux surfaces for display; psi_n ~ rho^2, so these map to roughly
+# evenly-spaced volume radii rho ~ 0.15..0.92 — the innermost hugs the magnetic
+# axis so the dashed surfaces visibly emanate from it (not a hollow core).
+_PSI_N_LEVELS = (0.02, 0.1, 0.25, 0.45, 0.65, 0.85)
 
 
 def _revolution_metrics(R, Z):

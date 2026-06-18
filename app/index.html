@@ -391,8 +391,8 @@ function setTokGeomMode(k){const gm=+k;
   if(gm!==2){if(isPlainObject(VALS.eq))TOK_EQ_STASH=cloneJson(VALS.eq);delete VALS.eq;}
   else if(!isPlainObject(VALS.eq)&&isPlainObject(TOK_EQ_STASH))VALS.eq=cloneJson(TOK_EQ_STASH);
   VALS.geom_model=gm;}
-function showTokParamForMode(p){const gm=+VALS.geom_model||0;
-  if(p==='Vp_override'||p==='Sw_override')return gm!==0;
+function showTokParamForMode(p){
+  if(p==='Vp_override'||p==='Sw_override')return false;  // not exposed for tokamak
   return true;}
 
 const DENS=new Set(['ni0','n0']);const OUT_DENS=new Set(['ne0','ni0','n0','nbar','n_Sudo','nbar_geom']);
@@ -625,7 +625,7 @@ function buildParams(){
     setTokGeomMode(b.dataset.tgmode);
     buildParams();buildPlotOpts();recompute();
   });
-  if(CUR!=='stellarator'&&CONFIGS[CUR].params.some(p=>ADV_PARAMS.has(p))){
+  if(CUR!=='stellarator'&&CUR!=='tokamak'&&CONFIGS[CUR].params.some(p=>ADV_PARAMS.has(p))){
     const bar=document.createElement('div');bar.className='advbar';
     bar.innerHTML=`<button id="advBtn" class="advbtn${ADVANCED?' on':''}">`+
       `${ADVANCED?'▾ ':'▸ '}${L('高级输入（自定义轴 / 实测体积·面积覆写）','Advanced (custom axis / measured Vp·Sw)')}</button>`;
@@ -882,7 +882,7 @@ function drawShape(){
         sh.flux.forEach(s=>add(cv(s.R.concat([s.R[0]]),s.Z.concat([s.Z[0]]),GC('flux'),1.2,'dash'),'flux'));
       }else{
         const ax0=(sh.axis&&sh.axis.R&&sh.axis.R.length)?[sh.axis.R[0],sh.axis.Z[0]]:[R0,0];
-        [0.35,0.6,0.82].forEach(s=>add(cv(sh.lcfs.R.map(R=>ax0[0]+s*(R-ax0[0])),sh.lcfs.Z.map(Z=>ax0[1]+s*(Z-ax0[1])),GC('flux'),1.2,'dash'),'flux'));
+        [0.15,0.35,0.55,0.75,0.9].forEach(s=>add(cv(sh.lcfs.R.map(R=>ax0[0]+s*(R-ax0[0])),sh.lcfs.Z.map(Z=>ax0[1]+s*(Z-ax0[1])),GC('flux'),1.2,'dash'),'flux'));
       }
       add(lin(Lf[0],Lf[1],GC('boundary'),2.6,true,'rgba(54,226,196,.06)'),'boundary');
       const ax=(sh.axis&&sh.axis.R&&sh.axis.R.length)?[sh.axis.R[0],sh.axis.Z[0]]:[R0,0];
@@ -905,7 +905,8 @@ function drawShape(){
     }
     add({type:'scatter',mode:'lines+markers+text',x:[0,R0],y:[0,0],line:{color:'#ff6b6b',width:1.5,dash:'dot'},marker:{color:'#ff6b6b',size:3},text:['',`R<sub>0</sub>=${R0} m`],textposition:'top center',textfont:{color:'#ff6b6b',size:10}},'annot');
     add({type:'scatter',mode:'lines+markers+text',x:[R0,R0+a],y:[0,0],line:{color:'#ff9e3d',width:1.5,dash:'dot'},marker:{color:'#ff9e3d',size:3},text:['',`a=${a.toFixed(2)} m`],textposition:'bottom center',textfont:{color:'#ff9e3d',size:10}},'annot');
-    add({type:'scatter',mode:'lines+markers+text',x:[R0,R0],y:[0,a*k],line:{color:'#7ddc6b',width:1.5,dash:'dot'},marker:{color:'#7ddc6b',size:3},text:['',`κa=${(a*k).toFixed(2)} m`],textposition:'middle right',textfont:{color:'#7ddc6b',size:10}},'annot');
+    const topZ=(sh&&sh.lcfs&&sh.lcfs.Z&&sh.lcfs.Z.length)?Math.max.apply(null,sh.lcfs.Z):a*k;
+    add({type:'scatter',mode:'lines+markers+text',x:[R0,R0],y:[0,topZ],line:{color:'#7ddc6b',width:1.5,dash:'dot'},marker:{color:'#7ddc6b',size:3},text:['',`κa=${topZ.toFixed(2)} m`],textposition:'middle right',textfont:{color:'#7ddc6b',size:10}},'annot');
   }else if(CUR==='stellarator'){
     // backend analytic flux surfaces (rotating-ellipse / near-axis).  Geometry
     // physics rework (Scheme D) is a later phase; here we only unify the layers.
