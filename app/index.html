@@ -871,9 +871,13 @@ function drawShape(){
   const txt=(x,y,t,c)=>({type:'scatter',mode:'text',x,y,text:t,textfont:{color:c,size:11,family:'JetBrains Mono'}});
   const GC=k=>GRP[k][1];
   if(CUR==='tokamak'){
-    const R0=v.R0,a=v.R0/v.A,k=v.kappa,d=v.delta,g=v.g||0;
-    const gm=+v.geom_model||0;
-    const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.lcfs&&LASTRUN.shape.lcfs.R&&LASTRUN.shape.lcfs.R.length)?LASTRUN.shape:null;
+    // draw from the run that PRODUCED the shape (LASTRUN.inputs) so geom mode,
+    // R0/a/kappa/delta and the boundary never disagree mid-switch; VALS is the
+    // pre-run fallback only.
+    const tok=(LASTRUN&&LASTRUN.config==='tokamak'&&LASTRUN.inputs)?LASTRUN.inputs:v;
+    const R0=tok.R0,a=tok.R0/tok.A,k=tok.kappa,d=tok.delta,g=tok.g||0;
+    const gm=+tok.geom_model||0;
+    const sh=(LASTRUN&&LASTRUN.config==='tokamak'&&LASTRUN.shape&&LASTRUN.shape.lcfs&&LASTRUN.shape.lcfs.R&&LASTRUN.shape.lcfs.R.length)?LASTRUN.shape:null;
     if(gm!==0&&sh){
       const close=o=>[o.R.concat([o.R[0]]),o.Z.concat([o.Z[0]])];
       const W=close(sh.wall),Lf=close(sh.lcfs);
@@ -887,7 +891,7 @@ function drawShape(){
       add(lin(Lf[0],Lf[1],GC('boundary'),2.6,true,'rgba(54,226,196,.06)'),'boundary');
       const ax=(sh.axis&&sh.axis.R&&sh.axis.R.length)?[sh.axis.R[0],sh.axis.Z[0]]:[R0,0];
       add({type:'scatter',mode:'markers+text',x:[ax[0]],y:[ax[1]],text:[L('磁轴','axis')],textposition:'bottom center',textfont:{color:'#ff5d8f',size:10},marker:{color:'#ff5d8f',size:6}},'annot');
-      const eqLoaded=isPlainObject(v.eq);
+      const eqLoaded=isPlainObject(tok.eq);
       const GMN=gm===1?'Miller':(eqLoaded?L('实测平衡 (G-EQDSK)','measured equilibrium (G-EQDSK)'):L('平衡解析估计','analytic equilibrium estimate'));
       const shaf=isFiniteNum(sh.shaf_shift)?sh.shaf_shift:0;
       document.getElementById('plotMeta').innerHTML=`<span>${L('后端边界','backend boundary')}: <b>${GMN}</b>${shaf?` · Δ<sub>Shafranov</sub>=${shaf.toFixed(3)} m`:''} · ${L('壁面 = 边界沿外法向偏移 g','wall = boundary normal offset by g')}</span>`;
