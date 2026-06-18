@@ -189,7 +189,7 @@ const RX={1:'D-T',2:'D-D',3:'D-³He',4:'p-¹¹B(Nevins)',5:'p-¹¹B(Sikora)',6:'
 // name -> [zh desc, en desc, unit, group, symbol html(book notation)]
 const META={
   use_tauE:['使用输入 τE (关闭=自洽损失)','use input tauE (off = self-consistent losses)','','conf','τ<sub>E</sub>'],
-  geom_weighted:['几何体积加权剖面积分 (vs 自相似 2x dx)','geometry-weighted profile integrals (vs self-similar 2x dx)','','geo','geom'],
+  geom_weighted:['FRC 有限长度几何加权','FRC finite-length geometry weighting','','geo','geom'],
   sep_model:['FRC 分离面几何模型','FRC separatrix geometry model','','geo','sep'],
   geom_model:['托卡马克几何模型','tokamak geometry model','','geo','geom'],
   icase:['反应类型','Reaction','','rx',''],
@@ -338,14 +338,6 @@ function stashStellGeom(){
 }
 
 function stellGeomMode(){return VALS._geom_mode||inferStellGeomMode();}
-function normalizeStellBoundaryIota(){
-  if(CUR!=='stellarator'||stellGeomMode()!=='boundary')return;
-  if(isFiniteNum(VALS.iota)&&VALS.iota>0)return;
-  const gv=VALS.geometry_variants;
-  const b=isPlainObject(gv)&&gv.authority==='boundary'&&isPlainObject(gv.boundary)?gv.boundary:null;
-  if(!b||!isPlainObject(VALS.shape)||!isPlainObject(b.shape)||!isFiniteNum(b.iota)||b.iota<=0)return;
-  if(JSON.stringify(VALS.shape)===JSON.stringify(b.shape))VALS.iota=b.iota;
-}
 function stellGeomModeHtml(){const m=stellGeomMode();const item=(k,zh,en)=>`<button type="button" class="modebtn${m===k?' on':''}" data-gmode="${k}">${L(zh,en)}</button>`;return `<div class="fld full modefld"><label><span class="sym">geo</span><span class="nm">${L('几何输入方式','geometry input mode')}</span></label><div class="modebar">${item('simple','默认近轴','simple near-axis')}${item('axis','磁轴 Fourier','axis Fourier')}${item('boundary','边界 Fourier','boundary Fourier')}</div></div>`;}
 
 function migrateStellRadius(){if(CUR==='stellarator'&&VALS&&!('a'in VALS)&&'A'in VALS&&'R0'in VALS){VALS.a=VALS.R0/VALS.A;delete VALS.A;}}
@@ -526,7 +518,7 @@ async function loadPreset(){
     const name=pv.slice(UMARK.length);const stored=upGet(CUR)[name];
     if(!stored){await selectConfig(CUR);return;}   // gone (e.g. cleared) -> reset
     VALS=JSON.parse(JSON.stringify(stored));
-    if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();normalizeStellBoundaryIota();stashStellGeom();}
+    if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();}
     buildParams();buildThresh();buildPlotOpts();fitScanRanges();
     await recompute();setView(VIEW);
     return;
@@ -534,7 +526,7 @@ async function loadPreset(){
   const r=await jpost('/api/run',{config:CUR,preset:pv});
   VALS=Object.assign({},r.inputs);
   // auto-reveal advanced inputs if this preset carries any (measured machines)
-  if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();normalizeStellBoundaryIota();stashStellGeom();}
+  if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();}
   ADVANCED=(VALS.Vp_override>0)||(VALS.Sw_override>0)||Array.isArray(VALS.rc)||Array.isArray(VALS.zs)||isPlainObject(VALS.shape);
   buildParams();buildThresh();buildPlotOpts();applyRun(r);fitScanRanges();setView(VIEW);
 }
@@ -674,10 +666,6 @@ function buildParams(){
     else if(el.dataset.bool)VALS[el.dataset.p]=+el.value;
     else if(el.dataset.p==='sep_model')VALS.sep_model=el.value;
     else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
-    if(CUR==='stellarator'&&el.dataset.p==='iota'){
-      normalizeStellBoundaryIota();
-      el.value=VALS.iota;
-    }
     applyModeLocks();
     clearTimeout(timer);timer=setTimeout(()=>{updateA0();fitScanRanges();recompute();},280);});
   if(CUR==='tokamak'&&(+VALS.geom_model||0)===2){
@@ -1109,7 +1097,7 @@ async function runScan(){
   }catch(e){err.textContent=String(e);}finally{run.disabled=false;run.textContent=t;}
 }
 function onLoadFile(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
-  rd.onload=()=>{try{const d=JSON.parse(rd.result);Object.assign(VALS,d);if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();normalizeStellBoundaryIota();stashStellGeom();}buildParams();recompute();}catch(err){document.getElementById('err').textContent='JSON: '+err.message;}};
+  rd.onload=()=>{try{const d=JSON.parse(rd.result);Object.assign(VALS,d);if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();}buildParams();recompute();}catch(err){document.getElementById('err').textContent='JSON: '+err.message;}};
   rd.readAsText(f);e.target.value='';}
 function dl(name,text){const b=new Blob([text],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();URL.revokeObjectURL(a.href);}
 function scanCsv(s){const F=Object.keys(s.fields);let out='# '+s.xkey+','+s.ykey+','+F.join(',')+'\n';

@@ -20,7 +20,7 @@ from dataclasses import replace as _dc_replace
 from .twotemp import (critical_energy, ion_deposition_fraction, equilibration_time,
                       p_ei_exchange, solve_channel_balance)
 from .impurity import lz_line_net, SPECIES as _IMP_SPECIES
-from .tokageom import tokamak_geometry, volume_weight
+from .tokageom import tokamak_geometry
 
 # Per-reaction parameters: charges, mass numbers, charged-fraction fion,
 # energy release Y [J], like-particle flag delta12, and a label.
@@ -92,24 +92,20 @@ def _line_average_value(center, S, rho, vfrac):
     return float(center) * _line_average_factor_from_vfrac(S, rho, vfrac)
 
 
-def line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx, pw=None):
+def line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx):
     """Impurity line-radiation power [MW] for the (1-x^2)^S profile family.
 
-    P_line = Int n_e(x) n_imp(x) Lz_net(Te(x)) w(x) dx * Vp; Lz_net is the
+    P_line = Int n_e(x) n_imp(x) Lz_net(Te(x)) 2x dx * Vp; Lz_net is the
     Mavrin coronal cooling rate minus the bremsstrahlung share already
     counted in P_brem through Z_eff (no double counting; docs/30 P1-2).
-    ``pw`` is the per-grid volume weight (sum(pw)=1); when omitted the legacy
-    self-similar ``2x dx`` element is used.
     """
     if imp_name is None or nimp0 <= 0:
         return 0.0
     if imp_name not in _IMP_SPECIES:
         raise ValueError(f"unknown impurity species {imp_name!r}; have {_IMP_SPECIES}")
-    if pw is None:
-        pw = 2.0 * x * dx
     Tex = Te0 * (1 - x ** 2) ** ST
     lz = lz_line_net(imp_name, Tex)
-    integ = float(np.sum((1 - x ** 2) ** (2 * Sn) * lz * pw))
+    integ = 2.0 * float(np.sum((1 - x ** 2) ** (2 * Sn) * lz * x * dx))
     return ne0 * nimp0 * integ * Vp * 1e-6
 
 
@@ -178,8 +174,7 @@ class Result:
 def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
           BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
           imp_name=None, f_aux_e=0.5, H_fac=1.0, use_tauE=1.0,
-          geom_model=0.0, eq=None, Vp_override=0.0, Sw_override=0.0,
-          geom_weighted=0.0) -> Result:
+          geom_model=0.0, eq=None, Vp_override=0.0, Sw_override=0.0) -> Result:
     """Evaluate the 0-D power balance for one operating point.
 
     See parameter table in ``docs/01_托卡马克代码说明文档.md`` (§3) for units.
@@ -218,8 +213,7 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
                          imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac,
                          use_tauE=1.0,
                          geom_model=geom_model, eq=eq,
-                         Vp_override=Vp_override, Sw_override=Sw_override,
-                         geom_weighted=geom_weighted)
+                         Vp_override=Vp_override, Sw_override=Sw_override)
 
         def _resid_t(t, res):
             # H98(t) is monotone increasing in t; root at H98 = H_fac
@@ -235,8 +229,7 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
                          imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac,
                          use_tauE=1.0,
                          geom_model=geom_model, eq=eq,
-                         Vp_override=Vp_override, Sw_override=Sw_override,
-                         geom_weighted=geom_weighted)
+                         Vp_override=Vp_override, Sw_override=Sw_override)
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
@@ -303,39 +296,24 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     fnavg = np.sum(x * (1 - x**2) ** Sn) / np.sum(x)
     vfrac = x**2
 
-    # --- profile volume weight (docs/04): legacy self-similar 2x dx, or, when
-    # geom_weighted, the true dV/dx of the geometry's tapered nested flux
-    # surfaces.  pw is the per-grid-point weight (sum(pw)=1); _Gf(p) is the
-    # closed (1-x^2)^p form factor — for the legacy path it is the exact
-    # 1/(1+p), so every profile-integrated term degrades bit-for-bit. ---
-    if geom_weighted:
-        _w = volume_weight(R0, A, kappa, delta, x, eq=eq, shaf=geom["shaf_shift"])
-        pw = _w * dx
-        def _Gf(p):
-            return float(np.sum((1 - x**2) ** p * pw))
-    else:
-        pw = 2 * x * dx
-        def _Gf(p):
-            return 1.0 / (1.0 + p)
-
     # --- reactivity profile integral Phi ---
     phi = 0.0
-    for i, xi in enumerate(x):
+    for xi in x:
         Tx = Ti0 * (1 - xi**2) ** ST
         sgv = reactivity(Tx, icase)
         if not math.isnan(sgv):
-            phi += (1 - xi**2) ** (2 * Sn) * sgv * pw[i]
-    Phi = fsig * phi
+            phi += (1 - xi**2) ** (2 * Sn) * sgv * xi * dx
+    Phi = fsig * 2 * phi
 
     # --- fusion power ---
     Pfus = rx["Y"] / (1 + d12) * n10 * n20 * Phi * Vp * 1e-6
     Pn = Pfus * (1 - rx["fion"])
 
     # --- bremsstrahlung (relativistic-corrected, profile-weighted) ---
-    term1 = Zeff * _Gf(2 * Sn + 0.5 * ST)
-    term2 = 0.7936 * _Gf(2 * Sn + 1.5 * ST) * (Te0 / MEC2)
-    term3 = 1.874 * _Gf(2 * Sn + 2.5 * ST) * (Te0 / MEC2) ** 2
-    term4 = 3 / math.sqrt(2) * _Gf(2 * Sn + 1.5 * ST) * (Te0 / MEC2)
+    term1 = Zeff * (1 / (1 + 2 * Sn + 0.5 * ST))
+    term2 = 0.7936 / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
+    term3 = 1.874 / (1 + 2 * Sn + 2.5 * ST) * (Te0 / MEC2) ** 2
+    term4 = 3 / math.sqrt(2) / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
     Pbrem = 5.34e-37 * ne0**2 * math.sqrt(Te0) * (term1 + term2 + term3 + term4) * 1e-6 * Vp
 
     # --- cyclotron radiation (empirical) ---
@@ -346,10 +324,10 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
              * aeff**-0.5 * (1 + 2.5 * Teff / 511) * Vp)
 
     # --- impurity line radiation (Mavrin; opt-in, docs/30 P1-2) ---
-    P_line = line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx, pw=pw)
+    P_line = line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx)
 
     # --- stored energy, transport loss, heating, gain ---
-    Eth = 1.5 * (ni0 * Ti0 + ne0 * Te0) * 1e3 * QE * _Gf(Sn + ST) * Vp * 1e-6
+    Eth = 1.5 * (ni0 * Ti0 + ne0 * Te0) * 1e3 * QE / (1 + Sn + ST) * Vp * 1e-6
     Pth = Eth / tauE
     Pheat = Pcycl + Pbrem + P_line + Pth - rx["fion"] * Pfus
     ignited = 1.0 if Pheat <= 0 else 0.0
@@ -402,7 +380,7 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     # --- two-temperature channel diagnostics (docs/30 P1-1) ---
     Ecrit, f_fast, tau_eq, pei = twotemp_diagnostics(
         rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M)
-    P_ei = pei * Vp * _Gf(2 * Sn + ST) * 1e-6   # peak-weighted estimate [MW]
+    P_ei = pei * Vp / (1 + 2 * Sn + ST) * 1e-6   # peak-weighted estimate [MW]
 
     # --- Angioni density-peaking suggestion (docs/30 batch 2, diagnostic) ---
     # nu_n = 1.347 - 0.117 ln(nu_eff) - 4.03 betaT,  nu_eff = 0.1 Zeff n19 R/<Te>^2

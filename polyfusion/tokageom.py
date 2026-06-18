@@ -282,58 +282,18 @@ def miller_flux_surfaces(R0, a, kappa, delta, shaf=0.0,
     boundary and is fitted to real ITER/MAST equilibria; mirrors the
     stellarator's rho-built nested surfaces.
     """
+    f = _KAPPA_EXCESS_AXIS_FRAC
     t = np.linspace(0.0, 2 * math.pi, int(n_theta))
     out = []
     for rho in levels:
-        R, Z = _taper_surface(rho, R0, a, kappa, delta, shaf, t)
+        ar = a * rho
+        kr = 1.0 + (kappa - 1.0) * (f + (1.0 - f) * rho**4)
+        dr = max(-0.999, min(0.999, delta * rho**2))
+        cR = R0 + shaf * (1.0 - rho**2)
+        R = cR + ar * np.cos(t + math.asin(dr) * np.sin(t))
+        Z = kr * ar * np.sin(t)
         out.append({"R": R.tolist(), "Z": Z.tolist()})
     return out
-
-
-def _taper_surface(rho, R0, a, kappa, delta, shaf, t):
-    """One tapered Miller flux surface (R, Z) at flux label ``rho`` (see
-    :func:`miller_flux_surfaces` for the taper laws)."""
-    f = _KAPPA_EXCESS_AXIS_FRAC
-    ar = a * rho
-    kr = 1.0 + (kappa - 1.0) * (f + (1.0 - f) * rho**4)
-    dr = max(-0.999, min(0.999, delta * rho**2))
-    cR = R0 + shaf * (1.0 - rho**2)
-    R = cR + ar * np.cos(t + math.asin(dr) * np.sin(t))
-    Z = kr * ar * np.sin(t)
-    return R, Z
-
-
-def volume_weight(R0, A, kappa, delta, x, eq=None, shaf=0.0, nr=200):
-    """Normalized radial volume weight ``w(x)`` for profile integrals.
-
-    ``w`` is the true volume element ``dV/dx`` of the tapered nested flux
-    surfaces, sampled on the profile grid ``x`` (flux label = normalized minor
-    radius) and normalized so ``sum(w*dx) == 1`` (trapezoid-free Riemann sum to
-    match the 0-D integrals).  For a self-similar plasma (kappa=1, delta=0 — or
-    any constant shaping) this reduces to ``w(x) -> 2x``, recovering the legacy
-    ``2x dx`` element.  Shaped plasmas concentrate volume toward the edge, so the
-    volume-weighted form factor of a peaked profile is lower than the
-    self-similar estimate.  When ``eq`` (parsed G-EQDSK geometry) is given, its
-    edge ``kappa``/``delta`` and minor radius set the taper.
-    """
-    x = np.asarray(x, dtype=float)
-    a = R0 / A
-    if isinstance(eq, dict):
-        if eq.get("a"):
-            a = float(eq["a"])
-        if eq.get("kappa"):
-            kappa = float(eq["kappa"])
-        if eq.get("kappa"):
-            delta = float(eq.get("delta", delta))
-    t = np.linspace(0.0, 2 * math.pi, 240)
-    rs = np.linspace(1e-4, 1.0, int(nr))
-    V = np.array([revolution_metrics(*_taper_surface(r, R0, a, kappa, delta, shaf, t))[0]
-                  for r in rs])
-    w_fine = np.gradient(V, rs)
-    w = np.interp(x, rs, w_fine)
-    dx = x[1] - x[0]
-    s = float(np.sum(w * dx))
-    return w / s if s > 0 else w
 
 
 def legacy_metrics(R0, A, kappa, delta, g):
