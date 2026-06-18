@@ -48,12 +48,12 @@ def main():
     dh = solve_stellarator(**{**BASE, "delta_h": 1.2})
     allok &= _ok(abs(dh.iota_geom - r.iota_geom) > 1e-6,
                  f"delta_h changes iota (torsion) ({r.iota_geom:.3f}->{dh.iota_geom:.3f})")
-    # 3. explicit iota overrides geometry
+    # 3. near-axis mode ignores boundary-only iota input
     ov = solve_stellarator(**{**BASE, "iota": 0.5})
-    allok &= _ok(ov.iota == 0.5 and ov.iota_geom == r.iota_geom, "explicit iota overrides; geom still reported")
-    # 4. helical axis lengthens L_ax and volume (planar baseline needs a
-    #    measured iota: delta_h=0 gives zero geometric transform)
-    st0 = solve_stellarator(**{**BASE, "delta_h": 0.0, "iota": 0.5})
+    allok &= _ok(ov.iota == r.iota and ov.iota_geom == r.iota_geom,
+                 "near-axis iota comes from current geometry")
+    # 4. helical axis lengthens L_ax relative to an almost-planar axis.
+    st0 = solve_stellarator(**{**BASE, "delta_h": 1e-3})
     # the helical excursion lengthens the magnetic axis (geometric fact).  With
     # the exact boundary integral the volume is no longer strictly monotonic with
     # L_ax (the bean/curvature correction can outweigh the longer axis), so we

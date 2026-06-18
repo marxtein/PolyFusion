@@ -21,26 +21,26 @@ from ..tokageom import tokamak_shape_outlines
 from ..presets import (PRESETS as TOKAMAK_PRESETS, PARAM_ORDER as TOKAMAK_PARAMS,
                        PRESET_GROUPS as TOKAMAK_GROUPS)
 from ..presets_io import load_presets
-from .mirror import solve_mirror, mirror_shape
+from .mirror import solve_mirror
 from .frc import solve_frc, frc_shape_outlines
 from .dipole import solve_dipole
 from .stellarator import solve_stellarator, section_outlines
 
 # Inputs each solver accepts (positional/keyword names).
-_MIRROR_PARAMS = ["use_tauE", "geometry", "a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0", "tauE",
+_MIRROR_PARAMS = ["use_tauE", "a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0", "tauE",
                   "Sn", "ST", "g", "fsig", "f_throat", "f_alpha", "B_expand", "Rw",
                   "icase", "f1", "fHe", "fimp", "Zimp", "phi_i_over_Te", "lnLambda",
-                  "imp_name", "L_th", "profile", "f_axial", "L_expand"]
+                  "imp_name"]
 _FRC_PARAMS = ["use_tauE", "geom_weighted", "sep_model", "m", "r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "f_shape", "fsig", "Rw",
                "icase", "f1", "fHe", "fimp", "Zimp", "imp_name"]
 _DIPOLE_PARAMS = ["use_tauE", "r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
                   "L_in_fac", "fsig", "icase", "f1", "fHe", "fimp", "Zimp", "Rw",
                   "ring_model", "imp_name"]
 _STELL_PARAMS = ["use_tauE", "R0", "a", "N_fp", "delta_h", "etabar", "Sn", "ST",
-                 "ni0", "Ti0", "fT", "fsig", "f1", "B0", "iota", "tauE", "fHe",
-                 "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name",
-                 "H_fac", "rc", "zs", "Vp_override", "Sw_override", "shape",
-                 "geometry_variants"]
+                  "ni0", "Ti0", "fT", "fsig", "f1", "B0", "iota", "tauE", "fHe",
+                  "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name",
+                  "H_fac", "rc", "zs", "Vp_override", "Sw_override", "shape",
+                  "geometry_variants"]
 
 # Machine presets for every non-tokamak configuration now live in JSON data
 # files (``polyfusion/presets/<config>.json``, with any
@@ -274,9 +274,6 @@ def _tokamak_cross(p: dict) -> list[str]:
 
 def _mirror_cross(p: dict) -> list[str]:
     errors = []
-    geom = p.get("geometry", "sin2_simple")
-    if geom not in ("sin2_simple", "multi_zone"):
-        errors.append(f"geometry must be 'sin2_simple' or 'multi_zone' (got {geom!r})")
     R = _num(p, "R_mirror")
     if R is not None and R <= 1.0:
         errors.append(f"R_mirror must be > 1 (got {R}): no magnetic well otherwise")
@@ -389,7 +386,6 @@ MIRROR = ConfigSpec(
     contour_spec=MIRROR_CONTOURS,
     preset_groups=MIRROR_GROUPS,
     _solve=solve_mirror,
-    shape_fn=lambda params: mirror_shape(params),
 )
 
 FRC = ConfigSpec(
@@ -469,7 +465,6 @@ for _p in TOKAMAK_PRESETS.values():
     _p.setdefault("Sw_override", 0.0)
 for _p in MIRROR_PRESETS.values():
     _p.setdefault("use_tauE", 1.0)
-    _p.setdefault("geometry", "sin2_simple")
     _p.setdefault("f_aux_e", 0.5)
     _p.setdefault("B_expand", 100.0)
     _p.setdefault("lnLambda", 17.0)

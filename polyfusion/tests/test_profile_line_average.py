@@ -43,10 +43,10 @@ def test_tokamak_geometry_line_average_diagnostics_match_existing_nbar():
 
 def test_stellarator_geometry_line_average_diagnostics_are_reported():
     base = dict(
-        R0=18.0, a=1.8, N_fp=5, delta_h=0.0, etabar=0.05,
+        R0=18.0, a=1.8, N_fp=5, delta_h=0.01, etabar=0.05,
         Sn=0.5, ST=1.0, ni0=2e20, Ti0=15.0, fT=1.0, fsig=1.0,
         f1=0.5, B0=5.0, tauE=1.0, fHe=0.04, fimp=0.01,
-        Zimp=10, Rw=0.7, g=0.1, icase=1, iota=1.0,
+        Zimp=10, Rw=0.7, g=0.1, icase=1,
     )
     circular = solve_stellarator(**base)
     assert circular.nbar_geom == pytest.approx(circular.nbar, rel=5e-3)

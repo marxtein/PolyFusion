@@ -3,7 +3,7 @@
 Verifies the measured-machine overrides added in Scheme D:
   * ``Vp_override`` replaces the geometric plasma volume and rescales Pfus,
   * ``Sw_override`` replaces the geometric wall surface and sets Pwall,
-  * an explicit measured ``iota`` lets a planar (delta_h=0) device run,
+  * a boundary Fourier input uses its own explicit measured ``iota``,
   * a custom Fourier axis (``rc``/``zs``) changes the geometric transform.
 
 Run: python polyfusion/tests/test_stellarator_overrides.py
@@ -50,9 +50,11 @@ def main():
     allok &= _ok(abs(so.Pwall - pwall_expect) < 1e-9 * max(abs(pwall_expect), 1.0),
                  f"Sw_override sets Pwall = (Pfus+Pheat)/200 ({so.Pwall:.6f} == {pwall_expect:.6f})")
 
-    # 3. Planar measured machine (delta_h=0 -> iota_geom=0) runs WITHOUT error
-    #    because the explicit measured iota satisfies the zero-transform guard.
-    pm = solve_stellarator(**{**BASE, "delta_h": 0.0, "etabar": 0.04, "iota": 0.40})
+    # 3. Boundary mode uses the iota carried by that boundary input.
+    circle = {"kind": "fourier", "nfp": 5,
+              "R": [[0, 0, 0.0], [1, 0, 1.0]], "Z": [[-1, 0, 1.0]]}
+    pm = solve_stellarator(**{**BASE, "delta_h": 0.0, "etabar": 0.04,
+                              "shape": circle, "iota": 0.40})
     allok &= _ok(pm.iota == 0.40 and math.isfinite(pm.Pfus) and pm.Pfus > 0,
                  f"planar measured (delta_h=0, iota=0.40) runs: iota={pm.iota}, "
                  f"Pfus={pm.Pfus:.2f}MW")

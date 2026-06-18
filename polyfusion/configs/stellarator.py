@@ -19,10 +19,11 @@ rho=1 surface for Vp/Sw/Sp, with optional measured Vp/Sw overrides.
 left ``kappa_s`` inert in near-axis mode and ``delta_h`` blind to iota in
 legacy mode.  See docs/superpowers/plans/2026-06-14-stellarator-scheme-d.md.)
 
-Measured-machine overrides (D1): a real device that single-harmonic near-axis
-cannot represent (W7-X quasi-isodynamic, LHD heliotron) supplies an explicit
-``iota`` (> 0) used in the ISS04/Sudo closure, and optionally ``Vp_override`` /
-``Sw_override`` (m^3 / m^2, > 0) to anchor the power account to the real
+Measured boundary inputs (D1): a real device that single-harmonic near-axis
+cannot represent (W7-X quasi-isodynamic, LHD heliotron) may carry its own
+explicit ``iota`` (> 0) for the ISS04/Sudo closure, and optionally
+``Vp_override`` / ``Sw_override`` (m^3 / m^2, > 0) to anchor the power account
+to the real
 plasma geometry instead of the near-axis estimate.
 
 * PROFILES / REACTIVITY / RADIATION: identical to the tokamak core (already
@@ -40,7 +41,6 @@ Rep. Prog. Phys. 77, 087001 (2014); Garren & Boozer, Phys. Fluids B 3 (1991)
 from __future__ import annotations
 
 import math
-import json
 from dataclasses import dataclass, asdict
 
 import numpy as np
@@ -272,264 +272,6 @@ def _axis_from_shape(R0, a, shape):
     if len(rc) <= 1:
         return None, None
     return rc, zs
-
-
-def _round_list(xs, ndigits=9):
-    return [round(float(x), ndigits) for x in xs]
-
-
-def _dominant_axis_delta(rc, zs, fallback=0.0):
-    n = max(len(rc or []), len(zs or []))
-    amps = []
-    for i in range(1, n):
-        r = float(rc[i]) if rc is not None and i < len(rc) else 0.0
-        z = float(zs[i]) if zs is not None and i < len(zs) else 0.0
-        amps.append(math.hypot(r, z))
-    val = max(amps) if amps else float(fallback or 0.0)
-    return float(val if val > 1e-12 else (fallback or 0.0))
-
-
-def _shape_from_axis_variant(R0, a, N_fp, rc, zs, source):
-    """Synthetic boundary Fourier descriptor carrying its generating axis."""
-    R_modes = [[0, 0, 0.0], [1, 0, 1.0]]
-    Z_modes = [[-1, 0, 1.0]]
-    for i, c in enumerate(rc[1:], start=1):
-        if abs(float(c)) > 1e-12:
-            R_modes.append([0, i, round(float(c) / float(a), 9)])
-    for i, c in enumerate(zs[1:], start=1):
-        if abs(float(c)) > 1e-12:
-            Z_modes.append([0, -i, round(float(c) / float(a), 9)])
-    return {
-        "kind": "fourier",
-        "nfp": int(round(N_fp)),
-        "R": R_modes,
-        "Z": Z_modes,
-        "axis_rc": _round_list(rc),
-        "axis_zs": _round_list(zs),
-        "source": source,
-    }
-
-
-def _nearaxis_iota_for_simple(R0, N_fp, delta_h, etabar):
-    na = solve_near_axis([float(R0), float(delta_h)], [0.0, -float(delta_h)],
-                         int(round(N_fp)), float(etabar), nphi=61)
-    return abs(float(na.iota))
-
-
-def _axis_iota(rc, zs, N_fp, etabar):
-    na = solve_near_axis([float(x) for x in rc], [float(x) for x in zs],
-                         int(round(N_fp)), float(etabar), nphi=61)
-    return abs(float(na.iota))
-
-
-def _fit_axis_etabar_to_iota(rc, zs, N_fp, target_iota, etabar_hint=0.05):
-    ebase = max(float(etabar_hint or 0.05), 1e-4)
-    etas = sorted(set([0.02, 0.03, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3,
-                       0.405, 0.6, 0.8, 1.0, 1.2, ebase, ebase * 0.5,
-                       ebase * 1.5, ebase * 2.0]))
-    best = None
-    for eta in etas:
-        if eta <= 0:
-            continue
-        try:
-            iota = _axis_iota(rc, zs, N_fp, eta)
-        except Exception:
-            continue
-        target = float(target_iota or 0.0)
-        score = abs(iota - target) if target > _IOTA_MIN else -iota
-        if best is None or score < best[0]:
-            best = (score, float(eta), float(iota))
-    if best is None:
-        return None, None
-    return best[1], best[2]
-
-
-def _same_shape(a, b):
-    if not (isinstance(a, dict) and isinstance(b, dict)):
-        return False
-    try:
-        return json.dumps(a, sort_keys=True, separators=(",", ":")) == json.dumps(
-            b, sort_keys=True, separators=(",", ":"))
-    except TypeError:
-        return False
-
-
-def _boundary_variant_iota(params, shape):
-    gv = params.get("geometry_variants") if isinstance(params, dict) else None
-    if not isinstance(gv, dict):
-        return None
-    bv = gv.get("boundary")
-    if not isinstance(bv, dict):
-        return None
-    val = bv.get("iota")
-    if not (isinstance(val, (int, float)) and val > _IOTA_MIN):
-        return None
-    bshape = bv.get("shape")
-    if _same_shape(shape, bshape):
-        return float(val)
-    return None
-
-
-def _fit_simple_to_iota(R0, a, N_fp, target_iota, etabar_hint=0.05,
-                        delta_hint=0.0):
-    """Small deterministic search for a runnable simple near-axis proxy."""
-    if not (target_iota and target_iota > _IOTA_MIN):
-        dh = float(delta_hint or 0.15 * a)
-        return dh, float(etabar_hint or 0.05), None
-    ebase = max(float(etabar_hint or 0.05), 1e-4)
-    etas = sorted(set([0.02, 0.03, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3,
-                       0.405, 0.6, 0.8, 1.0, 1.2, ebase, ebase * 0.5,
-                       ebase * 1.5, ebase * 2.0]))
-    scales = [0.005, 0.01, 0.02, 0.03, 0.05, 0.08, 0.12, 0.16, 0.24,
-              0.35, 0.5, 0.75, 1.0, 1.3, 1.6]
-    deltas = [max(min(float(a) * s, 0.8 * float(R0)), 1e-6) for s in scales]
-    if delta_hint and delta_hint > 0:
-        deltas.extend([float(delta_hint), float(delta_hint) * 0.5,
-                       float(delta_hint) * 1.5])
-    best = None
-    for eta in etas:
-        if eta <= 0:
-            continue
-        for dh in deltas:
-            if not (0.0 <= dh < R0):
-                continue
-            try:
-                iota = _nearaxis_iota_for_simple(R0, N_fp, dh, eta)
-            except Exception:
-                continue
-            score = abs(iota - target_iota) + 0.02 * abs(dh - float(delta_hint or 0.0))
-            if best is None or score < best[0]:
-                best = (score, dh, eta, iota)
-    if best is None:
-        dh = float(delta_hint or 0.15 * a)
-        return dh, float(etabar_hint or 0.05), None
-    _, dh, eta, iota = best
-    return float(dh), float(eta), float(iota)
-
-
-def _axis_variant_from_simple(R0, delta_h, etabar, source):
-    dh = float(delta_h)
-    return {
-        "rc": _round_list([float(R0), dh]),
-        "zs": _round_list([0.0, -dh]),
-        "etabar": float(etabar),
-        "source": source,
-    }
-
-
-def _boundary_variant_from_axis(R0, a, N_fp, rc, zs, etabar, source):
-    return {
-        "shape": _shape_from_axis_variant(R0, a, N_fp, rc, zs, source),
-        "iota": 0.0,
-        "Vp_override": 0.0,
-        "Sw_override": 0.0,
-        "etabar": float(etabar),
-        "source": source,
-    }
-
-
-def sync_geometry_variants(params, source_mode=None):
-    """Generate simple/axis/boundary variants from the current geometry mode."""
-    p = dict(params or {})
-    R0 = float(p["R0"])
-    a = _minor_radius(R0, p.get("a"), p.get("A"))
-    N_fp = int(round(float(p.get("N_fp", 1))))
-    source_mode = source_mode or (
-        "boundary" if isinstance(p.get("shape"), dict)
-        else "axis" if isinstance(p.get("rc"), list) or isinstance(p.get("zs"), list)
-        else "simple"
-    )
-    etabar = float(p.get("etabar", 0.05) or 0.05)
-    if source_mode == "simple":
-        delta_h = float(p.get("delta_h", 0.0) or 0.0)
-        simple = {"delta_h": delta_h, "etabar": etabar}
-        axis = _axis_variant_from_simple(R0, delta_h, etabar,
-                                         "synthetic from simple near-axis")
-        boundary = _boundary_variant_from_axis(
-            R0, a, N_fp, axis["rc"], axis["zs"], etabar,
-            "synthetic from simple near-axis")
-    elif source_mode == "axis":
-        rc = _round_list(p.get("rc") or [R0, p.get("delta_h", 0.0)])
-        zs = _round_list(p.get("zs") or [0.0, -float(p.get("delta_h", 0.0) or 0.0)])
-        axis = {"rc": rc, "zs": zs, "etabar": etabar}
-        try:
-            target_iota = _axis_iota(rc, zs, N_fp, etabar)
-        except Exception:
-            target_iota = 0.0
-        delta_hint = _dominant_axis_delta(rc, zs, p.get("delta_h", 0.0))
-        delta_h, eta_fit, iota_fit = _fit_simple_to_iota(
-            R0, a, N_fp, target_iota, etabar, delta_hint)
-        simple = {
-            "delta_h": round(delta_h, 9),
-            "etabar": float(eta_fit),
-            "source": "synthetic from axis Fourier fitted iota",
-        }
-        if iota_fit is not None:
-            simple["iota_fit"] = float(iota_fit)
-        boundary = _boundary_variant_from_axis(
-            R0, a, N_fp, rc, zs, etabar,
-            "synthetic from axis Fourier near-axis")
-    elif source_mode == "boundary":
-        shape = p.get("shape")
-        if not isinstance(shape, dict):
-            raise ValueError("boundary sync requires a Fourier shape object")
-        target_iota = float(p.get("iota", 0.0) or 0.0)
-        if target_iota <= _IOTA_MIN:
-            target_iota = _boundary_variant_iota(p, shape) or 0.0
-        rc0, zs0 = _axis_from_shape(R0, a, shape)
-        delta_hint = _dominant_axis_delta(rc0, zs0, p.get("delta_h", 0.0)) if rc0 and zs0 else float(p.get("delta_h", 0.0) or 0.15 * a)
-        delta_h, eta_fit, iota_fit = _fit_simple_to_iota(
-            R0, a, N_fp, target_iota, etabar, delta_hint)
-        simple = {
-            "delta_h": round(delta_h, 9),
-            "etabar": float(eta_fit),
-            "source": "synthetic from boundary Fourier fitted iota",
-        }
-        if iota_fit is not None:
-            simple["iota_fit"] = float(iota_fit)
-        axis = None
-        if rc0 and zs0:
-            if target_iota > _IOTA_MIN:
-                eta_axis, iota_axis = _fit_axis_etabar_to_iota(
-                    rc0, zs0, N_fp, target_iota, eta_fit)
-            else:
-                eta_axis = etabar
-                try:
-                    iota_axis = _axis_iota(rc0, zs0, N_fp, eta_axis)
-                except Exception:
-                    iota_axis = None
-            axis_ok = iota_axis is not None and iota_axis > _IOTA_MIN
-            if target_iota > _IOTA_MIN and axis_ok:
-                simple_res = abs(float(iota_fit if iota_fit is not None else target_iota) - target_iota)
-                axis_res = abs(float(iota_axis) - target_iota)
-                axis_ok = axis_res <= max(0.10, 0.15 * target_iota, simple_res)
-            if eta_axis is not None and axis_ok:
-                axis = {
-                    "rc": _round_list(rc0),
-                    "zs": _round_list(zs0),
-                    "etabar": float(eta_axis),
-                    "iota_fit": float(iota_axis),
-                    "source": "synthetic from boundary Fourier centerline fitted iota",
-                }
-        if axis is None:
-            axis = _axis_variant_from_simple(
-                R0, delta_h, eta_fit,
-                "synthetic from boundary Fourier fitted iota")
-        boundary = {
-            "shape": shape,
-            "iota": target_iota,
-            "Vp_override": float(p.get("Vp_override", 0.0) or 0.0),
-            "Sw_override": float(p.get("Sw_override", 0.0) or 0.0),
-            "etabar": etabar,
-        }
-    else:
-        raise ValueError(f"unknown stellarator geometry source mode {source_mode!r}")
-    return {
-        "authority": source_mode,
-        "simple": simple,
-        "axis": axis,
-        "boundary": boundary,
-    }
 
 
 def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
@@ -962,8 +704,8 @@ class StellaratorResult:
     PL_ISS04: float   # loss power entering ISS04/Sudo closure [MW]
     Vp: float
     iota: float       # rotational transform actually used in the closure
-    iota_geom: float  # transform from the analytic geometry
-    iota_geom_authoritative: float # 1 if iota_geom is a matched boundary authority value
+    iota_geom: float  # current-mode transform: axis solve or boundary's own iota
+    iota_geom_authoritative: float # deprecated compatibility field; always 0
     helicity: float   # near-axis helicity (0 in rotating-ellipse mode)
     L_ax: float       # magnetic-axis length [m]
     kappa_eff: float  # effective section elongation used for areas
@@ -1159,10 +901,11 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     profile come from the self-consistent sigma equation.
 
     ``N_fp`` = number of field periods (5 for W7-X/HELIAS, 4 for HSX, 10 for
-    LHD, 2 for CFQS).  ``iota`` (optional, > 0) overrides the geometric
-    transform for machines with a measured value; ``Vp_override`` /
-    ``Sw_override`` (> 0) override the geometric plasma volume / wall surface
-    for measured machines.
+    LHD, 2 for CFQS).  Near-axis and axis-Fourier modes compute rotational
+    transform from the current axis geometry.  Boundary-Fourier mode uses the
+    iota carried by that boundary input; if it is zero, the boundary centerline
+    near-axis estimate is used.  ``Vp_override`` / ``Sw_override`` (> 0)
+    override the geometric plasma volume / wall surface for measured machines.
     """
     missing = [k for k, v in {
         "R0": R0, "N_fp": N_fp, "Sn": Sn, "ST": ST, "ni0": ni0,
@@ -1177,8 +920,6 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     rx = _REACTIONS[icase]
     _check_inputs(R0, a, N_fp, delta_h, Sn, ST, fT, B0, tauE,
                   f1, fHe, fimp, Zimp, Rw, g, fsig, etabar)
-    if iota is not None and iota != 0 and iota < 0:
-        raise ValueError(f"explicit iota must be > 0 (got {iota})")
     if not 0.0 <= f_aux_e <= 1.0:
         raise ValueError(f"f_aux_e must be in [0, 1] (got {f_aux_e})")
     if H_fac <= 0:
@@ -1264,19 +1005,15 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
                                and Sw_override and Sw_override > 0) else 0.0
     Vp_geom_report = Vp_geom
     Sw_geom_report = Sw_geom
-    explicit_iota = iota is not None and iota > 0
-    variant_iota = _boundary_variant_iota(
-        {"geometry_variants": geometry_variants}, shape) if shape is not None else None
-    iota_source = float(iota) if explicit_iota else variant_iota
-    iota_used = iota_source if iota_source is not None else iota_geom
+    boundary_iota = float(iota) if shape is not None and iota is not None and iota > 0 else None
+    iota_used = boundary_iota if boundary_iota is not None else iota_geom
     iota_geom_authoritative = 0.0
-    if shape is not None and iota_source is not None:
-        iota_geom = float(iota_source)
-        iota_geom_authoritative = 1.0
+    if boundary_iota is not None:
+        iota_geom = boundary_iota
     if iota_used <= _IOTA_MIN:
-        raise ValueError("rotational transform is ~0: give an explicit iota "
-                         "override (measured machine) or shaping that produces "
-                         "transform (etabar + helical/multi-harmonic axis)")
+        raise ValueError("rotational transform is ~0: boundary Fourier needs "
+                         "its own iota parameter, while near-axis/axis Fourier "
+                         "needs shaping that produces transform")
 
     # --- composition (identical to funsc) ---
     Te0 = fT * Ti0

@@ -14,7 +14,6 @@ from polyfusion.configs.stellarator import (  # noqa: E402
     _nearaxis_boundary_fn_with_rho,
     _shape_boundary_fn_with_rho,
     section_outlines,
-    sync_geometry_variants,
 )
 from polyfusion.io import run_case  # noqa: E402
 from polyfusion.presets_io import load_presets  # noqa: E402
@@ -173,74 +172,21 @@ def test_synthetic_boundary_variants_do_not_claim_measured_values():
             assert boundary.get("Sw_override", 0) == 0, name
 
 
-def test_frontend_sync_generates_axis_and_synthetic_boundary():
+def test_frontend_has_no_geometry_sync_feature():
     src = open(INDEX, encoding="utf-8").read()
-    support = [
-        _extract_function(src, "isPlainObject"),
-        _extract_function(src, "cloneJson"),
-        _extract_function(src, "isFiniteNum"),
-        _extract_function(src, "inferStellGeomMode"),
-        _extract_function(src, "stashStellGeom"),
-        _extract_function(src, "stellGeomMode"),
-        _extract_function(src, "stellVariant"),
-        _extract_function(src, "applyStellVariant"),
-        _extract_function(src, "canSyncStellGeometry"),
-        _extract_function(src, "stellSyncPayload"),
-        _extract_function(src, "showSyncError"),
-        _extract_function(src, "syncStellGeometryVariants"),
-    ]
-    js = f"""
-let CUR = 'stellarator';
-let VALS = {{}};
-let STELL_STASH = {{}};
-let ADVANCED = false;
-let calls = [];
-function L(zh,en){{return en||zh;}}
-const document = {{getElementById: () => null}};
-async function jpost(url, body){{
-  calls.push({{url, body}});
-  const mode = body.source_mode;
-  return {{geometry_variants: {{
-    authority: mode,
-    simple: {{delta_h: 0.31, etabar: 0.08}},
-    axis: {{rc: [6, 0.31], zs: [0, -0.31], etabar: 0.08}},
-    boundary: {{shape: {{kind: 'fourier', nfp: 5, R: [[1,0,1]], Z: [[-1,0,1]], source: 'mock'}}, iota: mode === 'boundary' ? 0.7 : 0, Vp_override: 0, Sw_override: 0, etabar: 0.08}}
-  }}}};
-}}
-{chr(10).join(support)}
-(async () => {{
-  const cases = [
-    {{R0: 6, a: 0.8, N_fp: 5, delta_h: 0.3, etabar: 0.07, _geom_mode: 'simple'}},
-    {{R0: 6, a: 0.8, N_fp: 5, rc: [6, 0.3], zs: [0, -0.3], etabar: 0.07, _geom_mode: 'axis'}},
-    {{R0: 6, a: 0.8, N_fp: 5, shape: {{kind: 'fourier', nfp: 5, R: [[1,0,1]], Z: [[-1,0,1]]}}, iota: 0.7, Vp_override: 20, Sw_override: 90, etabar: 0.07, _geom_mode: 'boundary'}}
-  ];
-  const out = [];
-  for (const c of cases) {{
-    VALS = c; STELL_STASH = {{}};
-    const ok = canSyncStellGeometry();
-    const changed = await syncStellGeometryVariants();
-    out.push({{ok, changed, mode: VALS._geom_mode, authority: VALS.geometry_variants.authority, call: calls[calls.length - 1]}});
-  }}
-  console.log(JSON.stringify(out));
-}})();
-"""
-    out = subprocess.check_output(["node", "-e", js], cwd=ROOT, text=True)
-    data = json.loads(out)
-    assert [d["ok"] for d in data] == [True, True, True]
-    assert [d["changed"] for d in data] == [True, True, True]
-    assert [d["authority"] for d in data] == ["simple", "axis", "boundary"]
-    assert [d["call"]["url"] for d in data] == ["/api/stellarator/sync_geometry"] * 3
-    assert [d["call"]["body"]["source_mode"] for d in data] == ["simple", "axis", "boundary"]
-    assert "delta_h" not in data[1]["call"]["body"]["params"]
-    assert "rc" not in data[2]["call"]["body"]["params"]
+    server = open(os.path.join(ROOT, "app", "server.py"), encoding="utf-8").read()
+    assert "syncStellGeometryVariants" not in src
+    assert "syncGeom" not in src
+    assert "同步到其他几何" not in src
+    assert "/api/stellarator/sync_geometry" not in server
 
 
-def test_frontend_iota_text_and_estimate_marker_match_authority_semantics():
+def test_frontend_boundary_keeps_its_own_iota_input_without_authority_semantics():
     src = open(INDEX, encoding="utf-8").read()
-    assert "0=用几何值" not in src
-    assert "0=使用权威/拟合几何值" in src
-    assert "iota_geom_authoritative" in src
-    assert "k==='iota_geom'||k==='kappa_eff'" not in src
+    assert "p==='Vp_override'||p==='Sw_override'||p==='iota'" in src
+    assert "iota_geom_authoritative" not in src
+    assert "边界自身参数自洽计算" in src
+    assert "使用权威/拟合几何值" not in src
 
 
 def test_frontend_mode_switch_prefers_geometry_variants():
@@ -298,24 +244,37 @@ console.log(JSON.stringify({{axis, boundary, simple}}));
     assert data["simple"] == {"delta_h": 0.31, "etabar": 0.119, "hasShape": False, "hasRc": False, "hasIota": False}
 
 
-def test_boundary_mode_reports_authoritative_iota_geom():
+def test_iota_uses_only_the_current_geometry_parameters():
     presets, _ = load_presets("stellarator")
-    for name in ("W7-X", "LHD", "HSX", "CFQS"):
-        payload = _payload_for_mode(presets[name], "boundary")
-        run = run_case(payload, config="stellarator")
-        assert "errors" not in run, f"{name}: {run.get('errors')}"
-        assert run["outputs"]["iota"] == pytest.approx(payload["iota"])
-        assert run["outputs"]["iota_geom"] == pytest.approx(payload["iota"])
+    for mode in ("simple", "axis"):
+        payload = _payload_for_mode(presets["W7-X"], mode)
+        baseline = dict(payload)
+        baseline["iota"] = 0.0
+        overridden = dict(payload)
+        overridden["iota"] = 9.9
+        overridden["geometry_variants"] = {
+            "authority": "boundary",
+            "boundary": {"shape": overridden.get("shape"), "iota": 8.8},
+        }
+        run0 = run_case(baseline, config="stellarator")
+        run1 = run_case(overridden, config="stellarator")
+        assert "errors" not in run0, f"{mode}: {run0.get('errors')}"
+        assert "errors" not in run1, f"{mode}: {run1.get('errors')}"
+        assert run0["outputs"]["iota"] == pytest.approx(run0["outputs"]["iota_geom"])
+        assert run1["outputs"]["iota"] == pytest.approx(run1["outputs"]["iota_geom"])
+        assert run1["outputs"]["iota"] == pytest.approx(run0["outputs"]["iota"])
+        assert run1["outputs"]["iota_geom_authoritative"] == 0.0
 
-
-def test_boundary_mode_iota_zero_uses_matching_authoritative_variant():
-    presets, _ = load_presets("stellarator")
-    payload = _payload_for_mode(presets["W7-X"], "boundary")
-    payload["iota"] = 0.0
-    run = run_case(payload, config="stellarator")
+    boundary = _payload_for_mode(presets["W7-X"], "boundary")
+    boundary["iota"] = 0.73
+    boundary["geometry_variants"] = {
+        "authority": "axis",
+        "boundary": {"shape": boundary["shape"], "iota": 8.8},
+    }
+    run = run_case(boundary, config="stellarator")
     assert "errors" not in run, run.get("errors")
-    assert run["outputs"]["iota"] == pytest.approx(0.88)
-    assert run["outputs"]["iota_geom"] == pytest.approx(0.88)
+    assert run["outputs"]["iota"] == pytest.approx(0.73)
+    assert run["outputs"]["iota_geom"] == pytest.approx(0.73)
 
 
 def test_sw_override_derives_sp_from_uniform_wall_gap():
@@ -328,22 +287,6 @@ def test_sw_override_derives_sp_from_uniform_wall_gap():
     expected_sp = payload["Sw_override"] * out["a_vol"] / (out["a_vol"] + payload["g"])
     assert out["Sw"] == pytest.approx(payload["Sw_override"])
     assert out["Sp"] == pytest.approx(expected_sp)
-
-
-@pytest.mark.parametrize("source_mode", ["simple", "axis", "boundary"])
-def test_backend_sync_generates_other_modes_from_current_mode(source_mode):
-    presets, _ = load_presets("stellarator")
-    for name, preset in presets.items():
-        source = _payload_for_mode(preset, source_mode)
-        synced = sync_geometry_variants(source, source_mode=source_mode)
-        assert synced["authority"] == source_mode
-        for mode in ("simple", "axis", "boundary"):
-            assert synced.get(mode), f"{name}/{source_mode}->{mode}"
-            payload = dict(source)
-            payload["geometry_variants"] = synced
-            payload = _payload_for_mode(payload, mode)
-            run = run_case(payload, config="stellarator")
-            assert "errors" not in run, f"{name}/{source_mode}->{mode}: {run.get('errors')}"
 
 
 def test_boundary_authority_axis_and_simple_iota_are_close_to_authority():
