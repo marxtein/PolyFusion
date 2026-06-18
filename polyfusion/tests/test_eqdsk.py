@@ -19,3 +19,28 @@ def test_parse_geqdsk_dims_axis_boundary():
 def test_parse_geqdsk_rejects_truncated():
     with pytest.raises(ValueError):
         eqdsk.parse_geqdsk("FREEGS  garbage  3 101 101\n 0.1 0.2 0.3\n")
+
+
+def test_equilibrium_geometry_real_fixture():
+    g = eqdsk.parse_geqdsk(open(FIXTURE).read())
+    eq = eqdsk.equilibrium_geometry(g)
+    assert eq["R0"] == pytest.approx(0.83, abs=0.05)
+    assert eq["a"] == pytest.approx(0.60, abs=0.05)
+    assert 1.5 < eq["kappa"] < 2.2
+    assert 6.5 < eq["Vp"] < 9.0
+    assert 45.0 < eq["Sp"] < 65.0
+    assert eq["shaf_shift"] > 0.0
+    assert eq["axis"]["R"][0] == pytest.approx(g["rmaxis"])
+    fs = eq["flux_surfaces"]
+    assert len(fs) >= 4
+    widths = [max(s["R"]) - min(s["R"]) for s in fs]
+    assert widths == sorted(widths)
+    for s in fs:
+        assert len(s["R"]) == len(s["Z"]) >= 16
+
+
+def test_equilibrium_geometry_jsonable():
+    import json
+    g = eqdsk.parse_geqdsk(open(FIXTURE).read())
+    eq = eqdsk.equilibrium_geometry(g)
+    json.dumps(eq)

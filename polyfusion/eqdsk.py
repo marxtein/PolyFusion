@@ -78,3 +78,98 @@ def parse_geqdsk(text: str) -> dict:
         "simag": simag, "sibry": sibry, "bcentr": bcentr, "psirz": psirz,
         "rbbbs": np.array(bnd[0::2]), "zbbbs": np.array(bnd[1::2]),
     }
+
+
+_PSI_N_LEVELS = (0.2, 0.4, 0.6, 0.8, 0.9)   # nested flux surfaces for display
+
+
+def _revolution_metrics(R, Z):
+    """Vp, Sp of the surface of revolution of a closed (R, Z) contour."""
+    R = np.asarray(R, float)
+    Z = np.asarray(Z, float)
+    if not (math.isclose(R[0], R[-1]) and math.isclose(Z[0], Z[-1])):
+        R = np.append(R, R[0])
+        Z = np.append(Z, Z[0])
+    Rmid = 0.5 * (R[:-1] + R[1:])
+    Vp = abs(math.pi * float(np.sum(Rmid**2 * np.diff(Z))))
+    Sp = float(np.sum(2 * math.pi * Rmid * np.hypot(np.diff(R), np.diff(Z))))
+    return Vp, Sp
+
+
+def _psi_interpolator(g):
+    """Return a bilinear psi(R, Z) sampler over the EQDSK grid."""
+    Rg = np.linspace(g["rleft"], g["rleft"] + g["rdim"], g["nw"])
+    Zg = np.linspace(g["zmid"] - g["zdim"] / 2, g["zmid"] + g["zdim"] / 2, g["nh"])
+    psirz = g["psirz"]
+
+    def psi(R, Z):
+        R = min(max(R, Rg[0]), Rg[-1])
+        Z = min(max(Z, Zg[0]), Zg[-1])
+        i = min(max(np.searchsorted(Rg, R) - 1, 0), g["nw"] - 2)
+        j = min(max(np.searchsorted(Zg, Z) - 1, 0), g["nh"] - 2)
+        tr = (R - Rg[i]) / (Rg[i + 1] - Rg[i])
+        tz = (Z - Zg[j]) / (Zg[j + 1] - Zg[j])
+        return (psirz[j, i] * (1 - tr) * (1 - tz) + psirz[j, i + 1] * tr * (1 - tz)
+                + psirz[j + 1, i] * (1 - tr) * tz + psirz[j + 1, i + 1] * tr * tz)
+
+    return psi, Rg, Zg
+
+
+def _flux_surface(psi, rmaxis, zmaxis, target, sign, s_cap, n_theta=120):
+    """Ray-cast one psi=target contour from the magnetic axis. Returns (R, Z)."""
+    R, Z = [], []
+    for ang in np.linspace(0.0, 2 * math.pi, n_theta, endpoint=False):
+        dr, dz = math.cos(ang), math.sin(ang)
+        s0, s1 = 1e-4, s_cap
+        f0 = (psi(rmaxis + s0 * dr, zmaxis + s0 * dz) - target) * sign
+        f1 = (psi(rmaxis + s1 * dr, zmaxis + s1 * dz) - target) * sign
+        if f0 * f1 > 0:
+            continue
+        for _ in range(50):
+            sm = 0.5 * (s0 + s1)
+            fm = (psi(rmaxis + sm * dr, zmaxis + sm * dz) - target) * sign
+            if f0 * fm <= 0:
+                s1 = sm
+            else:
+                s0, f0 = sm, fm
+        s = 0.5 * (s0 + s1)
+        R.append(rmaxis + s * dr)
+        Z.append(zmaxis + s * dz)
+    return np.array(R), np.array(Z)
+
+
+def equilibrium_geometry(g: dict) -> dict:
+    """Derive JSON-able geometry from a parsed G-EQDSK dict.
+
+    Returns: boundary {R,Z}, axis {R,Z}, flux_surfaces [{R,Z}...],
+    R0, a, kappa, delta, shaf_shift, Vp, Sp.
+    """
+    Rb, Zb = g["rbbbs"], g["zbbbs"]
+    R0 = 0.5 * (float(Rb.max()) + float(Rb.min()))
+    a = 0.5 * (float(Rb.max()) - float(Rb.min()))
+    kappa = (float(Zb.max()) - float(Zb.min())) / (2 * a) if a > 0 else 1.0
+    R_up = float(Rb[int(np.argmax(Zb))])
+    R_lo = float(Rb[int(np.argmin(Zb))])
+    delta = (R0 - 0.5 * (R_up + R_lo)) / a if a > 0 else 0.0
+    delta = max(-0.999, min(0.999, delta))
+    shaf_shift = float(g["rmaxis"]) - R0
+    Vp, Sp = _revolution_metrics(Rb, Zb)
+
+    psi, Rg, Zg = _psi_interpolator(g)
+    sign = math.copysign(1.0, g["sibry"] - g["simag"])
+    s_cap = 0.95 * min(g["rmaxis"] - Rg[0], Rg[-1] - g["rmaxis"],
+                       g["zmaxis"] - Zg[0], Zg[-1] - g["zmaxis"]) + a
+    flux = []
+    for pn in _PSI_N_LEVELS:
+        target = g["simag"] + (g["sibry"] - g["simag"]) * pn
+        Rs, Zs = _flux_surface(psi, g["rmaxis"], g["zmaxis"], target, sign, s_cap)
+        if Rs.size >= 16:
+            flux.append({"R": Rs.tolist(), "Z": Zs.tolist()})
+
+    return {
+        "boundary": {"R": Rb.tolist(), "Z": Zb.tolist()},
+        "axis": {"R": [float(g["rmaxis"])], "Z": [float(g["zmaxis"])]},
+        "flux_surfaces": flux,
+        "R0": R0, "a": a, "kappa": kappa, "delta": delta,
+        "shaf_shift": shaf_shift, "Vp": Vp, "Sp": Sp,
+    }
