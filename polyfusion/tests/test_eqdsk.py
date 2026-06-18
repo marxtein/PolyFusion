@@ -58,12 +58,8 @@ def test_equilibrium_geometry_exposes_bt0_ip():
     g = eqdsk.parse_geqdsk(open(FIXTURE).read())
     assert "current" in g
     eq = eqdsk.equilibrium_geometry(g)
-    # bt0 = toroidal field at the MAGNETIC AXIS (vacuum field ~ 1/R):
-    #   B_axis = |bcentr| * rcentr / rmaxis
-    b_axis = abs(g["bcentr"]) * g["rcentr"] / g["rmaxis"]
-    assert eq["bt0"] == pytest.approx(b_axis, rel=1e-9)
+    # bt0 = the file's vacuum toroidal field BCENTR (override BT0 directly)
+    assert eq["bt0"] == pytest.approx(abs(g["bcentr"]), rel=1e-9)
     assert eq["bt0"] > 0
-    # the magnetic axis is outboard of rcentr, so the axis field is weaker
-    assert eq["bt0"] < abs(g["bcentr"])
     assert eq["ip"] == pytest.approx(abs(g["current"]) / 1e6, rel=1e-9)
     assert eq["ip"] > 0

@@ -175,7 +175,6 @@ def equilibrium_geometry(g: dict) -> dict:
         "flux_surfaces": flux,
         "R0": R0, "a": a, "kappa": kappa, "delta": delta,
         "shaf_shift": shaf_shift, "Vp": Vp, "Sp": Sp,
-        # toroidal field at the magnetic axis (vacuum ~1/R): B_axis = Bcentr*rcentr/rmaxis
-        "bt0": abs(float(g["bcentr"])) * float(g["rcentr"]) / float(g["rmaxis"]),
+        "bt0": abs(float(g["bcentr"])),          # file's vacuum toroidal field BCENTR [T]
         "ip": abs(float(g["current"])) / 1e6,    # plasma current [MA]
     }
