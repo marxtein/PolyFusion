@@ -51,7 +51,7 @@ def test_legacy_dispatch_matches_old_formula_exactly():
 
 
 def test_dispatch_override_replaces_metric_keeps_geom_diagnostic():
-    out = tg.tokamak_geometry(1, 6.2, 3.1, 1.7, 0.33, 0.05, 0, 900.0, 700.0)
+    out = tg.tokamak_geometry(1, 6.2, 3.1, 1.7, 0.33, 0.05, None, 900.0, 700.0)
     assert out["Vp"] == 900.0          # override wins
     assert out["Sw"] == 700.0
     assert out["Vp_geom"] != 900.0     # integrated value still reported
@@ -77,7 +77,7 @@ def test_funsc_legacy_default_unchanged_and_models_differ():
 
 def test_shape_outlines_closed_and_wall_outside():
     out = tg.tokamak_shape_outlines(R0=6.2, A=3.1, kappa=1.7, delta=0.33, g=0.1,
-                                    geom_model=2, divertor=1)
+                                    geom_model=2, eq=None)
     lcfs = out["lcfs"]
     wall = out["wall"]
     assert len(lcfs["R"]) == len(lcfs["Z"]) >= 64
@@ -129,3 +129,28 @@ def test_cf_low_aspect_no_log_domain_warning():
     Vp, _ = tg.revolution_metrics(R, Z)
     assert Vp > 0
     assert np.all(R > 0)
+
+
+def test_dispatch_eq_uses_equilibrium_boundary():
+    import os
+    from polyfusion import eqdsk
+    fx = os.path.join(os.path.dirname(__file__), "data", "test_1.geqdsk")
+    eq = eqdsk.equilibrium_geometry(eqdsk.parse_geqdsk(open(fx).read()))
+    out = tg.tokamak_geometry(2, 6.2, 3.1, 1.7, 0.33, 0.05, eq, 0.0, 0.0)
+    assert out["Vp"] == pytest.approx(eq["Vp"], rel=1e-6)
+    assert out["a"] == pytest.approx(eq["a"], rel=1e-6)
+    assert out["shaf_shift"] == pytest.approx(eq["shaf_shift"], rel=1e-6)
+    cf = tg.tokamak_geometry(2, 6.2, 3.1, 1.7, 0.33, 0.05, None, 0.0, 0.0)
+    assert cf["Vp"] != pytest.approx(eq["Vp"], rel=1e-3)
+
+
+def test_shape_outlines_eq_has_flux_surfaces():
+    import os
+    from polyfusion import eqdsk
+    fx = os.path.join(os.path.dirname(__file__), "data", "test_1.geqdsk")
+    eq = eqdsk.equilibrium_geometry(eqdsk.parse_geqdsk(open(fx).read()))
+    out = tg.tokamak_shape_outlines(R0=6.2, A=3.1, kappa=1.7, delta=0.33, g=0.05,
+                                    geom_model=2, eq=eq)
+    assert len(out["lcfs"]["R"]) >= 100
+    assert len(out["flux"]) >= 4
+    assert out["axis"]["R"][0] == pytest.approx(eq["axis"]["R"][0])

@@ -216,26 +216,41 @@ def cf_boundary(R0, a, kappa, delta, n_theta=360):
 
 
 def tokamak_shape_outlines(R0, A, kappa, delta, g=0.0, geom_model=1,
-                           divertor=0, n_theta=181, **_ignored):
+                           eq=None, n_theta=181, **_ignored):
     """JSON-able cross-section outline for the UI shape view.
 
-    Returns {lcfs:{R,Z}, wall:{R,Z}, axis:{R,Z}, geom_model, shaf_shift}.
-    Model 0 (legacy fits have no drawn boundary) falls back to the Miller
-    outline for display only — the power account still uses the model-0 fits.
+    Returns {lcfs:{R,Z}, wall:{R,Z}, axis:{R,Z}, flux:[{R,Z}...],
+             geom_model, shaf_shift}.
+    Model 0 (legacy fits have no drawn boundary) returns an empty outline so the
+    UI draws its own double-ellipse; model 1 = Miller; model 2 = real EQDSK
+    boundary + flux surfaces when ``eq`` given, else CF limiter.
     """
     a = R0 / A
     shaf = 0.0
     gm = int(geom_model)
-    if gm == 2:
+    flux = []
+    if gm == 0:
+        return {"lcfs": {"R": [], "Z": []}, "wall": {"R": [], "Z": []},
+                "axis": {"R": [], "Z": []}, "flux": [], "geom_model": 0,
+                "shaf_shift": 0.0}
+    if gm == 2 and isinstance(eq, dict) and eq.get("boundary"):
+        R = np.asarray(eq["boundary"]["R"], float)
+        Z = np.asarray(eq["boundary"]["Z"], float)
+        shaf = float(eq.get("shaf_shift", 0.0))
+        ax = eq.get("axis", {"R": [R0 + shaf], "Z": [0.0]})
+        flux = eq.get("flux_surfaces", [])
+    elif gm == 2:
         R, Z, shaf = cf_boundary(R0, a, kappa, delta, n_theta)
+        ax = {"R": [R0 + shaf], "Z": [0.0]}
     else:
         R, Z = miller_boundary(R0, a, kappa, delta, n_theta)
+        ax = {"R": [R0], "Z": [0.0]}
     Rw, Zw = offset_outward(np.append(R, R[0]), np.append(Z, Z[0]), g)
     return {
         "lcfs": {"R": R.tolist(), "Z": Z.tolist()},
         "wall": {"R": Rw.tolist(), "Z": Zw.tolist()},
-        "axis": {"R": [R0 + shaf], "Z": [0.0]},
-        "geom_model": gm, "shaf_shift": shaf,
+        "axis": {"R": list(ax["R"]), "Z": list(ax["Z"])},
+        "flux": flux, "geom_model": gm, "shaf_shift": shaf,
     }
 
 
@@ -249,29 +264,40 @@ def legacy_metrics(R0, A, kappa, delta, g):
     return a, Vp, Sp, Sw
 
 
-def tokamak_geometry(geom_model, R0, A, kappa, delta, g, divertor,
+def tokamak_geometry(geom_model, R0, A, kappa, delta, g, eq,
                      Vp_override, Sw_override, n_theta=360):
     """Dispatch geometry by model and return a metrics dict.
 
-    Keys: a, Vp, Sp, Sw (used by the power account) plus diagnostics
-    Vp_geom, Sp_geom, Sw_geom (raw integrated/fit values before any override),
-    geom_volume_ratio, geom_wall_ratio (Vp_geom/Vp, Sw_geom/Sw),
-    shaf_shift (CF only; 0 otherwise), geom_model, divertor.
+    geom_model: 0 legacy fits, 1 Miller boundary, 2 equilibrium.
+    For model 2, ``eq`` (parsed G-EQDSK geometry dict from
+    ``eqdsk.equilibrium_geometry``) drives Vp/Sp/Sw and R0/a/kappa/delta when
+    present; otherwise the CF analytic limiter is used.
+
+    Keys: a, Vp, Sp, Sw, Vp_geom, Sp_geom, Sw_geom, geom_volume_ratio,
+    geom_wall_ratio, shaf_shift, geom_model.
     """
     a = R0 / A
     shaf = 0.0
     if geom_model == 0:
         a, Vp_g, Sp_g, Sw_g = legacy_metrics(R0, A, kappa, delta, g)
-    else:
-        if geom_model == 1:
-            R, Z = miller_boundary(R0, a, kappa, delta, n_theta)
-        elif geom_model == 2:
-            R, Z, shaf = cf_boundary(R0, a, kappa, delta, n_theta)
-        else:
-            raise ValueError(f"geom_model must be 0, 1 or 2 (got {geom_model})")
+    elif geom_model == 1:
+        R, Z = miller_boundary(R0, a, kappa, delta, n_theta)
         Vp_g, Sp_g = revolution_metrics(R, Z)
         Rw, Zw = offset_outward(R, Z, g)
         _, Sw_g = revolution_metrics(Rw, Zw)
+    elif geom_model == 2:
+        if isinstance(eq, dict) and eq.get("boundary"):
+            R = np.asarray(eq["boundary"]["R"], float)
+            Z = np.asarray(eq["boundary"]["Z"], float)
+            a = float(eq["a"])
+            shaf = float(eq.get("shaf_shift", 0.0))
+        else:
+            R, Z, shaf = cf_boundary(R0, a, kappa, delta, n_theta)
+        Vp_g, Sp_g = revolution_metrics(R, Z)
+        Rw, Zw = offset_outward(R, Z, g)
+        _, Sw_g = revolution_metrics(Rw, Zw)
+    else:
+        raise ValueError(f"geom_model must be 0, 1 or 2 (got {geom_model})")
     Vp = Vp_override if Vp_override and Vp_override > 0 else Vp_g
     Sw = Sw_override if Sw_override and Sw_override > 0 else Sw_g
     return {
@@ -279,6 +305,5 @@ def tokamak_geometry(geom_model, R0, A, kappa, delta, g, divertor,
         "Vp_geom": Vp_g, "Sp_geom": Sp_g, "Sw_geom": Sw_g,
         "geom_volume_ratio": Vp_g / Vp if Vp else float("nan"),
         "geom_wall_ratio": Sw_g / Sw if Sw else float("nan"),
-        "shaf_shift": shaf,
-        "geom_model": float(geom_model), "divertor": float(divertor),
+        "shaf_shift": shaf, "geom_model": float(geom_model),
     }
