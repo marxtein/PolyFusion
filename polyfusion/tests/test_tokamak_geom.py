@@ -185,3 +185,13 @@ def test_config_spec_has_eq_param():
     out = spec.solve({**spec.presets["ITER"], "geom_model": 2, "eq": eq})
     assert out["valid"] == 1.0
     assert out["Vp"] == pytest.approx(eq["Vp"], rel=1e-6)
+
+
+def test_geom_model_switch_changes_power_account():
+    from polyfusion.configs.base import get
+    spec = get("tokamak")
+    p = spec.presets["ITER"]
+    vps = [spec.solve({**p, "geom_model": gm})["Vp"] for gm in (0, 1, 2)]
+    assert vps[0] != pytest.approx(vps[1], rel=1e-6)   # legacy fit != Miller integral
+    pf = [spec.solve({**p, "geom_model": gm})["Pfus"] for gm in (0, 1)]
+    assert pf[0] != pytest.approx(pf[1], rel=1e-6)      # geometry drives fusion power
