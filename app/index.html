@@ -909,8 +909,15 @@ function drawShape(){
     }
     add({type:'scatter',mode:'lines+markers+text',x:[0,R0],y:[0,0],line:{color:'#ff6b6b',width:1.5,dash:'dot'},marker:{color:'#ff6b6b',size:3},text:['',`R<sub>0</sub>=${R0} m`],textposition:'top center',textfont:{color:'#ff6b6b',size:10}},'annot');
     add({type:'scatter',mode:'lines+markers+text',x:[R0,R0+a],y:[0,0],line:{color:'#ff9e3d',width:1.5,dash:'dot'},marker:{color:'#ff9e3d',size:3},text:['',`a=${a.toFixed(2)} m`],textposition:'bottom center',textfont:{color:'#ff9e3d',size:10}},'annot');
-    const topZ=(sh&&sh.lcfs&&sh.lcfs.Z&&sh.lcfs.Z.length)?Math.max.apply(null,sh.lcfs.Z):a*k;
-    add({type:'scatter',mode:'lines+markers+text',x:[R0,R0],y:[0,topZ],line:{color:'#7ddc6b',width:1.5,dash:'dot'},marker:{color:'#7ddc6b',size:3},text:['',`κa=${topZ.toFixed(2)} m`],textposition:'middle right',textfont:{color:'#7ddc6b',size:10}},'annot');
+    // kappa*a height marker drawn AT the boundary apex (R0-delta*a for a
+    // triangular plasma), so the tip touches the actual top instead of floating
+    // on the descending side at R0.
+    let Rapex=R0-d*a, Zapex=a*k;
+    if(sh&&sh.lcfs&&sh.lcfs.Z&&sh.lcfs.Z.length){
+      const Zb=sh.lcfs.Z;let im=0;for(let i=1;i<Zb.length;i++)if(Zb[i]>Zb[im])im=i;
+      Rapex=sh.lcfs.R[im];Zapex=Zb[im];
+    }
+    add({type:'scatter',mode:'lines+markers+text',x:[Rapex,Rapex],y:[0,Zapex],line:{color:'#7ddc6b',width:1.5,dash:'dot'},marker:{color:'#7ddc6b',size:3},text:['',`κa=${Zapex.toFixed(2)} m`],textposition:'middle right',textfont:{color:'#7ddc6b',size:10}},'annot');
   }else if(CUR==='stellarator'){
     // backend analytic flux surfaces (rotating-ellipse / near-axis).  Geometry
     // physics rework (Scheme D) is a later phase; here we only unify the layers.
