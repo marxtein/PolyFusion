@@ -191,6 +191,8 @@ const META={
   use_tauE:['使用输入 τE (关闭=自洽损失)','use input tauE (off = self-consistent losses)','','conf','τ<sub>E</sub>'],
   geom_weighted:['FRC 有限长度几何加权','FRC finite-length geometry weighting','','geo','geom'],
   sep_model:['FRC 分离面几何模型','FRC separatrix geometry model','','geo','sep'],
+  geom_model:['托卡马克几何模型','tokamak geometry model','','geo','geom'],
+  divertor:['偏滤器位形 (仅平衡模型)','divertor topology (equilibrium model only)','','geo','div'],
   icase:['反应类型','Reaction','','rx',''],
   R0:['大半径','major radius','m','geo','R<sub>0</sub>'],A:['环径比','aspect ratio','','geo','A'],a:['小半径','minor radius','m','geo','a'],kappa:['拉长比','elongation','','geo','κ'],
   delta:['三角形变','triangularity','','geo','δ'],g:['壁间隙','wall gap','m','geo','g'],
@@ -250,18 +252,18 @@ const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub
   P_LH:'P<sub>LH</sub>',LH_ratio:'P<sub>sep</sub>/P<sub>LH</sub>',tau_ITPA20:'τ<sub>ITPA20</sub>',H_ITPA20:'H<sub>ITPA20</sub>',
   tau_classical:'τ<sub>cl</sub>',tau_Bohm:'τ<sub>Bohm</sub>',a_over_rhoi:'a/ρ<sub>i</sub>',
   aspect_geom:'A<sub>geom</sub>',aspect_vol:'A<sub>vol</sub>',fpavg:'f<sub>p,avg</sub>',n_Sudo:'n<sub>Sudo</sub>',
-  PL_ISS04:'P<sub>L,ISS04</sub>',beta_soft_limit:'&beta;<sub>soft</sub>',geom_volume_ratio:'V<sub>p</sub>/V<sub>geom</sub>',
+  PL_ISS04:'P<sub>L,ISS04</sub>',beta_soft_limit:'&beta;<sub>soft</sub>',shaf_shift:'Δ<sub>Shafr</sub>',geom_volume_ratio:'V<sub>p</sub>/V<sub>geom</sub>',
   geom_wall_ratio:'S<sub>w</sub>/S<sub>w,geom</sub>',nbar_geom:'n&#772;<sub>geom</sub>',
   Te_line_geom:'T<sub>e,line,geom</sub>',Ti_line_geom:'T<sub>i,line,geom</sub>',nbar_geom_o_nbar:'n&#772;<sub>geom</sub>/n&#772;'};
 const pk=k=>PR[k]?`<span class="sym">${PR[k]}</span>`:k;
 const chipLab=s=>{const u=(s.label.match(/\[[^\]]+\]/)||[''])[0];return (PR[s.f]?`<span class="sym">${PR[s.f]}</span>`:s.f)+(u?' '+u:'');};
 const GROUPS=[['rx','反应','Reaction'],['geo','几何','Geometry'],['prof','剖面','Profile'],['plasma','等离子体','Plasma'],['field','场·电流','Field·Current'],['fuel','燃料·杂质','Fuel·Impurity'],['conf','约束·修正','Confinement·Factors']];
 const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',A_flux:'m²',a_vol:'m',C_sec_mean:'m',C_wall_mean:'m',Vp_geom:'m³',Sp_geom:'m²',Sw_geom:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',tau_eta:'s',Te0:'keV',tauE_used:'s',P_LH:'MW',tau_ITPA20:'s',tau_classical:'s',tau_Bohm:'s',
-  PL_ISS04:'MW',Te_line_geom:'keV',Ti_line_geom:'keV',n_Sudo:'m⁻³',nbar_geom:'m⁻³'};
+  PL_ISS04:'MW',Te_line_geom:'keV',Ti_line_geom:'keV',n_Sudo:'m⁻³',nbar_geom:'m⁻³',shaf_shift:'m'};
 const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','Pth','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth']],
   ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ITPA20','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tau_ITPA20','tauE_used','taue_mode','tau_eta','tauN_o_taueta','tau_classical','tau_Bohm','ntau','PL_ISS04']],
   ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_avg','beta_null','beta_o_limit','beta_soft_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','nbar_geom_o_nbar','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain','P_LH','LH_ratio','a_over_rhoi']],
-  ['几何·后验 Geometry·Posterior',['aspect_geom','aspect_vol','a_vol','A_flux','Vp_geom','Sp_geom','Sw_geom','C_sec_mean','C_wall_mean','geom_volume_ratio','geom_wall_ratio','fnavg','fTavg','fpavg','nbar_geom','Te_line_geom','Ti_line_geom']],
+  ['几何·后验 Geometry·Posterior',['aspect_geom','aspect_vol','a_vol','A_flux','Vp_geom','Sp_geom','Sw_geom','C_sec_mean','C_wall_mean','geom_volume_ratio','geom_wall_ratio','shaf_shift','fnavg','fTavg','fpavg','nbar_geom','Te_line_geom','Ti_line_geom']],
   ['等离子体 Plasma',['ne0','ni0','nbar','n_Sudo','Vp','Sp','Sw','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','L_ax','L_in','A_throat','flux_p','G1','G2','GB','p_shape','f_shape_calc','geom_weighted','sep_model','m_shape','lambda_ii','coll_ratio','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
 const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_c','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','nbar_geom_o_nbar','beta_o_limit','beta_soft_limit']);
 const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 28 40 28 32 28 24 30 14 40 8Z"/>',
@@ -626,6 +628,10 @@ function buildParams(){
       else if(p==='m'){continue;}  // FRC paper shape index: derived from f_shape (API-only input); m_shape is shown as output
       else if(p==='sep_model'){const SM=[['superellipse',L('超椭圆(默认)','superellipse (default)')],['mrr',L('MRR 论文分离面','MRR paper separatrix')]];const cur=VALS.sep_model||'superellipse';
         html+=`<div class="fld full"><label title="${desc}"><span class="sym">sep</span><span class="nm">${desc}</span></label><select data-p="sep_model">${SM.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${t}</option>`).join('')}</select></div>`;}
+      else if(p==='geom_model'){const GM=[[0,L('传统解析 (默认)','legacy fits (default)')],[1,L('Miller 边界','Miller boundary')],[2,L('平衡 Cerfon–Freidberg','equilibrium Cerfon–Freidberg')]];const cur=+VALS.geom_model||0;
+        html+=`<div class="fld full"><label title="${desc}"><span class="sym">geom</span><span class="nm">${desc}</span></label><select data-p="geom_model">${GM.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${t}</option>`).join('')}</select></div>`;}
+      else if(p==='divertor'){if((+VALS.geom_model||0)!==2)continue;const DV=[[0,L('限制器','limiter')],[1,L('双零 X 点','double-null X-point')]];const cur=+VALS.divertor||0;
+        html+=`<div class="fld full"><label title="${desc}"><span class="sym">div</span><span class="nm">${desc}</span></label><select data-p="divertor">${DV.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${t}</option>`).join('')}</select></div>`;}
       else if(p==='profile'){const PR=[['hermite',L('Hermite 三次 (默认)','Hermite cubic (default)')],['sin2',L('sin² (经典)','sin² (classic)')]];const cur=VALS.profile||'hermite';
         html+=`<div class="fld full"><label title="${desc}"><span class="sym">prof</span><span class="nm">${desc}</span></label><select data-p="profile">${PR.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${t}</option>`).join('')}</select></div>`;}
       else if(p==='icase'){html+=`<div class="fld full"><label title="${desc}">${desc}</label><select data-p="icase">${Object.entries(RX).map(([k,v])=>`<option value="${k}" ${+VALS.icase===+k?'selected':''}>${k} · ${v}</option>`).join('')}</select></div>`;}
@@ -705,6 +711,7 @@ function buildParams(){
         // near-axis Fourier list: comma-separated floats
         const arr=(el.value||'').split(',').map(s=>parseFloat(s.trim())).filter(x=>isFinite(x));
         if(arr.length)VALS[el.dataset.p]=arr;else delete VALS[el.dataset.p];}}
+    else if(el.dataset.p==='geom_model'){VALS.geom_model=+el.value;buildParams();buildPlotOpts();recompute();return;}
     else if(el.dataset.bool)VALS[el.dataset.p]=+el.value;
     else if(el.dataset.p==='sep_model')VALS.sep_model=el.value;
     else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
@@ -890,15 +897,33 @@ function drawShape(){
   const GC=k=>GRP[k][1];
   if(CUR==='tokamak'){
     const R0=v.R0,a=v.R0/v.A,k=v.kappa,d=v.delta,g=v.g||0;
-    const rr=[0.2*a,0.4*a,0.6*a,0.8*a,1.0*a,a+Math.max(g,0.01)];
-    const dshape=r=>{const R=[],Z=[];
-      for(let t=0.5*Math.PI;t<=1.502*Math.PI;t+=0.01){R.push(r*(1-d)*Math.cos(t)+R0-d*r);Z.push(r*(1-d)*Math.sin(t)*(k/(1-d)));}
-      for(let t=1.5*Math.PI;t<=2.502*Math.PI;t+=0.01){R.push(r*(1+d)*Math.cos(t)+R0-d*r);Z.push(r*(1+d)*Math.sin(t)*(k/(1+d)));}
-      return[R,Z];};
-    rr.forEach((r,j)=>{const ar=dshape(r);
-      if(j===rr.length-1)add(lin(ar[0],ar[1],GC('wall'),3),'wall');
-      else if(j===rr.length-2)add(lin(ar[0],ar[1],GC('boundary'),2.6,true,'rgba(54,226,196,.06)'),'boundary');
-      else add(cv(ar[0],ar[1],GC('flux'),1.2,'dash'),'flux');});
+    const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.lcfs)?LASTRUN.shape:null;
+    if(sh){
+      // backend boundary: Miller (model 1) or Cerfon-Freidberg equilibrium
+      // (model 2, incl. double-null X-point); model 0 shows the Miller outline.
+      const close=o=>[o.R.concat([o.R[0]]),o.Z.concat([o.Z[0]])];
+      const W=close(sh.wall),Lf=close(sh.lcfs);
+      add(lin(W[0],W[1],GC('wall'),3),'wall');
+      const ax=(sh.axis&&sh.axis.R&&sh.axis.R.length)?[sh.axis.R[0],sh.axis.Z[0]]:[R0,0];
+      // decorative nested flux surfaces: LCFS scaled about the magnetic axis
+      [0.35,0.6,0.82].forEach(s=>add(cv(sh.lcfs.R.map(R=>ax[0]+s*(R-ax[0])),sh.lcfs.Z.map(Z=>ax[1]+s*(Z-ax[1])),GC('flux'),1.2,'dash'),'flux'));
+      add(lin(Lf[0],Lf[1],GC('boundary'),2.6,true,'rgba(54,226,196,.06)'),'boundary');
+      add({type:'scatter',mode:'markers+text',x:[ax[0]],y:[ax[1]],text:[L('磁轴','axis')],textposition:'bottom center',textfont:{color:'#ff5d8f',size:10},marker:{color:'#ff5d8f',size:6}},'annot');
+      const GMN=[L('传统(显示用 Miller)','legacy (Miller shown)'),'Miller',L('平衡 Cerfon–Freidberg','equilibrium Cerfon–Freidberg')][sh.geom_model|0]||'';
+      const shaf=isFiniteNum(sh.shaf_shift)?sh.shaf_shift:0;
+      document.getElementById('plotMeta').innerHTML=`<span>${L('后端边界','backend boundary')}: <b>${GMN}</b>${shaf?` · Δ<sub>Shafranov</sub>=${shaf.toFixed(3)} m`:''} · ${L('壁面 = 边界沿外法向偏移 g','wall = boundary normal offset by g')}</span>`;
+    }else{
+      // fallback before first run: simple JS D-shape nested surfaces
+      const rr=[0.2*a,0.4*a,0.6*a,0.8*a,1.0*a,a+Math.max(g,0.01)];
+      const dshape=r=>{const R=[],Z=[];
+        for(let t=0.5*Math.PI;t<=1.502*Math.PI;t+=0.01){R.push(r*(1-d)*Math.cos(t)+R0-d*r);Z.push(r*(1-d)*Math.sin(t)*(k/(1-d)));}
+        for(let t=1.5*Math.PI;t<=2.502*Math.PI;t+=0.01){R.push(r*(1+d)*Math.cos(t)+R0-d*r);Z.push(r*(1+d)*Math.sin(t)*(k/(1+d)));}
+        return[R,Z];};
+      rr.forEach((r,j)=>{const ar=dshape(r);
+        if(j===rr.length-1)add(lin(ar[0],ar[1],GC('wall'),3),'wall');
+        else if(j===rr.length-2)add(lin(ar[0],ar[1],GC('boundary'),2.6,true,'rgba(54,226,196,.06)'),'boundary');
+        else add(cv(ar[0],ar[1],GC('flux'),1.2,'dash'),'flux');});
+    }
     add({type:'scatter',mode:'lines+markers+text',x:[0,R0],y:[0,0],line:{color:'#ff6b6b',width:1.5,dash:'dot'},marker:{color:'#ff6b6b',size:3},text:['',`R<sub>0</sub>=${R0} m`],textposition:'top center',textfont:{color:'#ff6b6b',size:10}},'annot');
     add({type:'scatter',mode:'lines+markers+text',x:[R0,R0+a],y:[0,0],line:{color:'#ff9e3d',width:1.5,dash:'dot'},marker:{color:'#ff9e3d',size:3},text:['',`a=${a.toFixed(2)} m`],textposition:'bottom center',textfont:{color:'#ff9e3d',size:10}},'annot');
     add({type:'scatter',mode:'lines+markers+text',x:[R0,R0],y:[0,a*k],line:{color:'#7ddc6b',width:1.5,dash:'dot'},marker:{color:'#7ddc6b',size:3},text:['',`κa=${(a*k).toFixed(2)} m`],textposition:'middle right',textfont:{color:'#7ddc6b',size:10}},'annot');
@@ -973,24 +998,52 @@ function drawShape(){
         `<span>${L('后端解析磁面：','backend flux surfaces: ')}${sh.mode} · ${L('壁面 = 边界沿外法向偏移 g','wall = boundary normal offset by g')}</span>`;
     }else{document.getElementById('plotMeta').innerHTML=`<span>${L('等待后端解析磁面','waiting for backend flux surfaces')}</span>`;document.getElementById('phControls').innerHTML='';}
   }else if(CUR==='mirror'){
-    const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
-    const Lth=ft*Lc,Z=[],Rr=[];
-    const prof=z=>{const az=Math.abs(z);if(az<=Lc/2)return a;const t=Math.min((az-Lc/2)/Math.max(Lth,1e-6),1);
-      return a/Math.sqrt(1+(Rm-1)*Math.pow(Math.sin(Math.PI*t/2),2));};
-    for(let i=0;i<=160;i++){const z=-Lc/2-Lth+(Lc+2*Lth)*i/160;Z.push(z);Rr.push(prof(z));}
-    const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rr].reverse().map(r=>-r)];
-    add(lin(Zb,Rb,'#ffb02e',2.4,true),'boundary');
-    add(lin([-Lc/2-Lth,Lc/2+Lth],[a+gg,a+gg],GC('wall'),2.2),'wall');
-    add(lin([-Lc/2-Lth,Lc/2+Lth],[-(a+gg),-(a+gg)],GC('wall'),2.2),'wall');
-    [0.35,0.65,0.88].forEach(q=>{add(cv(Z,Rr.map(r=>q*r),GC('flux'),1.2,'dash'),'flux');add(cv(Z,Rr.map(r=>-q*r),GC('flux'),1.2,'dash'),'flux');});
-    const zt=Lc/2+Lth,rt=prof(zt);
-    add(cv([zt,zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
-    add(cv([-zt,-zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
-    add({type:'scatter',mode:'markers',x:[-zt,zt],y:[0,0],marker:{color:'#36e2c4',size:10,symbol:'line-ns-open'}},'annot');
-    add(txt([-zt,zt],[-rt*1.35,rt*1.35],['B↑','B↑'],'#36e2c4'),'annot');
-    lay=LAYOUT('z [m]',L('r [m]（径向放大）','r [m] (radial enlarged)'));
-    lay.xaxis.range=[-Lc/2-Lth*1.15,Lc/2+Lth*1.15];lay.yaxis.range=[-(a+gg)*1.75,(a+gg)*1.75];
-    document.getElementById('plotMeta').innerHTML=`<span>${L('径向放大显示磁通管收缩；壁含间隙 g；端面积为通量诊断','radial enlarged; wall includes gap g; throat area diagnostic')}</span>`;
+    const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.type==='mirror')?LASTRUN.shape:null;
+    if(sh&&sh.axial){
+      const ax=sh.axial,Z=ax.z,Rr=ax.r,Rw=ax.r_wall;
+      // plasma boundary: upper edge + mirrored lower edge
+      const Zb=[...Z,...[...Z].reverse()];
+      const Rb=[...Rr,...[...Rr].reverse().map(r=>-r)];
+      add(lin(Zb,Rb,'#ffb02e',2.4,true),'boundary');
+      // wall envelope
+      const Zbw=[...Z,...[...Z].reverse()];
+      const Rbw=[...Rw,...[...Rw].reverse().map(r=>-r)];
+      add(lin(Zbw,Rbw,GC('wall'),2.2),'wall');
+      // nested flux surfaces
+      [0.35,0.65,0.88].forEach(q=>{add(cv(Z,Rr.map(r=>q*r),GC('flux'),1.2,'dash'),'flux');add(cv(Z,Rr.map(r=>-q*r),GC('flux'),1.2,'dash'),'flux');});
+      // throat markers
+      const th=sh.throat;
+      if(th){
+        add(cv([th.z,th.z],[-th.r,th.r],'#c792ff',2.2,'dot'),'annot');
+        add(cv([-th.z,-th.z],[-th.r,th.r],'#c792ff',2.2,'dot'),'annot');
+        add({type:'scatter',mode:'markers',x:[-th.z,th.z],y:[0,0],marker:{color:'#36e2c4',size:10,symbol:'line-ns-open'}},'annot');
+        add(txt([-th.z,th.z],[-th.r*1.35,th.r*1.35],['B↑','B↑'],'#36e2c4'),'annot');
+      }
+      lay=LAYOUT('z [m]',L('r [m]（径向放大）','r [m] (radial enlarged)'));
+      const zMin=Math.min(...Z),zMax=Math.max(...Z),rMax=Math.max(...Rw);
+      lay.xaxis.range=[zMin*1.05,zMax*1.05];lay.yaxis.range=[-rMax*1.75,rMax*1.75];
+      document.getElementById('phControls').innerHTML='';
+      document.getElementById('plotMeta').innerHTML=`<span>${L('后端几何采样','backend geometry sampling')} · ${sh.mode} · ${L('壁含间隙 g','wall includes gap g')}</span>`;
+    }else{
+      // fallback: old JS hardcoded (safety net)
+      const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
+      const Lth=ft*Lc,Z=[],Rr=[];
+      const prof=z=>{const az=Math.abs(z);if(az<=Lc/2)return a;const t=Math.min((az-Lc/2)/Math.max(Lth,1e-6),1);
+        return a/Math.sqrt(1+(Rm-1)*Math.pow(Math.sin(Math.PI*t/2),2));};
+      for(let i=0;i<=160;i++){const z=-Lc/2-Lth+(Lc+2*Lth)*i/160;Z.push(z);Rr.push(prof(z));}
+      const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rr].reverse().map(r=>-r)];
+      add(lin(Zb,Rb,'#ffb02e',2.4,true),'boundary');
+      add(lin([-Lc/2-Lth,Lc/2+Lth],[a+gg,a+gg],GC('wall'),2.2),'wall');
+      add(lin([-Lc/2-Lth,Lc/2+Lth],[-(a+gg),-(a+gg)],GC('wall'),2.2),'wall');
+      [0.35,0.65,0.88].forEach(q=>{add(cv(Z,Rr.map(r=>q*r),GC('flux'),1.2,'dash'),'flux');add(cv(Z,Rr.map(r=>-q*r),GC('flux'),1.2,'dash'),'flux');});
+      const zt=Lc/2+Lth,rt=prof(zt);
+      add(cv([zt,zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
+      add(cv([-zt,-zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
+      add(txt([-zt,zt],[-rt*1.35,rt*1.35],['B↑','B↑'],'#36e2c4'),'annot');
+      lay=LAYOUT('z [m]',L('r [m]（径向放大）','r [m] (radial enlarged)'));
+      lay.xaxis.range=[-Lc/2-Lth*1.15,Lc/2+Lth*1.15];lay.yaxis.range=[-(a+gg)*1.75,(a+gg)*1.75];
+      document.getElementById('plotMeta').innerHTML=`<span>${L('前端 fallback 模式','frontend fallback mode')}</span>`;
+    }
   }else if(CUR==='frc'){
     const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.type==='frc')?LASTRUN.shape:null;
     const fs=(v.f_shape!=null?v.f_shape:0.85),p=sh?sh.p_shape:Math.min(2/(3*Math.max(1-fs,0.017)),40);
