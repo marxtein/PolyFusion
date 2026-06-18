@@ -170,12 +170,35 @@ def _cf_psi(x, y, coeffs, A=_CF_A):
     return P[0] + float(np.dot(coeffs, H[:, 0]))
 
 
+def _cf_psi_value(x, y, coeffs, A=_CF_A):
+    """psi VALUE at (x, y), vectorized over numpy arrays (value column only).
+
+    Identical to ``_cf_psi`` for scalars but evaluates the 7 basis values + the
+    particular solution directly, so a whole ray bundle is one numpy expression
+    instead of thousands of (7x5)-array constructions.
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    L = np.log(x)
+    x2, y2 = x**2, y**2
+    c = coeffs
+    psi = x2**2 / 8 + A * (0.5 * x2 * L - x2**2 / 8)            # particular value
+    psi = psi + c[0] + c[1] * x2 + c[2] * (y2 - x2 * L)
+    psi = psi + c[3] * (x2**2 - 4 * x2 * y2)
+    psi = psi + c[4] * (2 * y2**2 - 9 * y2 * x2 + 3 * x2**2 * L - 12 * x2 * y2 * L)
+    psi = psi + c[5] * (x2**3 - 12 * x2**2 * y2 + 8 * x2 * y2**2)
+    psi = psi + c[6] * (8 * y2**3 - 140 * y2**2 * x2 + 75 * y2 * x2**2
+                        - 15 * x2**3 * L + 180 * x2**2 * y2 * L - 120 * x2 * y2**2 * L)
+    return psi
+
+
 def cf_boundary(R0, a, kappa, delta, n_theta=360):
     """Cerfon-Freidberg equilibrium LCFS (R, Z) [m] and Shafranov shift [m].
 
     The boundary is the psi = 0 contour, traced by bisection along rays from the
     normalized geometric centre (x=1, y=0). Returns (R, Z, shaf_shift) where
     shaf_shift = R(magnetic axis) - R0 (outward shift of the flux minimum).
+    The bisection runs on the whole ray bundle at once (vectorized).
     """
     if R0 <= 0 or a <= 0 or kappa <= 0:
         raise ValueError(f"R0, a, kappa must be > 0 (got {R0}, {a}, {kappa})")
@@ -185,31 +208,29 @@ def cf_boundary(R0, a, kappa, delta, n_theta=360):
     coeffs = _cf_coeffs(eps, kappa, delta)
     xc = 1.0
     th = np.linspace(0.0, 2 * math.pi, int(n_theta), endpoint=False)
-    R = np.empty_like(th)
-    Z = np.empty_like(th)
-    for k, ang in enumerate(th):
-        dx, dy = math.cos(ang), math.sin(ang)
-        s0, s1 = 1e-4, 1.2 * eps + 0.4
-        if dx < 0:                       # cap inward rays so x = xc + s*dx > 0 (log domain)
-            s1 = min(s1, (xc - 1e-3) / (-dx))
-        f0 = _cf_psi(xc + s0 * dx, s0 * dy, coeffs)
-        f1 = _cf_psi(xc + s1 * dx, s1 * dy, coeffs)
-        if f0 * f1 > 0:                 # ray misses boundary (X-point notch): clamp to Miller
-            s = eps
-        else:
-            for _ in range(60):
-                sm = 0.5 * (s0 + s1)
-                fm = _cf_psi(xc + sm * dx, sm * dy, coeffs)
-                if f0 * fm <= 0:
-                    s1 = sm
-                else:
-                    s0, f0 = sm, fm
-            s = 0.5 * (s0 + s1)
-        R[k] = (xc + s * dx) * R0
-        Z[k] = s * dy * R0
+    dx = np.cos(th)
+    dy = np.sin(th)
+    s0 = np.full(th.shape, 1e-4)
+    s1 = np.full(th.shape, 1.2 * eps + 0.4)
+    inward = dx < 0                       # cap inward rays so x = xc + s*dx > 0 (log domain)
+    s1 = np.where(inward, np.minimum(s1, (xc - 1e-3) / np.where(inward, -dx, 1.0)), s1)
+    f0 = _cf_psi_value(xc + s0 * dx, s0 * dy, coeffs)
+    f1 = _cf_psi_value(xc + s1 * dx, s1 * dy, coeffs)
+    bracketed = f0 * f1 <= 0             # rays that cross the boundary
+    lo, hi, flo = s0.copy(), s1.copy(), f0.copy()
+    for _ in range(60):
+        sm = 0.5 * (lo + hi)
+        fm = _cf_psi_value(xc + sm * dx, sm * dy, coeffs)
+        left = flo * fm <= 0            # root in [lo, sm]
+        hi = np.where(left, sm, hi)
+        lo = np.where(left, lo, sm)
+        flo = np.where(left, flo, fm)
+    s = np.where(bracketed, 0.5 * (lo + hi), eps)   # missed rays (X-point notch) -> eps
+    R = (xc + s * dx) * R0
+    Z = s * dy * R0
     # magnetic axis = flux minimum on the midplane
-    xs = np.linspace(1.0 - eps, 1.0 + eps, 2001)
-    psi_mid = np.array([_cf_psi(xi, 0.0, coeffs) for xi in xs])
+    xs = np.linspace(1.0 - eps, 1.0 + eps, 401)
+    psi_mid = _cf_psi_value(xs, np.zeros_like(xs), coeffs)
     x_axis = xs[int(np.argmin(psi_mid))]
     shaf_shift = (x_axis - 1.0) * R0
     return R, Z, shaf_shift

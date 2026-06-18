@@ -207,3 +207,16 @@ def test_miller_flux_surfaces_nested_and_rounder_inward():
     # Miller shape_fn now returns constructed flux surfaces (not naive scaling)
     out = tg.tokamak_shape_outlines(R0=6.2, A=3.1, kappa=1.8, delta=0.5, geom_model=1)
     assert len(out["flux"]) >= 3
+
+
+def test_cf_boundary_volume_regression_and_fast():
+    import time
+    R, Z, sh = tg.cf_boundary(6.2, 1.984, 1.7, 0.33, 360)
+    Vp, Sp = tg.revolution_metrics(R, Z)
+    assert Vp == pytest.approx(786.1448, rel=1e-4)     # unchanged by vectorization
+    assert Sp == pytest.approx(647.5392, rel=1e-4)
+    assert sh == pytest.approx(0.3174, abs=0.01)
+    t = time.perf_counter()
+    for _ in range(30):
+        tg.cf_boundary(6.2, 1.984, 1.7, 0.33, 360)
+    assert (time.perf_counter() - t) < 1.0            # 30 calls < 1s (was ~20s scalar)
