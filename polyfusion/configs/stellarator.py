@@ -195,9 +195,7 @@ def _shape_boundary_fn_with_rho(R0, a, shape, n_theta=_BOUNDARY_N_THETA):
     axis, |m|=1 terms scale linearly, and higher-order shaping fades as
     ``rho**_SHAPE_FADE``.
     """
-    nfp = int(shape.get("nfp"))
-    R_modes = [(int(m), int(n), float(c)) for m, n, c in shape["R"]]
-    Z_modes = [(int(m), int(n), float(c)) for m, n, c in shape["Z"]]
+    nfp, R_modes, Z_modes = _validated_shape_modes(shape)
     th = np.linspace(0.0, 2 * math.pi, n_theta, endpoint=False)
     cos_m = {}
     for m, _, _ in R_modes + Z_modes:
@@ -249,7 +247,8 @@ def _axis_from_shape(R0, a, shape):
     arc, azs = shape.get("axis_rc"), shape.get("axis_zs")
     if isinstance(arc, list) and isinstance(azs, list) and arc and azs:
         return [float(x) for x in arc], [float(x) for x in azs]
-    modes = shape.get("R", []) + shape.get("Z", [])
+    _, R_modes, Z_modes = _validated_shape_modes(shape)
+    modes = R_modes + Z_modes
     max_n = 0
     for row in modes:
         if len(row) >= 3 and int(row[0]) == 0:
@@ -258,12 +257,10 @@ def _axis_from_shape(R0, a, shape):
         return None, None
     rc = [float(R0)] + [0.0] * max_n
     zs = [0.0] * (max_n + 1)
-    for m, n, c in shape.get("R", []):
-        m, n, c = int(m), int(n), float(c)
+    for m, n, c in R_modes:
         if m == 0 and n >= 0 and n <= max_n:
             rc[n] += float(a) * c
-    for m, n, c in shape.get("Z", []):
-        m, n, c = int(m), int(n), float(c)
+    for m, n, c in Z_modes:
         if m == 0 and n < 0 and -n <= max_n:
             zs[-n] += float(a) * c
     while len(rc) > 1 and abs(rc[-1]) < 1e-12 and abs(zs[-1]) < 1e-12:
@@ -272,6 +269,46 @@ def _axis_from_shape(R0, a, shape):
     if len(rc) <= 1:
         return None, None
     return rc, zs
+
+
+def _validated_shape_modes(shape):
+    """Validate boundary Fourier indices instead of silently truncating them."""
+    if not isinstance(shape, dict):
+        raise ValueError("boundary Fourier shape must be an object")
+
+    def integer_mode(value, label):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"boundary Fourier {label} must be an integer") from None
+        if not math.isfinite(number) or not number.is_integer():
+            raise ValueError(f"boundary Fourier {label} must be an integer (got {value})")
+        return int(number)
+
+    nfp = integer_mode(shape.get("nfp"), "nfp")
+    if nfp < 1:
+        raise ValueError(f"boundary Fourier nfp must be >= 1 (got {nfp})")
+
+    def rows(key):
+        raw = shape.get(key)
+        if not isinstance(raw, list) or not raw:
+            raise ValueError(f"boundary Fourier {key} must be a non-empty list")
+        out = []
+        for i, row in enumerate(raw):
+            if not isinstance(row, (list, tuple)) or len(row) != 3:
+                raise ValueError(f"boundary Fourier {key}[{i}] must be [m,n,c]")
+            m = integer_mode(row[0], f"{key}[{i}].m")
+            n = integer_mode(row[1], f"{key}[{i}].n")
+            try:
+                c = float(row[2])
+            except (TypeError, ValueError):
+                raise ValueError(f"boundary Fourier {key}[{i}].c must be finite") from None
+            if not math.isfinite(c):
+                raise ValueError(f"boundary Fourier {key}[{i}].c must be finite")
+            out.append((m, n, c))
+        return out
+
+    return nfp, rows("R"), rows("Z")
 
 
 def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
@@ -295,9 +332,7 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
     iota/Vp_override/Sw_override, never this outline.  ``delta_h`` is unused here
     (the axis excursion is already encoded in the n!=0 R harmonics).
     """
-    nfp = int(shape.get("nfp", round(N_fp)))
-    R_modes = [(int(m), int(n), float(c)) for m, n, c in shape["R"]]
-    Z_modes = [(int(m), int(n), float(c)) for m, n, c in shape["Z"]]
+    nfp, R_modes, Z_modes = _validated_shape_modes(shape)
     th = np.linspace(0.0, 2 * math.pi, n_theta, endpoint=False)
     cos_m = {}; sin_m = {}
     for m, _, _ in R_modes + Z_modes:

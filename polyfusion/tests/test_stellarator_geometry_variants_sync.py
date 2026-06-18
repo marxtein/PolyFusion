@@ -189,6 +189,31 @@ def test_frontend_boundary_keeps_its_own_iota_input_without_authority_semantics(
     assert "使用权威/拟合几何值" not in src
 
 
+def test_boundary_fourier_mode_numbers_must_be_integers():
+    presets, _ = load_presets("stellarator")
+    payload = _payload_for_mode(presets["W7-X"], "boundary")
+    payload["shape"] = json.loads(json.dumps(payload["shape"]))
+    payload["shape"]["Z"][0][1] = -1.5
+    run = run_case(payload, config="stellarator")
+    assert run["errors"]
+    assert "integer" in run["errors"][0]
+
+
+def test_frontend_rejects_noninteger_boundary_fourier_modes():
+    src = open(INDEX, encoding="utf-8").read()
+    support = [_extract_function(src, "parseBoundaryFourier")]
+    js = f"""
+{chr(10).join(support)}
+const good = parseBoundaryFourier('[0,-1,0.46], [1,2,-0.3]');
+const bad = parseBoundaryFourier('[0,-1.5,0.46]');
+console.log(JSON.stringify({{good, bad}}));
+"""
+    out = subprocess.check_output(["node", "-e", js], cwd=ROOT, text=True)
+    data = json.loads(out)
+    assert data["good"] == [[0, -1, 0.46], [1, 2, -0.3]]
+    assert data["bad"] is None
+
+
 def test_frontend_mode_switch_prefers_geometry_variants():
     src = open(INDEX, encoding="utf-8").read()
     support = [

@@ -287,6 +287,18 @@ function cloneJson(v){return JSON.parse(JSON.stringify(v));}
 
 function defaultBoundaryShape(R0,N_fp){return{source:'',nfp:N_fp||5,R:[[1,0,1.0]],Z:[[-1,0,1.0]]};}
 function isFiniteNum(v){return typeof v==='number'&&isFinite(v);}
+function parseBoundaryFourier(text){
+  const ns=(text||'').match(/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/g)||[];
+  if(!ns.length)return[];
+  if(ns.length%3!==0)return null;
+  const arr=[];
+  for(let i=0;i<ns.length;i+=3){
+    const m=Number(ns[i]),n=Number(ns[i+1]),c=Number(ns[i+2]);
+    if(!Number.isInteger(m)||!Number.isInteger(n)||!Number.isFinite(c))return null;
+    arr.push([m,n,c]);
+  }
+  return arr;
+}
 function simpleAxisVariant(vals=VALS){return{rc:[vals.R0,vals.delta_h],zs:[0,-vals.delta_h],etabar:vals.etabar,source:'synthetic from simple near-axis'};}
 function simpleBoundaryVariant(vals=VALS){
   const R0=vals.R0,a=vals.a,N_fp=vals.N_fp,dh=vals.delta_h,axis=simpleAxisVariant(vals);
@@ -625,8 +637,13 @@ function buildParams(){
       const mk=el.dataset.p==='rc'?'R':'Z';
       // boundary Fourier: parse [m,n,c] triplets into VALS.shape
       if(isPlainObject(VALS.shape)&&el.tagName==='TEXTAREA'){
-        const ns=(el.value||'').match(/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/g)||[];
-        const arr=[];for(let i=0;i+2<ns.length;i+=3)arr.push([parseFloat(ns[i]),parseFloat(ns[i+1]),parseFloat(ns[i+2])]);
+        const arr=parseBoundaryFourier(el.value);
+        if(arr===null){
+          el.setCustomValidity(L('Fourier 模式 m、n 必须是整数，每行必须为 [m,n,c]','Fourier modes m and n must be integers; each row must be [m,n,c]'));
+          el.style.borderColor='#ff6b6b';
+          return;
+        }
+        el.setCustomValidity('');el.style.borderColor='';
         if(arr.length){if(!VALS.shape)VALS.shape={};VALS.shape[mk]=arr;}
         else{if(VALS.shape)delete VALS.shape[mk];if(VALS.shape&&!VALS.shape.R&&!VALS.shape.Z)delete VALS.shape;}
       }else{
