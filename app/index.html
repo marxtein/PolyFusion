@@ -192,7 +192,6 @@ const META={
   geom_weighted:['FRC 有限长度几何加权','FRC finite-length geometry weighting','','geo','geom'],
   sep_model:['FRC 分离面几何模型','FRC separatrix geometry model','','geo','sep'],
   geom_model:['托卡马克几何模型','tokamak geometry model','','geo','geom'],
-  divertor:['偏滤器位形 (仅平衡模型)','divertor topology (equilibrium model only)','','geo','div'],
   icase:['反应类型','Reaction','','rx',''],
   R0:['大半径','major radius','m','geo','R<sub>0</sub>'],A:['环径比','aspect ratio','','geo','A'],a:['小半径','minor radius','m','geo','a'],kappa:['拉长比','elongation','','geo','κ'],
   delta:['三角形变','triangularity','','geo','δ'],g:['壁间隙','wall gap','m','geo','g'],
@@ -277,10 +276,10 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   opPoint:'Operating Point',saveP:'⬇ Save Params',loadP:'⬆ Load Params',expJson:'⬇ Result JSON',expCsv:'⬇ Scan CSV',
   tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
   help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
-let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null;
+let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
 let STELL_STASH={};
 const ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override']);  // expert-only inputs
-const OPAQUE_PARAMS=new Set(['shape','geometry_variants']);  // opaque JSON objects intentionally sent to backend
+const OPAQUE_PARAMS=new Set(['shape','geometry_variants','eq']);  // opaque JSON objects intentionally sent to backend
 
 function isPlainObject(v){return v&&typeof v==='object'&&!Array.isArray(v);}
 function cloneJson(v){return JSON.parse(JSON.stringify(v));}
@@ -384,6 +383,17 @@ function showParamForMode(p){
   if(p==='shape')return false;  // shape is opaque, never a UI field
   return true;
 }
+function tokGeomMode(){return String(+VALS.geom_model||0);}
+function tokGeomModeHtml(){const m=tokGeomMode();
+  const item=(k,zh,en)=>`<button type="button" class="modebtn${m===k?' on':''}" data-tgmode="${k}">${L(zh,en)}</button>`;
+  return `<div class="fld full modefld"><label><span class="sym">geom</span><span class="nm">${L('几何输入方式','geometry input mode')}</span></label><div class="modebar">${item('0','传统','legacy')}${item('1','Miller','Miller')}${item('2','平衡','equilibrium')}</div></div>`;}
+function setTokGeomMode(k){const gm=+k;
+  if(gm!==2){if(isPlainObject(VALS.eq))TOK_EQ_STASH=cloneJson(VALS.eq);delete VALS.eq;}
+  else if(!isPlainObject(VALS.eq)&&isPlainObject(TOK_EQ_STASH))VALS.eq=cloneJson(TOK_EQ_STASH);
+  VALS.geom_model=gm;}
+function showTokParamForMode(p){const gm=+VALS.geom_model||0;
+  if(p==='Vp_override'||p==='Sw_override')return gm!==0;
+  return true;}
 
 const DENS=new Set(['ni0','n0']);const OUT_DENS=new Set(['ne0','ni0','n0','nbar','n_Sudo','nbar_geom']);
 const BOOLS=new Set(['use_tauE','geom_weighted']);const dsc=k=>DENS.has(k)?1e-20:1;  // density display in 10^20 m^-3
@@ -566,19 +576,18 @@ function buildParams(){
     html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div>`;
     html+=`<div class="pgrid" data-grp="${gk}">`;
     if(CUR==='stellarator'&&gk==='geo')html+=stellGeomModeHtml();
+    if(CUR==='tokamak'&&gk==='geo')html+=tokGeomModeHtml();
     for(const p of groups[gk]){const m=META[p];const desc=L(m[0],m[1]);
       // stellarator: hide params that don't apply to current geom mode
       if(CUR==='stellarator'&&gk==='geo'&&!showParamForMode(p))continue;
+      if(CUR==='tokamak'&&gk==='geo'&&!showTokParamForMode(p))continue;
+      if(CUR==='tokamak'&&p==='geom_model')continue;
       if(BOOLS.has(p)){const onTxt=p==='use_tauE'?L('开启：输入 τE','on: input tauE'):L('开启','on');
         const offTxt=p==='use_tauE'?L('关闭：自洽损失','off: self-consistent losses'):L('关闭','off');
         html+=`<div class="fld full"><label title="${desc}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span></label><select data-p="${p}" data-bool="1"><option value="1" ${VALS[p]!==0?'selected':''}>${onTxt}</option><option value="0" ${VALS[p]===0?'selected':''}>${offTxt}</option></select></div>`;}
       else if(p==='m'){continue;}  // FRC paper shape index: derived from f_shape (API-only input); m_shape is shown as output
       else if(p==='sep_model'){const SM=[['superellipse',L('超椭圆(默认)','superellipse (default)')],['mrr',L('MRR 论文分离面','MRR paper separatrix')]];const cur=VALS.sep_model||'superellipse';
         html+=`<div class="fld full"><label title="${desc}"><span class="sym">sep</span><span class="nm">${desc}</span></label><select data-p="sep_model">${SM.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${t}</option>`).join('')}</select></div>`;}
-      else if(p==='geom_model'){const GM=[[0,L('传统解析 (默认)','legacy fits (default)')],[1,L('Miller 边界','Miller boundary')],[2,L('平衡 Cerfon–Freidberg','equilibrium Cerfon–Freidberg')]];const cur=+VALS.geom_model||0;
-        html+=`<div class="fld full"><label title="${desc}"><span class="sym">geom</span><span class="nm">${desc}</span></label><select data-p="geom_model">${GM.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${t}</option>`).join('')}</select></div>`;}
-      else if(p==='divertor'){if((+VALS.geom_model||0)!==2)continue;const DV=[[0,L('限制器','limiter')],[1,L('双零 X 点','double-null X-point')]];const cur=+VALS.divertor||0;
-        html+=`<div class="fld full"><label title="${desc}"><span class="sym">div</span><span class="nm">${desc}</span></label><select data-p="divertor">${DV.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${t}</option>`).join('')}</select></div>`;}
       else if(p==='icase'){html+=`<div class="fld full"><label title="${desc}">${desc}</label><select data-p="icase">${Object.entries(RX).map(([k,v])=>`<option value="${k}" ${+VALS.icase===+k?'selected':''}>${k} · ${v}</option>`).join('')}</select></div>`;}
       else if(p==='imp_name'){const SP=['','He','Li','Be','C','N','O','Ne','Ar','Kr','Xe','W'];
         html+=`<div class="fld"><label title="${desc}"><span class="sym">imp</span><span class="nm">${desc}</span></label><select data-p="imp_name">${SP.map(s=>`<option value="${s}" ${(VALS.imp_name||'')===s?'selected':''}>${s||L('关闭(默认)','off (default)')}</option>`).join('')}</select></div>`;}
@@ -611,6 +620,10 @@ function buildParams(){
     setStellGeomMode(b.dataset.gmode);
     buildParams();buildThresh();buildPlotOpts();fitScanRanges();
     recompute();
+  });
+  box.querySelectorAll('[data-tgmode]').forEach(b=>b.onclick=()=>{
+    setTokGeomMode(b.dataset.tgmode);
+    buildParams();buildPlotOpts();recompute();
   });
   if(CUR!=='stellarator'&&CONFIGS[CUR].params.some(p=>ADV_PARAMS.has(p))){
     const bar=document.createElement('div');bar.className='advbar';
@@ -650,12 +663,29 @@ function buildParams(){
         // near-axis Fourier list: comma-separated floats
         const arr=(el.value||'').split(',').map(s=>parseFloat(s.trim())).filter(x=>isFinite(x));
         if(arr.length)VALS[el.dataset.p]=arr;else delete VALS[el.dataset.p];}}
-    else if(el.dataset.p==='geom_model'){VALS.geom_model=+el.value;buildParams();buildPlotOpts();recompute();return;}
     else if(el.dataset.bool)VALS[el.dataset.p]=+el.value;
     else if(el.dataset.p==='sep_model')VALS.sep_model=el.value;
     else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
     applyModeLocks();
     clearTimeout(timer);timer=setTimeout(()=>{updateA0();fitScanRanges();recompute();},280);});
+  if(CUR==='tokamak'&&(+VALS.geom_model||0)===2){
+    const geoGrid=box.querySelector('.pgrid[data-grp="geo"]');
+    if(geoGrid){
+      const wrap=document.createElement('div');wrap.className='fld full';
+      const loaded=isPlainObject(VALS.eq);
+      wrap.innerHTML=`<label><span class="sym">eq</span><span class="nm">${L('平衡文件 G-EQDSK','equilibrium file G-EQDSK')}</span></label>`+
+        `<input type="file" id="eqFile" accept=".geqdsk,.eqdsk,.g,.txt"><div class="u" id="eqStat">${loaded?L('已加载 ✓ ','loaded ✓ ')+`Vp=${(+VALS.eq.Vp).toFixed(1)} a=${(+VALS.eq.a).toFixed(2)}`:L('未加载（用解析估计）','none (analytic estimate)')}</div>`;
+      geoGrid.appendChild(wrap);
+      const fi=document.getElementById('eqFile');
+      fi.onchange=()=>{const f=fi.files[0];if(!f)return;const rd=new FileReader();
+        rd.onload=async()=>{try{
+          const r=await jpost('/api/tokamak/parse_eqdsk',{eqdsk:String(rd.result)});
+          if(r&&r.eq){VALS.eq=r.eq;buildParams();buildPlotOpts();recompute();}
+          else document.getElementById('eqStat').textContent=L('解析失败：','parse failed: ')+((r&&r.error)||'?');
+        }catch(e){document.getElementById('eqStat').textContent=L('解析失败：','parse failed: ')+e;}};
+        rd.readAsText(f);};
+    }
+  }
   applyModeLocks();
 }
 function applyModeLocks(){
@@ -834,23 +864,26 @@ function drawShape(){
   const GC=k=>GRP[k][1];
   if(CUR==='tokamak'){
     const R0=v.R0,a=v.R0/v.A,k=v.kappa,d=v.delta,g=v.g||0;
-    const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.lcfs)?LASTRUN.shape:null;
-    if(sh){
-      // backend boundary: Miller (model 1) or Cerfon-Freidberg equilibrium
-      // (model 2, incl. double-null X-point); model 0 shows the Miller outline.
+    const gm=+v.geom_model||0;
+    const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.lcfs&&LASTRUN.shape.lcfs.R&&LASTRUN.shape.lcfs.R.length)?LASTRUN.shape:null;
+    if(gm!==0&&sh){
       const close=o=>[o.R.concat([o.R[0]]),o.Z.concat([o.Z[0]])];
       const W=close(sh.wall),Lf=close(sh.lcfs);
       add(lin(W[0],W[1],GC('wall'),3),'wall');
-      const ax=(sh.axis&&sh.axis.R&&sh.axis.R.length)?[sh.axis.R[0],sh.axis.Z[0]]:[R0,0];
-      // decorative nested flux surfaces: LCFS scaled about the magnetic axis
-      [0.35,0.6,0.82].forEach(s=>add(cv(sh.lcfs.R.map(R=>ax[0]+s*(R-ax[0])),sh.lcfs.Z.map(Z=>ax[1]+s*(Z-ax[1])),GC('flux'),1.2,'dash'),'flux'));
+      if(Array.isArray(sh.flux)&&sh.flux.length){
+        sh.flux.forEach(s=>add(cv(s.R.concat([s.R[0]]),s.Z.concat([s.Z[0]]),GC('flux'),1.2,'dash'),'flux'));
+      }else{
+        const ax0=(sh.axis&&sh.axis.R&&sh.axis.R.length)?[sh.axis.R[0],sh.axis.Z[0]]:[R0,0];
+        [0.35,0.6,0.82].forEach(s=>add(cv(sh.lcfs.R.map(R=>ax0[0]+s*(R-ax0[0])),sh.lcfs.Z.map(Z=>ax0[1]+s*(Z-ax0[1])),GC('flux'),1.2,'dash'),'flux'));
+      }
       add(lin(Lf[0],Lf[1],GC('boundary'),2.6,true,'rgba(54,226,196,.06)'),'boundary');
+      const ax=(sh.axis&&sh.axis.R&&sh.axis.R.length)?[sh.axis.R[0],sh.axis.Z[0]]:[R0,0];
       add({type:'scatter',mode:'markers+text',x:[ax[0]],y:[ax[1]],text:[L('磁轴','axis')],textposition:'bottom center',textfont:{color:'#ff5d8f',size:10},marker:{color:'#ff5d8f',size:6}},'annot');
-      const GMN=[L('传统(显示用 Miller)','legacy (Miller shown)'),'Miller',L('平衡 Cerfon–Freidberg','equilibrium Cerfon–Freidberg')][sh.geom_model|0]||'';
+      const eqLoaded=isPlainObject(v.eq);
+      const GMN=gm===1?'Miller':(eqLoaded?L('实测平衡 (G-EQDSK)','measured equilibrium (G-EQDSK)'):L('平衡解析估计','analytic equilibrium estimate'));
       const shaf=isFiniteNum(sh.shaf_shift)?sh.shaf_shift:0;
       document.getElementById('plotMeta').innerHTML=`<span>${L('后端边界','backend boundary')}: <b>${GMN}</b>${shaf?` · Δ<sub>Shafranov</sub>=${shaf.toFixed(3)} m`:''} · ${L('壁面 = 边界沿外法向偏移 g','wall = boundary normal offset by g')}</span>`;
     }else{
-      // fallback before first run: simple JS D-shape nested surfaces
       const rr=[0.2*a,0.4*a,0.6*a,0.8*a,1.0*a,a+Math.max(g,0.01)];
       const dshape=r=>{const R=[],Z=[];
         for(let t=0.5*Math.PI;t<=1.502*Math.PI;t+=0.01){R.push(r*(1-d)*Math.cos(t)+R0-d*r);Z.push(r*(1-d)*Math.sin(t)*(k/(1-d)));}
@@ -860,6 +893,7 @@ function drawShape(){
         if(j===rr.length-1)add(lin(ar[0],ar[1],GC('wall'),3),'wall');
         else if(j===rr.length-2)add(lin(ar[0],ar[1],GC('boundary'),2.6,true,'rgba(54,226,196,.06)'),'boundary');
         else add(cv(ar[0],ar[1],GC('flux'),1.2,'dash'),'flux');});
+      if(gm===0)document.getElementById('plotMeta').innerHTML=`<span>${L('传统解析几何（双椭圆示意）','legacy analytic geometry (double-ellipse sketch)')}</span>`;
     }
     add({type:'scatter',mode:'lines+markers+text',x:[0,R0],y:[0,0],line:{color:'#ff6b6b',width:1.5,dash:'dot'},marker:{color:'#ff6b6b',size:3},text:['',`R<sub>0</sub>=${R0} m`],textposition:'top center',textfont:{color:'#ff6b6b',size:10}},'annot');
     add({type:'scatter',mode:'lines+markers+text',x:[R0,R0+a],y:[0,0],line:{color:'#ff9e3d',width:1.5,dash:'dot'},marker:{color:'#ff9e3d',size:3},text:['',`a=${a.toFixed(2)} m`],textposition:'bottom center',textfont:{color:'#ff9e3d',size:10}},'annot');
@@ -1038,13 +1072,16 @@ function drawShape(){
   Plotly.react('plot',tr,lay,{responsive:true,displayModeBar:false});
 }
 function drawProfiles(){
-  document.getElementById('plotTitle').innerHTML=`${L('剖面','Profiles')} n(x), T(x) · <b>${cfgL(CUR)}</b>`;document.getElementById('plotMeta').innerHTML='';
+  const isStell=CUR==='stellarator';
+  document.getElementById('plotTitle').innerHTML=`${L('剖面','Profiles')} ${isStell?'n(ρ), T(ρ)':'n(x), T(x)'} · <b>${cfgL(CUR)}</b>`;document.getElementById('plotMeta').innerHTML='';
   const v=VALS,X=[],N=[],TT=[];
   for(let i=0;i<=100;i++){const x=i/100;X.push(x);
     if('Sn'in v){N.push(Math.pow(1-x*x,v.Sn));TT.push(Math.pow(1-x*x,v.ST));}
     else if(CUR==='dipole'){const Li=(v.L_in_fac!=null?v.L_in_fac:1.5);const r=1+x*(v.R_p/(Li*v.r_ring)-1);N.push(Math.pow(1/r,4));TT.push(Math.pow(1/r,8/3));}
     else{N.push(1);TT.push(1);}}
-  const xl=CUR==='dipole'?L('归一化半径 (环→外)','normalized radius'):L('归一化小半径 x=r/a','normalized x=r/a');
+  const xl=CUR==='dipole'?L('归一化半径 (环→外)','normalized radius'):
+    CUR==='stellarator'?L('体积半径 ρ=√(V/Vp)','volume radius ρ=√(V/Vp)'):
+    L('归一化小半径 x=r/a','normalized x=r/a');
   Plotly.react('plot',[{type:'scatter',mode:'lines',x:X,y:N,name:'n/n<sub>0</sub>',line:{color:'#ffb02e',width:2.6}},
     {type:'scatter',mode:'lines',x:X,y:TT,name:'T/T<sub>0</sub>',line:{color:'#36e2c4',width:2.6}}],LAYOUT(xl,L('归一化值','normalized')),{responsive:true,displayModeBar:false});
 }
