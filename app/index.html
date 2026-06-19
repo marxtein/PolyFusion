@@ -146,6 +146,16 @@
   .eqbtn.ok:hover{filter:brightness(1.06)}
   .eqstat{margin-top:5px;font-size:10.5px;line-height:1.4;color:var(--dim);font-family:"JetBrains Mono"}
   .eqstat.ok{color:var(--teal)}
+  /* per-preset bundled real-equilibrium quick-load (Task 8) */
+  #eqQuick{margin-top:6px}
+  .eqload{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;cursor:pointer;text-align:left;
+    font-family:"Chakra Petch";font-size:11.5px;font-weight:600;letter-spacing:.02em;color:var(--amber);
+    background:var(--panel2);border:1px solid var(--amber);border-radius:7px;transition:.15s}
+  .eqload:hover{background:var(--panel);box-shadow:0 4px 14px -8px var(--amber);transform:translateY(-1px)}
+  .eqload .ei{font-size:13px}.eqload .et{flex:1;min-width:0}
+  .eqload .eb{font-size:9px;font-weight:700;color:var(--btn-ink);background:var(--amber);border-radius:10px;padding:1px 6px;letter-spacing:.04em}
+  .eqload.proxy{color:var(--mut);border-color:var(--line2)}.eqload.proxy .eb{color:var(--btn-ink);background:var(--mut)}
+  .eqnote{margin-top:4px;font-size:10px;line-height:1.4;color:var(--dim);font-family:"JetBrains Mono"}
 </style>
 </head>
 <body>
@@ -164,7 +174,8 @@
   <div class="col left">
     <div class="sec"><p class="sec-t" data-t="config">位形 Configuration <span class="n" id="cfgN"></span></p><div id="configPick" class="configs"></div></div>
     <div class="sec"><p class="sec-t" data-t="preset">机型预设 Preset</p><select id="preset"></select>
-      <div class="exports" style="margin-top:6px"><button id="saveAsP">★ 另存为预设</button><button id="delP" disabled>✕ 删除预设</button></div></div>
+      <div class="exports" style="margin-top:6px"><button id="saveAsP">★ 另存为预设</button><button id="delP" disabled>✕ 删除预设</button></div>
+      <div id="eqQuick"></div></div>
     <div class="sec"><p class="sec-t" data-t="params">参数 Parameters <span class="n" data-t="liveN">编辑即重算</span></p><div id="params"></div></div>
     <div class="sec"><p class="sec-t" data-t="window">最佳区判据 Operating Window</p><div id="thresh" class="scanbox"></div></div>
     <div class="sec"><p class="sec-t" data-t="contours">显示等值线 Contours</p><div id="plotOpts" class="opts"></div></div>
@@ -304,6 +315,7 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='shape',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
 let THEME=(()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}})();
+let EQMAN={};  // bundled real-equilibrium manifest {config:{preset:{file,format,...}}}
 let STELL_STASH={};
 const ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override']);  // expert-only inputs
 const OPAQUE_PARAMS=new Set(['shape','geometry_variants','eq','equilibrium']);  // opaque JSON objects intentionally sent to backend
@@ -467,18 +479,71 @@ function applyImportedEquilibrium(imported){
   delete VALS.rc;delete VALS.zs;delete VALS.delta_h;
 }
 
-async function onEquilibriumFile(e){
-  const f=e.target.files[0];e.target.value='';if(!f)return;
-  try{
-    const imported=await jpostBinary('/api/stellarator/equilibrium/preview',await f.arrayBuffer(),f.name);
-    if(imported.error)throw new Error(imported.error);
+// shared stellarator equilibrium import: preview the bytes via the backend,
+// (optionally) confirm, then apply + rebuild. Used by both the file picker and
+// the per-preset bundled quick-load (Task 8).
+async function importStellEquilibriumBuffer(buf,name,confirmFirst){
+  const imported=await jpostBinary('/api/stellarator/equilibrium/preview',buf,name);
+  if(imported.error)throw new Error(imported.error);
+  if(confirmFirst){
     const s=imported.source||{},q=imported.iota||{},m=imported.metrics||{};
     const warnings=(imported.warnings||[]).join('\n');
     const summary=`${L('导入平衡预览','Equilibrium import preview')}\n${s.format||''} · ${s.filename||''}\nNFP=${imported.nfp}\nR0=${fmt(m.R0_m)} m · a_vol=${fmt(m.a_vol_m)} m\nι(axis/2⁄3/edge)=${fmt(q.axis)} / ${fmt(q.rho_2_3)} / ${fmt(q.edge)}\nVp=${fmt(m.Vp_m3)} m³ · Sp=${fmt(m.Sp_m2)} m²\nmodes=${imported.mode_count||0}${warnings?`\n\n⚠ ${warnings}`:''}\n\n${L('应用并覆盖当前仿星器几何？','Apply and replace current stellarator geometry?')}`;
-    if(!confirm(summary))return;
-    applyImportedEquilibrium(imported);STELL_STASH={};stashStellGeom();ADVANCED=true;
-    buildParams();buildThresh();buildPlotOpts();fitScanRanges();await recompute();setView('shape');
-  }catch(err){document.getElementById('err').textContent=L('平衡导入失败：','equilibrium import failed: ')+(err.message||err);}
+    if(!confirm(summary))return false;
+  }
+  applyImportedEquilibrium(imported);STELL_STASH={};stashStellGeom();ADVANCED=true;
+  buildParams();buildThresh();buildPlotOpts();fitScanRanges();await recompute();setView('shape');
+  return true;
+}
+async function onEquilibriumFile(e){
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{await importStellEquilibriumBuffer(await f.arrayBuffer(),f.name,true);}
+  catch(err){document.getElementById('err').textContent=L('平衡导入失败：','equilibrium import failed: ')+(err.message||err);}
+}
+// apply a parsed tokamak G-EQDSK (same overrides as the eqFile picker) and
+// switch the geometry mode to "equilibrium" so the loaded boundary is drawn.
+function applyTokEq(e){
+  VALS.eq=e;VALS.geom_model=2;
+  if(isFiniteNum(e.R0))VALS.R0=+e.R0;
+  if(isFiniteNum(e.R0)&&isFiniteNum(e.a)&&+e.a>0)VALS.A=+e.R0/+e.a;
+  if(isFiniteNum(e.kappa))VALS.kappa=+e.kappa;
+  if(isFiniteNum(e.delta))VALS.delta=+e.delta;
+  if(isFiniteNum(e.bt0)&&+e.bt0>0)VALS.BT0=+e.bt0;
+  if(isFiniteNum(e.ip)&&+e.ip>0)VALS.Ip=+e.ip;
+}
+// the bundled real equilibrium (if any) for the currently selected packaged preset
+function eqEntryForCurrent(){
+  const pv=preset.value||'';if(pv.startsWith(UMARK))return null;
+  const byCfg=EQMAN&&EQMAN[CUR];return byCfg?byCfg[pv]||null:null;
+}
+async function loadBundledEquilibrium(){
+  const ent=eqEntryForCurrent();if(!ent)return;
+  const btn=document.querySelector('.eqload');const old=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.querySelector('.et').textContent=L('载入中…','loading…');}
+  try{
+    const resp=await fetch(`/equilibria/${CUR}/${encodeURIComponent(ent.file)}`);
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    if(CUR==='stellarator'){
+      await importStellEquilibriumBuffer(await resp.arrayBuffer(),ent.file,false);
+    }else if(CUR==='tokamak'){
+      const text=await resp.text();
+      const r=await jpost('/api/tokamak/parse_eqdsk',{eqdsk:text});
+      if(!r||!r.eq)throw new Error((r&&r.error)||'parse failed');
+      applyTokEq(r.eq);buildParams();buildPlotOpts();fitScanRanges();await recompute();setView('shape');
+    }
+  }catch(err){document.getElementById('err').textContent=L('真实平衡载入失败：','bundled equilibrium failed: ')+(err.message||err);}
+  finally{if(btn){btn.disabled=false;updateEqQuick();}}
+}
+function updateEqQuick(){
+  const box=document.getElementById('eqQuick');if(!box)return;
+  const ent=eqEntryForCurrent();
+  if(!ent){box.innerHTML='';return;}
+  const proxy=!!ent.proxy;
+  box.innerHTML=`<button type="button" class="eqload${proxy?' proxy':''}" id="eqLoadBtn">`+
+    `<span class="ei">📥</span><span class="et">${L('载入真实平衡','Load real equilibrium')}</span>`+
+    `<span class="eb">${proxy?L('近似','proxy'):L('真实','real')}</span></button>`+
+    `<div class="eqnote">${ent.source||''}${ent.note?' · '+ent.note:''}</div>`;
+  document.getElementById('eqLoadBtn').onclick=loadBundledEquilibrium;
 }
 const fillSel=(s,it,v)=>s.innerHTML=it.map(i=>`<option ${i===v?'selected':''}>${i}</option>`).join('');
 function fillPresets(sel,presets,groups,val){
@@ -523,6 +588,7 @@ function updateDelState(){const b=document.getElementById('delP');if(b)b.disable
 
 async function init(){
   CONFIGS=(await jget('/api/meta')).configs;
+  try{EQMAN=await jget('/api/equilibria');}catch(e){EQMAN={};}
   buildConfigPick();
   document.getElementById('cfgN').textContent=Object.keys(CONFIGS).length+' '+L('种','cfgs');
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setView(t.dataset.v));
@@ -601,7 +667,7 @@ function refreshCyclotronScanAxes(){
   reset(ykey,m.scan_defaults.ykey,ymin,ymax);
 }
 async function loadPreset(){
-  updateDelState();
+  updateDelState();updateEqQuick();
   const pv=preset.value||'';
   if(pv.startsWith(UMARK)){
     // user preset: server doesn't know it -> load locally and recompute via overrides

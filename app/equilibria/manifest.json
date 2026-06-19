@@ -1,0 +1,65 @@
+{
+  "_about": "Real public plasma-equilibrium files bundled for one-click import per preset. Tokamak = G-EQDSK; stellarator = VMEC wout (netCDF). 'proxy' marks a file from a closely related machine used as a stand-in. Presets not listed have no public equilibrium available yet.",
+  "tokamak": {
+    "ITER": {
+      "file": "ITER.geqdsk",
+      "format": "geqdsk",
+      "source": "ITER model G-EQDSK (CHEASE, COCOS-02, SI)",
+      "url": "",
+      "note": "ITER baseline-class equilibrium, R0~6.2 m, B~5.3 T."
+    },
+    "DIII-D": {
+      "file": "DIII-D.geqdsk",
+      "format": "geqdsk",
+      "source": "OMAS sample g145419.02100",
+      "url": "https://github.com/gafusion/omas/blob/master/omas/samples/g145419.02100",
+      "note": "DIII-D shot 145419 reconstructed equilibrium, R0~1.70 m."
+    }
+  },
+  "stellarator": {
+    "W7-X": {
+      "file": "W7-X.nc",
+      "format": "vmec",
+      "source": "simsopt test_files (VMEC wout)",
+      "url": "https://github.com/hiddenSymmetries/simsopt/blob/master/tests/test_files/wout_W7-X_without_coil_ripple_beta0p05_d23p4_tm_reference.nc",
+      "note": "Wendelstein 7-X, NFP=5, beta~5%, R0~5.5 m."
+    },
+    "precise-QA": {
+      "file": "precise-QA.nc",
+      "format": "vmec",
+      "source": "simsopt test_files (Landreman-Paul 2021)",
+      "url": "https://github.com/hiddenSymmetries/simsopt/blob/master/tests/test_files/wout_LandremanPaul2021_QA_lowres.nc",
+      "note": "Landreman-Paul 2021 precise quasi-axisymmetric, NFP=2."
+    },
+    "precise-QH": {
+      "file": "precise-QH.nc",
+      "format": "vmec",
+      "source": "simsopt test_files (Landreman-Paul 2021)",
+      "url": "https://github.com/hiddenSymmetries/simsopt/blob/master/tests/test_files/wout_LandremanPaul2021_QH_reactorScale_lowres_reference.nc",
+      "note": "Landreman-Paul 2021 precise quasi-helical, reactor scale, NFP=4."
+    },
+    "QH-nfp3": {
+      "file": "QH-nfp3.nc",
+      "format": "vmec",
+      "source": "simsopt test_files (n3are)",
+      "url": "https://github.com/hiddenSymmetries/simsopt/blob/master/tests/test_files/wout_n3are_R7.75B5.7_lowres.nc",
+      "note": "NFP=3 quasi-helical configuration (n3are, R~7.75 m, B~5.7 T)."
+    },
+    "NAE-QA": {
+      "file": "precise-QA.nc",
+      "format": "vmec",
+      "source": "simsopt test_files (Landreman-Paul 2021)",
+      "url": "https://github.com/hiddenSymmetries/simsopt/blob/master/tests/test_files/wout_LandremanPaul2021_QA_lowres.nc",
+      "note": "Quasi-axisymmetric reference used as a stand-in for the near-axis QA preset.",
+      "proxy": true
+    },
+    "HELIAS": {
+      "file": "W7-X.nc",
+      "format": "vmec",
+      "source": "simsopt test_files (VMEC wout)",
+      "url": "https://github.com/hiddenSymmetries/simsopt/blob/master/tests/test_files/wout_W7-X_without_coil_ripple_beta0p05_d23p4_tm_reference.nc",
+      "note": "W7-X used as a HELIAS-line representative (HELIAS is the W7-X reactor extrapolation).",
+      "proxy": true
+    }
+  }
+}

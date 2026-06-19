@@ -118,6 +118,26 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, fh.read(), "text/html; charset=utf-8")
         if self.path == "/api/meta":
             return self._send(200, json.dumps({"configs": list_configs()}))
+        if self.path == "/api/equilibria":
+            # manifest of bundled real equilibrium files, keyed by config+preset
+            mpath = os.path.join(HERE, "equilibria", "manifest.json")
+            if os.path.isfile(mpath):
+                with open(mpath, "rb") as fh:
+                    return self._send(200, fh.read())
+            return self._send(200, json.dumps({}))
+        if self.path.startswith("/equilibria/"):
+            # serve a bundled equilibrium file (binary). Restrict to the two
+            # known config subdirs + a plain basename to block path traversal.
+            parts = unquote(self.path).strip("/").split("/")
+            if len(parts) == 3 and parts[1] in ("tokamak", "stellarator"):
+                name = os.path.basename(parts[2])
+                fpath = os.path.join(HERE, "equilibria", parts[1], name)
+                if os.path.isfile(fpath) and os.path.commonpath(
+                    [os.path.realpath(fpath), os.path.join(HERE, "equilibria")]
+                ) == os.path.realpath(os.path.join(HERE, "equilibria")):
+                    with open(fpath, "rb") as fh:
+                        return self._send(200, fh.read(), "application/octet-stream")
+            return self._send(404, json.dumps({"error": "equilibrium not found"}))
         return self._send(404, json.dumps({"error": "not found"}))
 
     def do_POST(self):
