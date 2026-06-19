@@ -99,10 +99,15 @@ def _offset_closed_curve_normal(boundary_R, boundary_Z, gap):
     norm = np.hypot(nR, nZ)
     norm[norm == 0.0] = 1.0
     nR, nZ = nR / norm, nZ / norm
-    cR, cZ = float(np.mean(R)), float(np.mean(Z))
-    flip = (nR * (R - cR) + nZ * (Z - cZ)) < 0.0
-    nR[flip] = -nR[flip]
-    nZ[flip] = -nZ[flip]
+    # Orient the normals OUTWARD from the polygon winding (shoelace signed area),
+    # not from the centroid.  (t_y, -t_x) is the outward normal for a CCW polygon;
+    # flip the whole field once if the polygon is CW.  The old per-vertex centroid
+    # test (n.(P-c) < 0) wrongly flipped normals to point INWARD at the concave
+    # notch of non-star-shaped (bean / crescent) cross-sections — e.g. W7-X — so
+    # the wall dipped inside the plasma there (docs: stellarator wall containment).
+    area2 = float(np.sum(R * np.roll(Z, -1) - np.roll(R, -1) * Z))  # 2*signed area, CCW>0
+    if area2 < 0.0:
+        nR, nZ = -nR, -nZ
     wR = R + gap * nR
     wZ = Z + gap * nZ
     if closed:
