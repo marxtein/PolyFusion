@@ -1225,19 +1225,37 @@ function drawShape(){
   Plotly.react('plot',tr,lay,{responsive:true,displayModeBar:false});
 }
 function drawProfiles(){
-  // profile radial coordinate is the volume-averaged radius rho = sqrt(V/Vp)
-  // for every closed config (docs/04); dipole keeps its own ring->edge radius.
-  document.getElementById('plotTitle').innerHTML=`${L('剖面','Profiles')} n(ρ), T(ρ) · <b>${cfgL(CUR)}</b>`;document.getElementById('plotMeta').innerHTML='';
+  // Each config gets the profile that matches its confinement physics instead
+  // of one shared peaked curve (Task 6):
+  //   tokamak/stellarator/mirror : peaked  n=(1-ρ²)^Sn , T=(1-ρ²)^ST  (the 0D
+  //                                peaking model; ρ=√(V/Vp) for the closed tori)
+  //   FRC                        : HOLLOW rigid-rotor — density peaks at the
+  //                                field null (~0.7 r_s), not on axis
+  //   dipole                     : ring→edge adiabatic falloff n∝r^-4, T∝r^-8/3
+  document.getElementById('plotTitle').innerHTML=`${L('剖面','Profiles')} n(ρ), T(ρ) · <b>${cfgL(CUR)}</b>`;
   const v=VALS,X=[],N=[],TT=[];
+  const Sn=isFiniteNum(v.Sn)?v.Sn:0.5,ST=isFiniteNum(v.ST)?v.ST:1.0;
+  let note='';
   for(let i=0;i<=100;i++){const rho=i/100;X.push(rho);
-    if('Sn'in v){N.push(Math.pow(1-rho*rho,v.Sn));TT.push(Math.pow(1-rho*rho,v.ST));}
-    else if(CUR==='dipole'){const Li=(v.L_in_fac!=null?v.L_in_fac:1.5);const r=1+rho*(v.R_p/(Li*v.r_ring)-1);N.push(Math.pow(1/r,4));TT.push(Math.pow(1/r,8/3));}
-    else{N.push(1);TT.push(1);}}
-  const xl=CUR==='dipole'?L('归一化半径 (环→外)','normalized radius'):
+    if(CUR==='frc'){
+      // rigid-rotor FRC: n peaks at the field-null radius x0=1/√2, vanishing
+      // at the axis and the separatrix — the defining hollow FRC profile.
+      const x0=1/Math.SQRT2,w=0.26;
+      const g=Math.exp(-Math.pow((rho-x0)/w,2));
+      N.push(g);TT.push(0.55+0.45*g);  // T flatter than n (rigid-rotor T≈const + bump)
+    }else if(CUR==='dipole'){const Li=(v.L_in_fac!=null?v.L_in_fac:1.5);const r=1+rho*(v.R_p/(Li*v.r_ring)-1);N.push(Math.pow(1/r,4));TT.push(Math.pow(1/r,8/3));}
+    else{N.push(Math.pow(Math.max(1-rho*rho,0),Sn));TT.push(Math.pow(Math.max(1-rho*rho,0),ST));}}
+  if(CUR==='frc')note=L('刚体转子 FRC：密度在磁场零点(≈0.71 r_s)峰化、轴上与分离面为零','rigid-rotor FRC: density peaks at the field null (≈0.71 r_s), zero on axis & separatrix');
+  else if(CUR==='dipole')note=L('偶极绝热剖面：n∝r⁻⁴, T∝r⁻⁸ᐟ³（环→外壳）','dipole adiabatic profile: n∝r⁻⁴, T∝r⁻⁸ᐟ³ (ring→outer shell)');
+  else note=L(`峰化模型：n=(1−ρ²)^Sn, T=(1−ρ²)^ST  ·  Sn=${Sn}, ST=${ST}`,`peaking model: n=(1−ρ²)^Sn, T=(1−ρ²)^ST  ·  Sn=${Sn}, ST=${ST}`);
+  document.getElementById('plotMeta').innerHTML=`<span>${note}</span>`;
+  const xl=CUR==='dipole'?L('归一化半径 (环→外)','normalized radius (ring→edge)'):
+    CUR==='frc'?L('径向 ρ = r / r_s','radial ρ = r / r_s'):
     (CUR==='stellarator'||CUR==='tokamak')?L('体积半径 ρ=√(V/Vp)','volume radius ρ=√(V/Vp)'):
     L('归一化半径 ρ','normalized radius ρ');
-  Plotly.react('plot',[{type:'scatter',mode:'lines',x:X,y:N,name:'n/n<sub>0</sub>',line:{color:'#ffb02e',width:2.6}},
-    {type:'scatter',mode:'lines',x:X,y:TT,name:'T/T<sub>0</sub>',line:{color:'#36e2c4',width:2.6}}],LAYOUT(xl,L('归一化值','normalized')),{responsive:true,displayModeBar:false});
+  const nCol=THEME!=='light'?'#ffb02e':'#a96a00',tCol=THEME!=='light'?'#36e2c4':'#0e9486';
+  Plotly.react('plot',[{type:'scatter',mode:'lines',x:X,y:N,name:'n/n<sub>0</sub>',line:{color:nCol,width:2.6}},
+    {type:'scatter',mode:'lines',x:X,y:TT,name:'T/T<sub>0</sub>',line:{color:tCol,width:2.6}}],LAYOUT(xl,L('归一化值','normalized')),{responsive:true,displayModeBar:false});
 }
 async function runScan(){
   run.disabled=true;const t=run.textContent;run.textContent='⟳ '+L('计算中…','computing…');err.textContent='';
