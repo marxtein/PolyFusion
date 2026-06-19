@@ -66,7 +66,41 @@ def test_convex_section_wall_outside_and_enlarged():
     assert area2(wR, wZ) > area2(R, Z)
 
 
+def test_imported_equilibrium_flux_surfaces_inside_boundary():
+    """Imported VMEC (W7-X) flux surfaces must nest INSIDE the plasma boundary.
+
+    Bug: the synthesized nested surfaces used a per-harmonic fade that let the
+    bean cross-section's inner surfaces poke outside the boundary on the concave
+    side ("磁面与边界交叠").  The wall-containment test missed it because the wall
+    has a gap that hid the overshoot.  Fix: morph from the magnetic axis +
+    per-vertex clamp to the first boundary crossing.
+    """
+    import os
+    nc = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                      "app", "equilibria", "stellarator", "W7-X.nc")
+    if not os.path.isfile(nc):
+        return  # bundled file absent (skip)
+    from polyfusion import equilibrium_import as EI
+    from polyfusion.configs.stellarator import _machine_boundary_outlines
+
+    imp = EI._read_vmec(nc)
+    m = imp["metrics"]
+    out = _machine_boundary_outlines(m["R0_m"], m["boundary_scale_m"],
+                                     imp["nfp"], 0.0, 0.05, imp["shape"], 200)
+    for s in out["sections"]:
+        bR, bZ = s["R"], s["Z"]
+        for su in s["surfaces"]:
+            if su["rho"] >= 0.999:
+                continue  # rho=1 coincides with the boundary
+            outside = sum(not _inside(x, y, bR, bZ)
+                          for x, y in zip(su["R"], su["Z"]))
+            assert outside == 0, (
+                f"{s['label']} rho={su['rho']:.2f}: {outside} surface points "
+                f"outside boundary")
+
+
 if __name__ == "__main__":
     test_concave_section_wall_never_inside_plasma()
     test_convex_section_wall_outside_and_enlarged()
+    test_imported_equilibrium_flux_surfaces_inside_boundary()
     print("PASS")

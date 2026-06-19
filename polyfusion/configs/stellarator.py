@@ -116,6 +116,38 @@ def _offset_closed_curve_normal(boundary_R, boundary_Z, gap):
     return wR, wZ
 
 
+def _points_in_polygon(px, pz, polyR, polyZ):
+    """Vectorised even-odd point-in-polygon (broadcast over edges, no Python
+    edge loop, so it stays fast across the ~120 phase frames). ``polyR/polyZ``
+    is a closed loop."""
+    px = np.asarray(px, float)[:, None]; pz = np.asarray(pz, float)[:, None]  # (P,1)
+    R = np.asarray(polyR, float); Z = np.asarray(polyZ, float)
+    x1 = R[:-1][None, :]; z1 = Z[:-1][None, :]                               # (1,E)
+    x2 = R[1:][None, :]; z2 = Z[1:][None, :]
+    cross = ((z1 > pz) != (z2 > pz)) & (
+        px < (x2 - x1) * (pz - z1) / (z2 - z1 + 1e-30) + x1)
+    return (np.count_nonzero(cross, axis=1) % 2 == 1)
+
+
+def _clamp_surface_inside(Rb, Zb, aR, aZ, scale, polyR, polyZ, iters=14):
+    """Place a nested flux surface at fractional ``scale`` along the rays
+    axis->boundary, but pulled in to the FIRST boundary crossing so it stays
+    strictly inside even where the boundary is concave (non-star-shaped about
+    the axis).  Per-vertex bisection of the scale between 0 (axis, always inside)
+    and ``scale``; vertices whose whole [0,scale] ray is interior keep ``scale``.
+    """
+    Rb = np.asarray(Rb, float); Zb = np.asarray(Zb, float)
+    dR = Rb - aR; dZ = Zb - aZ
+    lo = np.zeros_like(Rb); hi = np.full_like(Rb, float(scale))
+    for _ in range(iters):
+        mid = 0.5 * (lo + hi)
+        ins = _points_in_polygon(aR + mid * dR, aZ + mid * dZ, polyR, polyZ)
+        lo = np.where(ins, mid, lo)
+        hi = np.where(ins, hi, mid)
+    sc = lo
+    return aR + sc * dR, aZ + sc * dZ
+
+
 def axis_length(R0: float, N_fp: float, delta_h: float, n: int = 720) -> float:
     """Arc length of the (possibly helical) magnetic axis, numerically exact
     for the model R = R0 + delta_h cos(N_fp phi), Z = delta_h sin(N_fp phi)."""
@@ -370,18 +402,56 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
             Zh += c * _fade(m, rho) * cos_m[m] * Bn
         return R0 + a * Rh, a * Zh
 
-    def _build_cut(frac, label):
+    def _axis_point(phi):
+        # Morph centre for nested surfaces. For an imported equilibrium use the
+        # TRUE magnetic axis (axis_rc/axis_zs, physical — R0/a are locked to the
+        # native values in equilibrium mode), which is guaranteed interior even
+        # when the boundary's m=0 mean falls in a bean's concave notch. For the
+        # cartoon presets (no axis Fourier) fall back to the boundary m=0 mean.
+        arc = shape.get("axis_rc"); azs = shape.get("axis_zs") or []
+        if shape.get("kind") == "equilibrium_fourier" and arc:
+            aR = sum(arc[n] * math.cos(n * nfp * phi) for n in range(len(arc)))
+            aZ = sum((azs[n] if n < len(azs) else 0.0) * math.sin(n * nfp * phi)
+                     for n in range(len(arc)))
+            return float(aR), float(aZ)
+        R0arr, Z0arr = _shape_RZ(phi, 0.0)
+        return float(R0arr[0]), float(Z0arr[0])
+
+    def _build_cut(frac, label, clamp=True):
         phi = frac * 2 * math.pi / nfp
         Rb, Zb = _shape_RZ(phi, 1.0)              # boundary at this cut
+        # Nested flux surfaces by a self-similar morph from the magnetic axis to
+        # the boundary: S(rho) = axis + rho*(boundary - axis).  Every interior
+        # point lies on the segment [axis, boundary], so the surfaces are STRICTLY
+        # nested inside any star-shaped boundary (true for a real LCFS about its
+        # axis) and can never cross a strongly-shaped (bean) boundary.  The old
+        # per-harmonic fade (m>=2 ~ rho^1.5) rounded toward the axis but let the
+        # imported W7-X bean's flux surfaces poke OUTSIDE the boundary on the
+        # concave side ("磁面与边界交叠").  rho=1 still reproduces the boundary
+        # exactly, so the 0-D power account (boundary-only) is unchanged.
+        aR, aZ = _axis_point(phi)                 # true magnetic axis (inside)
+        Rclosed, Zclosed = _closed_list(Rb), _closed_list(Zb)
         surfaces = []
         for surface_scale, rho in zip(rhos, rho_labels or rhos):
-            Rr, Zr = _shape_RZ(phi, surface_scale)
+            if surface_scale >= 1.0:
+                Rr, Zr = Rb, Zb                   # rho=1 IS the boundary, exactly
+            elif clamp:
+                # homothety about the axis can still poke a non-star-shaped
+                # (bean) boundary outward at concavities; clamp each vertex to
+                # the first boundary crossing so the surface stays strictly inside.
+                # (Static display cuts only — skipped for the ~120 scrub frames,
+                # where plain homothety is near-exact and clamping all frames is
+                # too slow for an interactive geometry build.)
+                Rr, Zr = _clamp_surface_inside(Rb, Zb, aR, aZ, surface_scale,
+                                               Rclosed, Zclosed)
+            else:
+                Rr = aR + surface_scale * (Rb - aR)
+                Zr = aZ + surface_scale * (Zb - aZ)
             surfaces.append({"rho": float(rho),
                              "surface_scale": float(surface_scale),
                              "R": _closed_list(Rr),
                              "Z": _closed_list(Zr)})
         elong = float((Zb.max() - Zb.min()) / (Rb.max() - Rb.min()))
-        Rclosed, Zclosed = _closed_list(Rb), _closed_list(Zb)
         wR, wZ = _offset_closed_curve_normal(Rclosed, Zclosed, g)
         return {"label": label, "elong": elong, "frac": float(frac),
                 "R": Rclosed, "Z": Zclosed, "surfaces": surfaces,
@@ -390,7 +460,7 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
     sections = [_build_cut(frac, label) for frac, label in cuts]
     # fine phi frames over one field period for the phase slider (UI scrub)
     frames = [_build_cut(k / (_N_PHASE_FRAMES - 1),
-                         "φ=%.3fT" % (k / (_N_PHASE_FRAMES - 1)))
+                         "φ=%.3fT" % (k / (_N_PHASE_FRAMES - 1)), clamp=False)
               for k in range(_N_PHASE_FRAMES)]
 
     # display axis ring (mean major radius; harmonic excursion is small)
