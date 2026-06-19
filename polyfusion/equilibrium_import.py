@@ -154,8 +154,23 @@ def _read_vmec(path):
         # Real interior flux surfaces from the wout (rmnc/zmns at several radial
         # surfaces, NOT just the LCFS), kept in native VMEC Fourier so the shape
         # view can draw the equilibrium's actual nested surfaces instead of a
-        # synthesized cartoon.  s = normalized toroidal flux, rho = sqrt(s).
+        # synthesized cartoon.  Each surface is LABELLED by the VOLUME radius
+        # rho = sqrt(V_enclosed/V_plasma) so it matches the 0-D profile/volume-
+        # average coordinate exactly (a flux-surface label, Shafranov-independent).
+        # The VMEC radial index is the normalized toroidal flux s = j/(ns-1); we
+        # map a target volume fraction -> s via the wout dV/ds profile ``vp``
+        # (V(s) is only ~s for these equilibria, but this keeps it exact).
         ns = rmnc_all.shape[0]
+        s_grid_full = np.linspace(0.0, 1.0, ns)
+        if "vp" in ds.variables:
+            vp = np.abs(np.asarray(ds.variables["vp"][:]).reshape(-1))
+            if vp.size == ns and np.all(np.isfinite(vp)):
+                Vcum = np.concatenate([[0.0], np.cumsum(0.5 * (vp[1:] + vp[:-1]))])
+                Vfrac_of_s = Vcum / Vcum[-1] if Vcum[-1] > 0 else s_grid_full
+            else:
+                Vfrac_of_s = s_grid_full
+        else:
+            Vfrac_of_s = s_grid_full
 
         def _native_modes(coeffs):
             return [[int(m), int(n), float(c)]
@@ -163,7 +178,9 @@ def _read_vmec(path):
 
         interior = []
         for rho in (0.18, 0.344, 0.508, 0.672, 0.836, 1.0):
-            j = min(ns - 1, max(1, int(round(rho * rho * (ns - 1)))))
+            # volume fraction = rho^2 -> s (via V(s)) -> nearest radial index
+            s_target = float(np.interp(rho * rho, Vfrac_of_s, s_grid_full))
+            j = min(ns - 1, max(1, int(round(s_target * (ns - 1)))))
             surf = {"rho": float(rho),
                     "R_c": _native_modes(rmnc_all[j]),
                     "Z_s": _native_modes(zmns_all[j])}
