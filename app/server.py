@@ -13,6 +13,7 @@ import json
 import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote
 
 # Cap BLAS threads BEFORE numpy loads.  On this Windows numpy build the OpenBLAS
 # threaded path is pathologically slow for medium matrices — a 121x121
@@ -29,6 +30,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from polyfusion.io import run_case, list_configs   # noqa: E402
 from polyfusion.configs.base import get             # noqa: E402
 from polyfusion.scan import scan2d, best_region_mask  # noqa: E402
+from polyfusion.equilibrium_import import (  # noqa: E402
+    MAX_FILE_BYTES,
+    parse_equilibrium_bytes,
+)
 from polyfusion import eqdsk                          # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -117,9 +122,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
+        if self.path == "/api/stellarator/equilibrium/preview":
+            if n > MAX_FILE_BYTES:
+                limit_mib = MAX_FILE_BYTES // (1024 * 1024)
+                return self._send(
+                    413, json.dumps({"error": f"equilibrium file exceeds {limit_mib} MiB limit"}))
+            filename = unquote(self.headers.get("X-Filename", ""))
+            try:
+                out = parse_equilibrium_bytes(self.rfile.read(n), filename)
+                body = json.dumps(out)
+            except Exception as e:
+                return self._send(400, json.dumps({"error": f"{type(e).__name__}: {e}"}))
+            return self._send(200, body)
         try:
             req = json.loads(self.rfile.read(n) or b"{}")
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
             return self._send(400, json.dumps({"error": f"bad json: {e}"}))
         try:
             if self.path == "/api/tokamak/parse_eqdsk":

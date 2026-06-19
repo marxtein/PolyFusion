@@ -36,6 +36,7 @@ from ..tokamak import _REACTIONS, twotemp_diagnostics
 from ..twotemp import p_ei_exchange
 from ..impurity import lz_line_net, SPECIES as _IMP_SPECIES
 from .. import ringfield
+from ..cyclotron import resolve_cyclotron_power
 
 _KEV_J = 1e3 * QE
 _SHELL = 64.0 * math.pi / 35.0      # dV/dL = _SHELL * L^2  (exact, point dipole)
@@ -48,7 +49,7 @@ class DipoleResult:
     Qfus_raw: float   # uncapped Pfus/Pheat (negative => ignited/over-driven)
     ignited: float    # 1 if Pheat <= 0
     Pbrem: float; Pcycl: float; Ptrans: float; Pn: float; Pwall: float
-    Eth: float
+    Eth: float; Eth_e: float
     # confinement
     tau_E: float      # energy confinement time (input) [s]
     ntau: float       # n0 * tau_E
@@ -66,7 +67,9 @@ class DipoleResult:
     Vp: float; Sw: float; L_in: float
     Zeff: float; M: float
     ring_model: float  # 0 = point dipole (legacy), 1 = exact finite loop
+    cyclotron_model: str  # fast-model geometry treatment
     P_line: float      # impurity line radiation [MW] (0 unless imp_name given)
+    tauC_eff: float    # effective cyclotron-radiation loss time [s]
     Ecrit: float; f_fast_ion: float; tau_eq_ie: float; P_ei: float
     strcase: str
 
@@ -78,7 +81,7 @@ def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
                  L_in_fac=1.5, fsig=1.0,
                  icase=2, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
                  Rw=0.9, N=160, ring_model=0, imp_name=None,
-                 use_tauE=1.0) -> DipoleResult:
+                 use_tauE=1.0, use_tauC=0.0, tauC=None) -> DipoleResult:
     """Evaluate the 0-D dipole power balance.
 
     Parameters (SI / keV)
@@ -106,6 +109,8 @@ def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
     if n0 <= 0 or Ti0 <= 0 or Te0 <= 0 or tauE <= 0:
         raise ValueError(f"n0, Ti0, Te0, tauE must be > 0 "
                          f"(got {n0}, {Ti0}, {Te0}, {tauE})")
+    if bool(use_tauC) and (tauC is None or tauC <= 0):
+        raise ValueError(f"tauC must be > 0 when use_tauC is enabled (got {tauC})")
     if not 0.0 <= f1 <= 1.0:
         raise ValueError(f"f1 must be in [0, 1] (got {f1})")
     if fHe < 0 or fimp < 0 or fHe + fimp >= 1.0:
@@ -185,9 +190,13 @@ def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
     rel = (Zeff + 0.7936 * (Te / MEC2) + 1.874 * (Te / MEC2) ** 2
            + 3 / math.sqrt(2) * (Te / MEC2))
     Pbrem = 5.34e-37 * float(np.trapezoid(ne**2 * np.sqrt(Te) * rel * w, L)) * 1e-6
-    Pcycl = 4.14e-7 * float(np.trapezoid((ne / 1e20) ** 0.5 * Te**2.5 * B_L**2.5
-                                         * (1 - Rw) ** 0.5 * L_in**-0.5
-                                         * (1 + 2.5 * Te / 511) * w, L))
+    formula_Pcycl = 4.14e-7 * float(np.trapezoid(
+        (ne / 1e20) ** 0.5 * Te**2.5 * B_L**2.5
+        * (1 - Rw) ** 0.5 * L_in**-0.5
+        * (1 + 2.5 * Te / 511) * w, L))
+    Eth_e = 1.5 * float(np.trapezoid(ne * Te * _KEV_J * w, L)) * 1e-6
+    Pcycl, tauC_eff = resolve_cyclotron_power(
+        formula_Pcycl, Eth_e, use_tauC, tauC)
 
     # impurity line radiation (Mavrin; shell-integrated, docs/30 P1-2)
     if imp_name is not None and fimp > 0:
@@ -222,12 +231,13 @@ def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
     return DipoleResult(
         Pfus=Pfus, Pheat=Pheat, Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
         Pbrem=Pbrem, Pcycl=Pcycl,
-        Ptrans=Ptrans, Pn=Pn, Pwall=Pwall, Eth=Eth,
+        Ptrans=Ptrans, Pn=Pn, Pwall=Pwall, Eth=Eth, Eth_e=Eth_e,
         tau_E=tauE, ntau=n0 * tauE,
         beta_in=beta_in, beta_out=beta_out, U_ratio=U_ratio, p_slope=p_slope,
         B_in=B_in, B_out=B_out, ne0=ne0, nbar=nbar,
         Vp=Vp, Sw=Sw, L_in=L_in, Zeff=Zeff, M=M,
-        ring_model=float(ring_model), P_line=P_line,
+        ring_model=float(ring_model), cyclotron_model="equatorial_shell_proxy",
+        P_line=P_line, tauC_eff=tauC_eff,
         Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq, P_ei=P_ei,
         strcase=rx["name"],
     )

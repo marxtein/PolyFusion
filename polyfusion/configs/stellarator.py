@@ -53,6 +53,7 @@ from ..tokamak import (_REACTIONS, twotemp_diagnostics, line_radiation_profile,
                        _line_average_factor, _line_average_value)
 from ..twotemp import solve_channel_balance
 from ..nearaxis import solve_near_axis
+from ..cyclotron import stellarator_B25_factor
 
 _KEV_J = 1e3 * QE
 _BETA_SOFT_LIMIT = 0.05   # ~5% soft stellarator beta limit (Mercier; can be exceeded)
@@ -311,7 +312,8 @@ def _validated_shape_modes(shape):
     return nfp, rows("R"), rows("Z")
 
 
-def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
+def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
+                               rho_labels=None) -> dict:
     """Explicit Fourier boundary for a real machine (SHAPE VIEW), from a public
     equilibrium.
 
@@ -367,9 +369,11 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
         phi = frac * 2 * math.pi / nfp
         Rb, Zb = _shape_RZ(phi, 1.0)              # boundary at this cut
         surfaces = []
-        for rho in rhos:
-            Rr, Zr = _shape_RZ(phi, rho)
-            surfaces.append({"rho": float(rho), "R": _closed_list(Rr),
+        for surface_scale, rho in zip(rhos, rho_labels or rhos):
+            Rr, Zr = _shape_RZ(phi, surface_scale)
+            surfaces.append({"rho": float(rho),
+                             "surface_scale": float(surface_scale),
+                             "R": _closed_list(Rr),
                              "Z": _closed_list(Zr)})
         elong = float((Zb.max() - Zb.min()) / (Rb.max() - Rb.min()))
         Rclosed, Zclosed = _closed_list(Rb), _closed_list(Zb)
@@ -389,9 +393,11 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta) -> dict:
     R00n = next((c for m, n, c in R_modes if m == 0 and n == 0), 0.0)
     axis = {"R": (R0 + a * R00n + 0.0 * phi_axis).tolist(),
             "Z": (0.0 * phi_axis).tolist()}
-    return {"mode": "machine-boundary", "metric_mode": "machine-boundary",
+    mode = "equilibrium" if shape.get("kind") == "equilibrium_fourier" else "machine-boundary"
+    return {"mode": mode, "metric_mode": mode,
             "a": a, "a_disp": a, "g": g, "sections": sections, "frames": frames,
             "axis": axis, "shape_source": shape.get("source", ""),
+            "rho_definition": "sqrt(V_enclosed/V_plasma)",
             "frame_range": {"frac_min": 0.0, "frac_max": 1.0,
                             "n_frames": _N_PHASE_FRAMES}}
 
@@ -563,11 +569,18 @@ def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
     can pass ``**params`` directly.
     """
     a = _minor_radius(R0, a, A)
+    geom = _stellarator_geometry(
+        R0, a, N_fp, delta_h, etabar, g, rc, zs, shape, B2c=B2c)
+    scale_grid = np.asarray(geom["profile_surface_scale"], dtype=float)
+    rho_grid = np.asarray(geom["profile_rho"], dtype=float)
+    rho_labels = np.interp(
+        np.asarray(_NEST_RHOS), scale_grid, rho_grid).tolist()
     # real-machine presets carry an explicit literature-calibrated boundary that
     # single-harmonic near-axis cannot represent (W7-X bean, LHD rotating
     # ellipse, ...).  Cosmetic only — the power account uses measured overrides.
     if shape is not None:
-        return _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta)
+        return _machine_boundary_outlines(
+            R0, a, N_fp, delta_h, g, shape, n_theta, rho_labels)
     if etabar == 0.0:
         raise ValueError("etabar must be != 0 for section outlines "
                          "(legacy mode removed)")
@@ -618,9 +631,11 @@ def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
 
     def _cut_surfaces(surf):
         out = []
-        for rho in rhos:
-            Rr, Zr = surf(rho)
-            out.append({"rho": float(rho), "R": _closed_list(Rr),
+        for surface_scale, rho in zip(rhos, rho_labels):
+            Rr, Zr = surf(surface_scale)
+            out.append({"rho": float(rho),
+                        "surface_scale": float(surface_scale),
+                        "R": _closed_list(Rr),
                         "Z": _closed_list(Zr)})
         return out
 
@@ -659,6 +674,7 @@ def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
     return {"mode": "near-axis", "metric_mode": metric_mode,
             "a": a, "a_disp": float(a_disp), "g": g,
             "sections": sections, "frames": frames, "axis": axis,
+            "rho_definition": "sqrt(V_enclosed/V_plasma)",
             "frame_range": {"frac_min": 0.0, "frac_max": 1.0,
                             "n_frames": _N_PHASE_FRAMES}}
 
@@ -735,6 +751,7 @@ class StellaratorResult:
     beta_soft_limit: float # fixed soft beta limit used by beta_o_limit
     Pbrem: float
     Pcycl: float
+    cyclotron_B25_factor: float # optional first-order nonuniform-B correction
     Ptrans: float
     PL_ISS04: float   # loss power entering ISS04/Sudo closure [MW]
     Vp: float
@@ -804,10 +821,10 @@ def _minor_radius(R0, a=None, A=None) -> float:
 
 
 def _profile_volume_fraction(boundary_rho_fn, nfp, n_rho=_PROFILE_N_RHO):
-    """Cumulative plasma-volume fraction for nested rho surfaces."""
-    rho = np.linspace(0.0, 1.0, int(n_rho))
-    volumes = np.zeros_like(rho)
-    for i, r in enumerate(rho[1:], start=1):
+    """Map internal surface scale to ``rho=sqrt(V_enclosed/V_plasma)``."""
+    surface_scale = np.linspace(0.0, 1.0, int(n_rho))
+    volumes = np.zeros_like(surface_scale)
+    for i, r in enumerate(surface_scale[1:], start=1):
         bfn = lambda phi, r=r: boundary_rho_fn(phi, float(r))
         volumes[i], _, _ = boundary_metrics(bfn, nfp, g=0.0, n_phi=80)
     total = float(volumes[-1])
@@ -820,7 +837,8 @@ def _profile_volume_fraction(boundary_rho_fn, nfp, n_rho=_PROFILE_N_RHO):
     volumes[0] = 0.0
     volumes[-1] = total
     vfrac = volumes / total
-    return rho, vfrac
+    rho = np.sqrt(np.clip(vfrac, 0.0, 1.0))
+    return surface_scale, rho, vfrac
 
 
 def _stellarator_geometry(R0, a, N_fp, delta_h, etabar, g, rc, zs, shape,
@@ -867,7 +885,8 @@ def _stellarator_geometry(R0, a, N_fp, delta_h, etabar, g, rc, zs, shape,
             R0, a, N_fp, delta_h, etabar, rc=rc, zs=zs, B2c=B2c)
     bfn = lambda phi: boundary_rho_fn(phi, 1.0)
     Vp_geom, Sw_geom, Sp_geom = boundary_metrics(bfn, nfp, g)
-    profile_rho, profile_vfrac = _profile_volume_fraction(boundary_rho_fn, nfp)
+    profile_surface_scale, profile_rho, profile_vfrac = _profile_volume_fraction(
+        boundary_rho_fn, nfp)
     res = dict(geom)
     res["C_sec_mean"] = Sp_geom / geom["L_ax"] if geom["L_ax"] > 0 else float("nan")
     res["C_wall_mean"] = Sw_geom / geom["L_ax"] if geom["L_ax"] > 0 else float("nan")
@@ -875,6 +894,7 @@ def _stellarator_geometry(R0, a, N_fp, delta_h, etabar, g, rc, zs, shape,
     res["Sw_integ"] = Sw_geom
     res["Sp_integ"] = Sp_geom
     res["Sp_geom"] = Sp_geom
+    res["profile_surface_scale"] = profile_surface_scale.tolist()
     res["profile_rho"] = profile_rho.tolist()
     res["profile_vfrac"] = profile_vfrac.tolist()
     if len(_GEOM_CACHE) >= 256:        # bound memory; geometry sets are tiny
@@ -926,7 +946,8 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
                       H_fac=1.0, use_tauE=1.0,
                       rc=None, zs=None, Vp_override=0.0,
                       Sw_override=0.0, shape=None, a=None,
-                      geometry_variants=None) -> StellaratorResult:
+                      geometry_variants=None, equilibrium=None,
+                      cyclotron_B_nonuniform=0.0) -> StellaratorResult:
     """Evaluate the 0-D stellarator power balance at one operating point.
 
     Single near-axis (Garren-Boozer) geometry (Scheme D).  ``etabar`` [1/m] is
@@ -979,7 +1000,9 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
                                      H_fac=H_fac, use_tauE=1.0,
                                      rc=rc, zs=zs, Vp_override=Vp_override,
                                      Sw_override=Sw_override, shape=shape,
-                                     geometry_variants=geometry_variants)
+                                     geometry_variants=geometry_variants,
+                                     equilibrium=equilibrium,
+                                     cyclotron_B_nonuniform=cyclotron_B_nonuniform)
 
         def _resid_t(t, res):
             return H_fac - res.H_ISS04
@@ -1001,7 +1024,9 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
                                      H_fac=H_fac, use_tauE=1.0,
                                      rc=rc, zs=zs, Vp_override=Vp_override,
                                      Sw_override=Sw_override, shape=shape,
-                                     geometry_variants=geometry_variants)
+                                     geometry_variants=geometry_variants,
+                                     equilibrium=equilibrium,
+                                     cyclotron_B_nonuniform=cyclotron_B_nonuniform)
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
@@ -1069,11 +1094,12 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     fnavg = 1.0 / (1.0 + Sn)
     fTavg = 1.0 / (1.0 + ST)
     fpavg = 1.0 / (1.0 + Sn + ST)
-    x = np.linspace(0.0, 1.0, 101)
-    dx = x[1] - x[0]
-    Tx = Ti0 * (1 - x**2) ** ST
+    rho = np.linspace(0.0, 1.0, 101)
+    drho = rho[1] - rho[0]
+    Tx = Ti0 * (1 - rho**2) ** ST
     sgv = reactivity(Tx, icase)
-    Phi = fsig * 2 * float(np.sum((1 - x**2) ** (2 * Sn) * sgv * x * dx))
+    Phi = fsig * 2 * float(np.sum(
+        (1 - rho**2) ** (2 * Sn) * sgv * rho * drho))
     Pfus = rx["Y"] / (1 + d12) * n10 * n20 * Phi * Vp * 1e-6
     Pn = Pfus * (1 - rx["fion"])
 
@@ -1088,12 +1114,17 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
                 + 3 / math.sqrt(2) / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2))
              * 1e-6 * Vp)
     neff = ne0 / 1e20 / (1 + Sn)
-    Teff = Te0 * float(np.sum((1 - x**2) ** ST)) * dx
+    Teff = Te0 * float(np.sum((1 - rho**2) ** ST)) * drho
+    cyclotron_B25_factor = (
+        stellarator_B25_factor(float(etabar) * a)
+        if bool(cyclotron_B_nonuniform) else 1.0)
     Pcycl = (4.14e-7 * neff**0.5 * Teff**2.5 * B0**2.5 * (1 - Rw)**0.5
-             * a_vol**-0.5 * (1 + 2.5 * Teff / 511) * Vp)
+             * a_vol**-0.5 * (1 + 2.5 * Teff / 511) * Vp
+             * cyclotron_B25_factor)
 
     # --- impurity line radiation (Mavrin; opt-in, docs/30 P1-2) ---
-    P_line = line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx)
+    P_line = line_radiation_profile(
+        imp_name, ne0, nimp0, Te0, Sn, ST, Vp, rho, drho)
 
     # --- stored energy, heating, gain (identical structure) ---
     Eth = 1.5 * (ni0 * Ti0 + ne0 * Te0) * 1e3 * QE / (1 + Sn + ST) * Vp * 1e-6
@@ -1144,7 +1175,9 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
         betaT=betaT, beta_o_limit=betaT / _BETA_SOFT_LIMIT,
         nbar_o_Sudo=nbar_o_Sudo, n_Sudo=n_Sudo,
         beta_soft_limit=_BETA_SOFT_LIMIT,
-        Pbrem=Pbrem, Pcycl=Pcycl, Ptrans=Pth, PL_ISS04=PL, Vp=Vp,
+        Pbrem=Pbrem, Pcycl=Pcycl,
+        cyclotron_B25_factor=cyclotron_B25_factor,
+        Ptrans=Pth, PL_ISS04=PL, Vp=Vp,
         iota=iota_used, iota_geom=iota_geom,
         iota_geom_authoritative=iota_geom_authoritative,
         helicity=helicity, L_ax=L_ax,

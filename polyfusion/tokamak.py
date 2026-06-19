@@ -21,6 +21,7 @@ from .twotemp import (critical_energy, ion_deposition_fraction, equilibration_ti
                       p_ei_exchange, solve_channel_balance)
 from .impurity import lz_line_net, SPECIES as _IMP_SPECIES
 from .tokageom import tokamak_geometry
+from .cyclotron import tokamak_B25_factor
 
 # Per-reaction parameters: charges, mass numbers, charged-fraction fion,
 # energy release Y [J], like-particle flag delta12, and a label.
@@ -128,6 +129,7 @@ class Result:
     q: float        # safety factor
     Pbrem: float    # bremsstrahlung power [MW]
     Pcycl: float    # cyclotron radiation power [MW]
+    cyclotron_B25_factor: float  # optional nonuniform toroidal-field correction
     Vp: float       # plasma volume [m^3]
     betap: float    # poloidal beta
     Sp: float       # plasma surface area [m^2]
@@ -174,7 +176,8 @@ class Result:
 def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
           BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
           imp_name=None, f_aux_e=0.5, H_fac=1.0, use_tauE=1.0,
-          geom_model=0.0, eq=None, Vp_override=0.0, Sw_override=0.0) -> Result:
+          geom_model=0.0, eq=None, Vp_override=0.0, Sw_override=0.0,
+          cyclotron_B_nonuniform=0.0) -> Result:
     """Evaluate the 0-D power balance for one operating point.
 
     See parameter table in ``docs/01_托卡马克代码说明文档.md`` (§3) for units.
@@ -213,7 +216,8 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
                          imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac,
                          use_tauE=1.0,
                          geom_model=geom_model, eq=eq,
-                         Vp_override=Vp_override, Sw_override=Sw_override)
+                         Vp_override=Vp_override, Sw_override=Sw_override,
+                         cyclotron_B_nonuniform=cyclotron_B_nonuniform)
 
         def _resid_t(t, res):
             # H98(t) is monotone increasing in t; root at H98 = H_fac
@@ -229,7 +233,8 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
                          imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac,
                          use_tauE=1.0,
                          geom_model=geom_model, eq=eq,
-                         Vp_override=Vp_override, Sw_override=Sw_override)
+                         Vp_override=Vp_override, Sw_override=Sw_override,
+                         cyclotron_B_nonuniform=cyclotron_B_nonuniform)
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
@@ -320,8 +325,12 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     neff = ne0 / 1e20 / (1 + Sn)
     aeff = a * math.sqrt(kappa)
     Teff = Te0 * np.sum((1 - x**2) ** ST) * dx
+    cyclotron_B25_factor = (
+        tokamak_B25_factor(R0, a, kappa, delta)
+        if bool(cyclotron_B_nonuniform) else 1.0)
     Pcycl = (4.14e-7 * neff**0.5 * Teff**2.5 * BT0**2.5 * (1 - Rw)**0.5
-             * aeff**-0.5 * (1 + 2.5 * Teff / 511) * Vp)
+             * aeff**-0.5 * (1 + 2.5 * Teff / 511) * Vp
+             * cyclotron_B25_factor)
 
     # --- impurity line radiation (Mavrin; opt-in, docs/30 P1-2) ---
     P_line = line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx)
@@ -394,7 +403,9 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         Eth=Eth, H98=H98, HST=HST, Pheat=Pheat, Pn=Pn, Pfus=Pfus, Pwall=Pwall,
         Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
         betaN=betaN, betaT=betaT, nbar_o_nGw=nbar_o_nGw, q=q,
-        Pbrem=Pbrem, Pcycl=Pcycl, Vp=Vp, betap=betap, Sp=Sp, ne0=ne0, M=M,
+        Pbrem=Pbrem, Pcycl=Pcycl,
+        cyclotron_B25_factor=cyclotron_B25_factor,
+        Vp=Vp, betap=betap, Sp=Sp, ne0=ne0, M=M,
         fTavg=fTavg, fnavg=fnavg, Sw=Sw, Pth=Pth, Ptrans=Pth, Zeff=Zeff,
         P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
         P_ei=P_ei, Te0=Te0, fT_used=fT, te_mode=0.0, te_resid=0.0,

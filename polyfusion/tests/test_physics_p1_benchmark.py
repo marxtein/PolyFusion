@@ -144,7 +144,7 @@ def main():
        f"FRC flux account: tau_eta = {o['tau_eta']:.3f} s, tauN/tau_eta = {o['tauN_o_taueta']:.2e}")
 
     # dipole finite-ring mode: runs, differs near ring, converges far away
-    p0 = run_case({}, preset="Dipole-DD", config="dipole")["outputs"]
+    p0 = run_case({"ring_model": 0}, preset="Dipole-DD", config="dipole")["outputs"]
     p1 = run_case({"ring_model": 1}, preset="Dipole-DD", config="dipole")["outputs"]
     ok(p1["valid"] == 1.0, "dipole loop mode: valid result")
     ok(abs(p1["beta_in"] - p0["beta_in"]) / p0["beta_in"] > 0.2,

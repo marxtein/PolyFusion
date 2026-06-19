@@ -35,6 +35,7 @@ from ..constants import QE, MP, ME, MU0, MEC2
 from ..reactivity import reactivity
 from ..tokamak import _REACTIONS, twotemp_diagnostics, line_radiation_profile
 from ..twotemp import solve_channel_balance
+from ..cyclotron import resolve_cyclotron_power
 
 _KEV_J = 1e3 * QE
 _LN_LAMBDA = 17.0
@@ -79,6 +80,7 @@ class MirrorResult:
     ne0: float; nbar: float; Zeff: float; M: float
     fTavg: float; fnavg: float
     P_line: float     # impurity line radiation [MW] (0 unless imp_name given)
+    tauC_eff: float   # effective cyclotron-radiation energy-loss time [s]
     Ecrit: float      # Stix critical energy [keV]
     f_fast_ion: float # fast-product energy fraction to ions
     tau_eq_ie: float  # ion-electron equilibration time [s]
@@ -110,17 +112,49 @@ def _solve_phi_e_over_Te(K: float) -> float:
     return y
 
 
+def _cyclotron_effective_temperature(Te0: float, ST: float) -> float:
+    """Trubnikov-profile effective electron temperature [keV]."""
+    log_i_t = math.lgamma(ST + 1) - math.lgamma(ST + 1.5)
+    log_i_t2 = math.lgamma(2 * ST + 1) - math.lgamma(2 * ST + 1.5)
+    return Te0 * math.exp(log_i_t2 - log_i_t)
+
+
+def _mirror_cyclotron_power(ne0: float, Te0: float, Sn: float, ST: float,
+                             Rw: float, a_c: float, L_c: float, B0: float,
+                             R_mc: float, f_throat: float) -> float:
+    """Mirror cyclotron loss [MW] using an axial Trubnikov-scale integral."""
+    Teff = _cyclotron_effective_temperature(Te0, ST)
+    neff = ne0 / 1e20 / (1 + Sn)
+    prefactor = (4.14e-7 * neff**0.5 * Teff**2.5 * (1 - Rw)**0.5
+                 * (1 + 2.5 * Teff / 511))
+
+    field_moment = B0**2.5 * math.pi * a_c**2 * L_c
+    L_th = f_throat * L_c
+    if L_th > 0:
+        u = np.linspace(0.0, 1.0, 201)
+        field_ratio = 1 + (R_mc - 1) * np.sin(math.pi * u / 2) ** 2
+        B_z = B0 * field_ratio
+        a_z = a_c / np.sqrt(field_ratio)
+        dV_du = math.pi * a_z**2 * L_th
+        one_throat = float(np.trapezoid(B_z**2.5 * dV_du, u))
+        field_moment += 2 * one_throat
+    return prefactor * a_c**-0.5 * field_moment
+
+
 def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
                  Sn=0.0, ST=0.0, g=0.0, fsig=1.0, f_throat=0.1,
                  f_alpha=None, B_expand=100.0,
                  Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
                  phi_i_over_Te=None, lnLambda=_LN_LAMBDA,
-                 imp_name=None, f_aux_e=0.5, use_tauE=1.0) -> MirrorResult:
+                 imp_name=None, f_aux_e=0.5, use_tauE=1.0,
+                 use_tauC=0.0, tauC=None) -> MirrorResult:
     """Evaluate the 0-D mirror power balance at one operating point.
 
     Parameters (SI / keV / m^-3); see docs/24 §3 for the full table.
     ``Sn``/``ST`` are the radial peaking exponents (0 = flat, tokamak family),
     ``g`` the plasma-wall gap, ``f_throat`` the throat length fraction of L_c.
+    ``use_tauC=0`` uses the mirror axial-integral cyclotron estimate;
+    ``use_tauC=1`` instead uses ``Pcycl = Eth_e/tauC``.
     ``geometry`` selects the axial geometry model: ``"sin2_simple"`` (default,
     original cylinder + sin² throat model) or ``"multi_zone"`` (independent
     throat length, expander zone, switchable B(z) profile).
@@ -144,6 +178,9 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
         raise ValueError(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
     if manual_tauE and Te0 == 0:
         raise ValueError("Te0=0 self-consistent solve is only available when use_tauE is disabled")
+    manual_tauC = bool(use_tauC)
+    if manual_tauC and (tauC is None or tauC <= 0):
+        raise ValueError(f"tauC must be > 0 when use_tauC is enabled (got {tauC})")
 
     if Te0 == 0:
         def _eval(te):
@@ -153,7 +190,8 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
                                 icase=icase, f1=f1, fHe=fHe, fimp=fimp,
                                 Zimp=Zimp, phi_i_over_Te=phi_i_over_Te,
                                 lnLambda=lnLambda, imp_name=imp_name,
-                                f_aux_e=f_aux_e, use_tauE=use_tauE)
+                                f_aux_e=f_aux_e, use_tauE=use_tauE,
+                                use_tauC=use_tauC, tauC=tauC)
 
         def _resid(te, res):
             # electron share of the end loss (phi_e + Te per escaping electron)
@@ -306,10 +344,11 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
                 + 1.874 / (1 + 2 * Sn + 2.5 * ST) * (Te0 / MEC2) ** 2
                 + 3 / math.sqrt(2) / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2))
              * 1e-6 * Vp)
-    neff = ne0 / 1e20 / (1 + Sn)
-    Teff = Te0 * float(np.sum((1 - x**2) ** ST)) * dx
-    Pcycl = (4.14e-7 * neff**0.5 * Teff**2.5 * B0**2.5 * (1 - Rw)**0.5
-             * a_c**-0.5 * (1 + 2.5 * Teff / 511) * Vp)
+    Eth_e = 1.5 * ne0 * Te0 * _KEV_J / (1 + Sn + ST) * Vp * 1e-6
+    formula_Pcycl = _mirror_cyclotron_power(
+        ne0, Te0, Sn, ST, Rw, a_c, L_c, B0, R_mc, f_throat)
+    Pcycl, tauC_eff = resolve_cyclotron_power(
+        formula_Pcycl, Eth_e, use_tauC, tauC)
 
     # ---------- stored energy & transport power ----------
     Eth = 1.5 * (ni0 * Ti0 + ne0 * Te0) * _KEV_J / (1 + Sn + ST) * Vp * 1e-6  # MJ
@@ -364,7 +403,8 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
         beta=beta, beta_avg=beta_avg, B0=B0, R_mc=R_mc,
         Vp=Vp, Sp=Sp, Sw=Sw, A_throat=A_throat,
         ne0=ne0, nbar=nbar, Zeff=Zeff, M=M, fTavg=fTavg, fnavg=fnavg,
-        P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
+        P_line=P_line, tauC_eff=tauC_eff,
+        Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
         P_ei=P_ei, f_alpha_used=f_alpha_used, Te0_used=Te0,
         te_mode=0.0, te_resid=0.0, strcase=rx["name"],
     )

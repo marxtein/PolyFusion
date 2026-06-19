@@ -27,20 +27,24 @@ from .dipole import solve_dipole
 from .stellarator import solve_stellarator, section_outlines
 
 # Inputs each solver accepts (positional/keyword names).
-_MIRROR_PARAMS = ["use_tauE", "a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0", "tauE",
+_MIRROR_PARAMS = ["use_tauE", "use_tauC", "tauC",
+                  "a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0", "tauE",
                   "Sn", "ST", "g", "fsig", "f_throat", "f_alpha", "B_expand", "Rw",
                   "icase", "f1", "fHe", "fimp", "Zimp", "phi_i_over_Te", "lnLambda",
                   "imp_name"]
-_FRC_PARAMS = ["use_tauE", "geom_weighted", "sep_model", "m", "r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "f_shape", "fsig", "Rw",
+_FRC_PARAMS = ["use_tauE", "use_tauC", "tauC", "geom_weighted", "sep_model", "m",
+               "r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "f_shape", "fsig", "Rw",
                "icase", "f1", "fHe", "fimp", "Zimp", "imp_name"]
-_DIPOLE_PARAMS = ["use_tauE", "r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
+_DIPOLE_PARAMS = ["use_tauE", "use_tauC", "tauC",
+                  "r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE",
                   "L_in_fac", "fsig", "icase", "f1", "fHe", "fimp", "Zimp", "Rw",
                   "ring_model", "imp_name"]
-_STELL_PARAMS = ["use_tauE", "R0", "a", "N_fp", "delta_h", "etabar", "Sn", "ST",
+_STELL_PARAMS = ["use_tauE", "cyclotron_B_nonuniform",
+                  "R0", "a", "N_fp", "delta_h", "etabar", "Sn", "ST",
                   "ni0", "Ti0", "fT", "fsig", "f1", "B0", "iota", "tauE", "fHe",
                   "fimp", "Zimp", "Rw", "g", "icase", "f_ren", "imp_name",
                   "H_fac", "rc", "zs", "Vp_override", "Sw_override", "shape",
-                  "geometry_variants"]
+                  "geometry_variants", "equilibrium"]
 
 # Machine presets for every non-tokamak configuration now live in JSON data
 # files (``polyfusion/presets/<config>.json``, with any
@@ -284,6 +288,12 @@ def _mirror_cross(p: dict) -> list[str]:
             errors.append(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
         if Te0 is not None and Te0 <= 0:
             errors.append(f"Te0 must be > 0 when use_tauE is enabled (got {Te0})")
+    if bool(p.get("use_tauC", 0.0)):
+        tauC = _num(p, "tauC")
+        if tauC is None:
+            errors.append("tauC is required when use_tauC is enabled")
+        elif tauC <= 0:
+            errors.append(f"tauC must be > 0 when use_tauC is enabled (got {tauC})")
     return errors
 
 
@@ -304,6 +314,12 @@ def _frc_cross(p: dict) -> list[str]:
         tauE = _num(p, "tauE")
         if tauE is not None and tauE <= 0:
             errors.append(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
+    if bool(p.get("use_tauC", 0.0)):
+        tauC = _num(p, "tauC")
+        if tauC is None:
+            errors.append("tauC is required when use_tauC is enabled")
+        elif tauC <= 0:
+            errors.append(f"tauC must be > 0 when use_tauC is enabled (got {tauC})")
     return errors
 
 
@@ -316,6 +332,12 @@ def _dipole_cross(p: dict) -> list[str]:
             and fac * r_ring >= R_p:
         errors.append(f"need L_in = L_in_fac*r_ring < R_p "
                       f"(got {fac * r_ring} >= {R_p}): no plasma shell")
+    if bool(p.get("use_tauC", 0.0)):
+        tauC = _num(p, "tauC")
+        if tauC is None:
+            errors.append("tauC is required when use_tauC is enabled")
+        elif tauC <= 0:
+            errors.append(f"tauC must be > 0 when use_tauC is enabled (got {tauC})")
     return errors
 
 
@@ -344,12 +366,13 @@ def _stell_cross(p: dict) -> list[str]:
 
 TOKAMAK = ConfigSpec(
     name="tokamak", label="托卡马克 Tokamak",
-    params=["use_tauE"] + TOKAMAK_PARAMS + ["imp_name", "H_fac",
+    params=["use_tauE", "cyclotron_B_nonuniform"] + TOKAMAK_PARAMS + ["imp_name", "H_fac",
             "geom_model", "eq", "Vp_override", "Sw_override"],
     required=TOKAMAK_PARAMS,
     positive=["R0", "A", "kappa", "ni0", "Ti0", "BT0", "Ip", "Zimp"],
     bounds={**_COMMON_BOUNDS, "delta": (-0.999, 0.999),
             "fT": (0.0, None), "tauE": (0.0, None), "use_tauE": (0.0, 1.0),
+            "cyclotron_B_nonuniform": (0.0, 1.0),
             "H_fac": (0.0, None),
             "geom_model": (0.0, 2.0),
             "Vp_override": (0.0, None), "Sw_override": (0.0, None)},
@@ -374,6 +397,7 @@ MIRROR = ConfigSpec(
     required=["a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Te0", "tauE", "icase"],
     positive=["a_c", "L_c", "B_vac", "R_mirror", "ni0", "Ti0", "Zimp"],
     bounds={**_COMMON_BOUNDS, "use_tauE": (0.0, 1.0),
+            "use_tauC": (0.0, 1.0), "tauC": (0.0, None),
             "f_throat": (0.0, 0.5), "f_alpha": (0.0, 1.0),
             "B_expand": (1.0, None), "lnLambda": (1.0, None),
             "phi_i_over_Te": (0.0, None), "Te0": (0.0, None),
@@ -394,6 +418,7 @@ FRC = ConfigSpec(
     required=["r_s", "l_s", "r_w", "B_e", "Ti", "Te", "tauE", "icase"],
     positive=["r_s", "l_s", "r_w", "B_e", "Ti", "Te", "Zimp"],
     bounds={**_COMMON_BOUNDS, "use_tauE": (0.0, 1.0),
+            "use_tauC": (0.0, 1.0), "tauC": (0.0, None),
             "geom_weighted": (0.0, 1.0), "m": (2.0, None),
             "tauE": (0.0, None), "f_shape": (2.0 / 3.0 - 1e-9, 1.0)},
     cross=_frc_cross,
@@ -416,6 +441,7 @@ DIPOLE = ConfigSpec(
     required=["r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE", "icase"],
     positive=["r_ring", "R_p", "B_ring", "n0", "Ti0", "Te0", "tauE", "Zimp"],
     bounds={**_COMMON_BOUNDS, "use_tauE": (0.0, 1.0),
+            "use_tauC": (0.0, 1.0), "tauC": (0.0, None),
             "L_in_fac": (1.0, None), "ring_model": (0, 1)},
     cross=_dipole_cross,
     presets=DIPOLE_PRESETS,
@@ -434,11 +460,14 @@ STELLARATOR = ConfigSpec(
     # are optional overrides.
     required=[p for p in _STELL_PARAMS
               if p not in ("f_ren", "iota", "delta_h", "imp_name", "H_fac",
-                            "rc", "zs", "Vp_override", "Sw_override", "shape")],
+                            "rc", "zs", "Vp_override", "Sw_override", "shape",
+                            "cyclotron_B_nonuniform", "geometry_variants",
+                            "equilibrium")],
     positive=["R0", "a", "N_fp", "ni0", "Ti0", "B0",
               "Zimp", "f_ren"],
     bounds={**_COMMON_BOUNDS, "delta_h": (0.0, None), "N_fp": (1.0, None),
             "fT": (0.0, None), "tauE": (0.0, None), "use_tauE": (0.0, 1.0),
+            "cyclotron_B_nonuniform": (0.0, 1.0),
             "H_fac": (0.0, None),
             "Vp_override": (0.0, None), "Sw_override": (0.0, None)},
     cross=_stell_cross,
@@ -457,6 +486,7 @@ STELLARATOR = ConfigSpec(
 
 for _p in TOKAMAK_PRESETS.values():
     _p.setdefault("use_tauE", 1.0)
+    _p.setdefault("cyclotron_B_nonuniform", 0.0)
     _p.setdefault("f_aux_e", 0.5)
     _p.setdefault("H_fac", 1.0)
     _p.setdefault("geom_model", 0.0)
@@ -464,18 +494,23 @@ for _p in TOKAMAK_PRESETS.values():
     _p.setdefault("Sw_override", 0.0)
 for _p in MIRROR_PRESETS.values():
     _p.setdefault("use_tauE", 1.0)
+    _p.setdefault("use_tauC", 0.0)
+    _p.setdefault("tauC", 1.0)
     _p.setdefault("f_aux_e", 0.5)
     _p.setdefault("B_expand", 100.0)
     _p.setdefault("lnLambda", 17.0)
     _p.setdefault("phi_i_over_Te", 0.0)
 for _p in FRC_PRESETS.values():
     _p.setdefault("use_tauE", 1.0)
+    _p.setdefault("use_tauC", 0.0)
+    _p.setdefault("tauC", 1.0)
     _p.setdefault("geom_weighted", 0.0)
 for _p in STELL_PRESETS.values():
     if "a" not in _p and "A" in _p and "R0" in _p:
         _p["a"] = _p["R0"] / _p["A"]
     _p.pop("A", None)
     _p.setdefault("use_tauE", 1.0)
+    _p.setdefault("cyclotron_B_nonuniform", 0.0)
     _p.setdefault("f_aux_e", 0.5)
     _p.setdefault("H_fac", 1.0)
     _p.setdefault("iota", 0.0)            # 0 = use geometric transform
@@ -483,7 +518,9 @@ for _p in STELL_PRESETS.values():
     _p.setdefault("Sw_override", 0.0)     # 0 = use geometric wall surface
 for _p in DIPOLE_PRESETS.values():
     _p.setdefault("use_tauE", 1.0)
-    _p.setdefault("ring_model", 0)
+    _p.setdefault("use_tauC", 0.0)
+    _p.setdefault("tauC", 1.0)
+    _p.setdefault("ring_model", 1)
 
 REGISTRY = {c.name: c for c in (TOKAMAK, MIRROR, FRC, DIPOLE, STELLARATOR)}
 

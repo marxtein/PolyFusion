@@ -179,6 +179,7 @@
         <button id="expJson" data-t="expJson">⬇ 结果 JSON</button><button id="expCsv" data-t="expCsv">⬇ 扫描 CSV</button>
       </div>
       <input id="fileIn" type="file" accept=".json" style="display:none">
+      <input id="equilibriumFileIn" type="file" accept=".nc,.h5,.hdf5" style="display:none">
     </div>
   </div>
 </div>
@@ -189,6 +190,9 @@ const RX={1:'D-T',2:'D-D',3:'D-³He',4:'p-¹¹B(Nevins)',5:'p-¹¹B(Sikora)',6:'
 // name -> [zh desc, en desc, unit, group, symbol html(book notation)]
 const META={
   use_tauE:['使用输入 τE (关闭=自洽损失)','use input tauE (off = self-consistent losses)','','conf','τ<sub>E</sub>'],
+  use_tauC:['使用输入 τC (关闭=位形快速公式)','use input tauC (off = configuration fast formula)','','conf','τ<sub>C</sub>'],
+  tauC:['回旋辐射等效能量损失时间','effective cyclotron-radiation energy-loss time','s','conf','τ<sub>C</sub>'],
+  cyclotron_B_nonuniform:['考虑回旋辐射中的磁场不均匀性','include magnetic-field nonuniformity in cyclotron loss','','conf','⟨B<sup>2.5</sup>⟩'],
   geom_weighted:['FRC 有限长度几何加权','FRC finite-length geometry weighting','','geo','geom'],
   sep_model:['FRC 分离面几何模型','FRC separatrix geometry model','','geo','sep'],
   geom_model:['托卡马克几何模型','tokamak geometry model','','geo','geom'],
@@ -232,7 +236,7 @@ const cfgL=n=>{const c=CFGN[n]||[n,n];return LANG==='zh'?c[0]:c[1];};
 // output keys -> book-notation symbol html (no underscores)
 const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub>',Pcycl:'P<sub>cycl</sub>',Pn:'P<sub>n</sub>',
   Ptrans:'P<sub>trans</sub>',Pwall:'P<sub>wall</sub>',Eth:'E<sub>th</sub>',Qfus:'Q<sub>fus</sub>',H98:'H<sub>98</sub>',HST:'H<sub>ST</sub>',
-  H_ISS04:'H<sub>ISS04</sub>',tau_c:'τ<sub>c</sub>',tau_E:'τ<sub>E</sub>',tau_ISS04:'τ<sub>ISS04</sub>',tau_Past:'τ<sub>Past</sub>',
+  H_ISS04:'H<sub>ISS04</sub>',tau_c:'τ<sub>c</sub>',tauC_eff:'τ<sub>C,eff</sub>',tau_E:'τ<sub>E</sub>',tau_ISS04:'τ<sub>ISS04</sub>',tau_Past:'τ<sub>Past</sub>',
   tau_gd:'τ<sub>gd</sub>',tau_rho:'τ<sub>ρ</sub>',ntau:'nτ',betaT:'β<sub>T</sub>',betaN:'β<sub>N</sub>',beta:'β',
   beta_in:'β<sub>in</sub>',beta_out:'β<sub>out</sub>',U_ratio:'U<sub>out</sub>/U<sub>in</sub>',p_slope:'dlnp/dlnL',B_in:'B<sub>in</sub>',B_out:'B<sub>out</sub>',L_in:'L<sub>in</sub>',P_coll_flux:'q<sub>coll</sub>',P_alpha_loss:'P<sub>α,loss</sub>',Past_domain:'Past⊂dom',flux_p:'Φ<sub>p</sub>',K_rr:'K',A_throat:'A<sub>th</sub>',P_end_flux:'q<sub>end</sub>',iota_geom:'ι<sub>geom</sub>',L_ax:'L<sub>ax</sub>',N_fp:'N<sub>fp</sub>',tau_ISS04:'τ<sub>ISS04</sub>',lambda_ii:'λ<sub>ii</sub>',beta_avg:'⟨β⟩',beta_null:'β<sub>null</sub>',beta_o_limit:'β/β<sub>lim</sub>',betap:'β<sub>p</sub>',q:'q',nbar_o_nGw:'n̄/n<sub>Gw</sub>',
   nbar_o_Sudo:'n̄/n<sub>Sudo</sub>',x_s:'x<sub>s</sub>',s_param:'s',elongation:'ε',R_mc:'R<sub>mc</sub>',ne0:'n<sub>e0</sub>',
@@ -246,6 +250,7 @@ const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub
   tauE_used:'τ<sub>E,used</sub>',taue_mode:'τ<sub>E</sub>mode',Pth:'P<sub>th</sub>',ring_model:'ring',
   P_LH:'P<sub>LH</sub>',LH_ratio:'P<sub>sep</sub>/P<sub>LH</sub>',tau_ITPA20:'τ<sub>ITPA20</sub>',H_ITPA20:'H<sub>ITPA20</sub>',
   tau_classical:'τ<sub>cl</sub>',tau_Bohm:'τ<sub>Bohm</sub>',a_over_rhoi:'a/ρ<sub>i</sub>',
+  GB25:'G<sub>B,2.5</sub>',Eth_e:'E<sub>th,e</sub>',cyclotron_B25_factor:'M<sub>B,2.5</sub>',
   aspect_geom:'A<sub>geom</sub>',aspect_vol:'A<sub>vol</sub>',fpavg:'f<sub>p,avg</sub>',n_Sudo:'n<sub>Sudo</sub>',
   PL_ISS04:'P<sub>L,ISS04</sub>',beta_soft_limit:'&beta;<sub>soft</sub>',shaf_shift:'Δ<sub>Shafr</sub>',geom_volume_ratio:'V<sub>p</sub>/V<sub>geom</sub>',
   geom_wall_ratio:'S<sub>w</sub>/S<sub>w,geom</sub>',nbar_geom:'n&#772;<sub>geom</sub>',
@@ -253,13 +258,13 @@ const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub
 const pk=k=>PR[k]?`<span class="sym">${PR[k]}</span>`:k;
 const chipLab=s=>{const u=(s.label.match(/\[[^\]]+\]/)||[''])[0];return (PR[s.f]?`<span class="sym">${PR[s.f]}</span>`:s.f)+(u?' '+u:'');};
 const GROUPS=[['rx','反应','Reaction'],['geo','几何','Geometry'],['prof','剖面','Profile'],['plasma','等离子体','Plasma'],['field','场·电流','Field·Current'],['fuel','燃料·杂质','Fuel·Impurity'],['conf','约束·修正','Confinement·Factors']];
-const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',A_flux:'m²',a_vol:'m',C_sec_mean:'m',C_wall_mean:'m',Vp_geom:'m³',Sp_geom:'m²',Sw_geom:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',tau_eta:'s',Te0:'keV',tauE_used:'s',P_LH:'MW',tau_ITPA20:'s',tau_classical:'s',tau_Bohm:'s',
+const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Eth_e:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',A_flux:'m²',a_vol:'m',C_sec_mean:'m',C_wall_mean:'m',Vp_geom:'m³',Sp_geom:'m²',Sw_geom:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_c:'s',tauC_eff:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',tau_eta:'s',Te0:'keV',tauE_used:'s',P_LH:'MW',tau_ITPA20:'s',tau_classical:'s',tau_Bohm:'s',
   PL_ISS04:'MW',Te_line_geom:'keV',Ti_line_geom:'keV',n_Sudo:'m⁻³',nbar_geom:'m⁻³',shaf_shift:'m'};
-const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','Pth','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth']],
-  ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ITPA20','H_ISS04','tau_c','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tau_ITPA20','tauE_used','taue_mode','tau_eta','tauN_o_taueta','tau_classical','tau_Bohm','ntau','PL_ISS04']],
+const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','Pth','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth','Eth_e']],
+  ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ITPA20','H_ISS04','tau_c','tauC_eff','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tau_ITPA20','tauE_used','taue_mode','tau_eta','tauN_o_taueta','tau_classical','tau_Bohm','ntau','PL_ISS04']],
   ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_avg','beta_null','beta_o_limit','beta_soft_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','nbar_geom_o_nbar','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain','P_LH','LH_ratio','a_over_rhoi']],
-  ['几何·后验 Geometry·Posterior',['aspect_geom','aspect_vol','a_vol','A_flux','Vp_geom','Sp_geom','Sw_geom','C_sec_mean','C_wall_mean','geom_volume_ratio','geom_wall_ratio','shaf_shift','fnavg','fTavg','fpavg','nbar_geom','Te_line_geom','Ti_line_geom']],
-  ['等离子体 Plasma',['ne0','ni0','nbar','n_Sudo','Vp','Sp','Sw','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','L_ax','L_in','A_throat','flux_p','G1','G2','GB','p_shape','f_shape_calc','geom_weighted','sep_model','m_shape','lambda_ii','coll_ratio','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
+  ['几何·后验 Geometry·Posterior',['aspect_geom','aspect_vol','a_vol','A_flux','Vp_geom','Sp_geom','Sw_geom','C_sec_mean','C_wall_mean','geom_volume_ratio','geom_wall_ratio','shaf_shift','cyclotron_B25_factor','fnavg','fTavg','fpavg','nbar_geom','Te_line_geom','Ti_line_geom']],
+  ['等离子体 Plasma',['ne0','ni0','nbar','n_Sudo','Vp','Sp','Sw','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','L_ax','L_in','A_throat','flux_p','G1','G2','GB','GB25','p_shape','f_shape_calc','geom_weighted','sep_model','m_shape','lambda_ii','coll_ratio','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
 const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_c','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','nbar_geom_o_nbar','beta_o_limit','beta_soft_limit']);
 const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 28 40 28 32 28 24 30 14 40 8Z"/>',
   mirror:'<path d="M10 20Q32 30 54 20M10 44Q32 34 54 44"/><circle cx="12" cy="32" r="8"/><circle cx="52" cy="32" r="8"/>',
@@ -279,10 +284,20 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
 let STELL_STASH={};
 const ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override']);  // expert-only inputs
-const OPAQUE_PARAMS=new Set(['shape','geometry_variants','eq']);  // opaque JSON objects intentionally sent to backend
+const OPAQUE_PARAMS=new Set(['shape','geometry_variants','eq','equilibrium']);  // opaque JSON objects intentionally sent to backend
 
 function isPlainObject(v){return v&&typeof v==='object'&&!Array.isArray(v);}
 function cloneJson(v){return JSON.parse(JSON.stringify(v));}
+function migrateTauC(){
+  if(!['mirror','frc','dipole'].includes(CUR))return;
+  if(!Object.prototype.hasOwnProperty.call(VALS,'use_tauC'))VALS.use_tauC=0;
+  if(!Object.prototype.hasOwnProperty.call(VALS,'tauC'))VALS.tauC=1;
+}
+function migrateCyclotronB(){
+  if(!['tokamak','stellarator'].includes(CUR))return;
+  if(!Object.prototype.hasOwnProperty.call(VALS,'cyclotron_B_nonuniform'))
+    VALS.cyclotron_B_nonuniform=0;
+}
 
 function defaultBoundaryShape(R0,N_fp){return{source:'',nfp:N_fp||5,R:[[1,0,1.0]],Z:[[-1,0,1.0]]};}
 function isFiniteNum(v){return typeof v==='number'&&isFinite(v);}
@@ -308,7 +323,7 @@ function simpleBoundaryVariant(vals=VALS){
 function stellAVolDisplay(){
   if(CUR!=='stellarator')return null;
   const mode=stellGeomMode();
-  if(mode==='boundary'&&isFiniteNum(VALS.Vp_override)&&VALS.Vp_override>0&&isFiniteNum(VALS.R0)&&VALS.R0>0){
+  if((mode==='boundary'||mode==='equilibrium')&&isFiniteNum(VALS.Vp_override)&&VALS.Vp_override>0&&isFiniteNum(VALS.R0)&&VALS.R0>0){
     return Math.sqrt(VALS.Vp_override/(2*Math.PI*Math.PI*VALS.R0));
   }
   const sameMode=LASTRUN&&LASTRUN._geom_mode===mode;
@@ -324,6 +339,7 @@ function stellAHeaderHtml(){
 }
 
 function inferStellGeomMode(){
+  if(isPlainObject(VALS.equilibrium))return'equilibrium';
   if(isPlainObject(VALS.shape))return'boundary';
   if(Array.isArray(VALS.rc)||Array.isArray(VALS.zs))return'axis';
   return'simple';
@@ -338,7 +354,7 @@ function stashStellGeom(){
 }
 
 function stellGeomMode(){return VALS._geom_mode||inferStellGeomMode();}
-function stellGeomModeHtml(){const m=stellGeomMode();const item=(k,zh,en)=>`<button type="button" class="modebtn${m===k?' on':''}" data-gmode="${k}">${L(zh,en)}</button>`;return `<div class="fld full modefld"><label><span class="sym">geo</span><span class="nm">${L('几何输入方式','geometry input mode')}</span></label><div class="modebar">${item('simple','默认近轴','simple near-axis')}${item('axis','磁轴 Fourier','axis Fourier')}${item('boundary','边界 Fourier','boundary Fourier')}</div></div>`;}
+function stellGeomModeHtml(){const m=stellGeomMode();const item=(k,zh,en)=>`<button type="button" class="modebtn${m===k?' on':''}" data-gmode="${k}">${L(zh,en)}</button>`;let summary='';if(m==='equilibrium'&&isPlainObject(VALS.equilibrium)){const e=VALS.equilibrium,s=e.source||{},q=e.iota||{},mt=e.metrics||{};summary=`<div class="eqsummary">${s.format||''} · ${s.filename||''}<br>NFP=${e.nfp} · ι(ρ=2/3)=${fmt(q.rho_2_3)} · V=${fmt(mt.Vp_m3)} m³ · ${e.mode_count||0} modes</div>`;}return `<div class="fld full modefld"><label><span class="sym">geo</span><span class="nm">${L('几何输入方式','geometry input mode')}</span></label><div class="modebar">${item('simple','默认近轴','simple near-axis')}${item('axis','磁轴 Fourier','axis Fourier')}${item('boundary','边界 Fourier','boundary Fourier')}${item('equilibrium','VMEC/DESC 平衡','VMEC/DESC equilibrium')}</div>${summary}</div>`;}
 
 function migrateStellRadius(){if(CUR==='stellarator'&&VALS&&!('a'in VALS)&&'A'in VALS&&'R0'in VALS){VALS.a=VALS.R0/VALS.A;delete VALS.A;}}
 
@@ -357,7 +373,9 @@ function applyStellVariant(mode,v){
   }
 }
 function setStellGeomMode(mode){
+  if(mode==='equilibrium'){document.getElementById('equilibriumFileIn').click();return;}
   stashStellGeom();VALS._geom_mode=mode;
+  delete VALS.equilibrium;
   const variant=(typeof stellVariant==='function')?stellVariant(mode):null;
   if(variant&&typeof applyStellVariant==='function'){applyStellVariant(mode,variant);return;}
   if(mode==='simple'){delete VALS.shape;delete VALS.rc;delete VALS.zs;delete VALS.iota;delete VALS.Vp_override;delete VALS.Sw_override;}
@@ -379,7 +397,7 @@ function showParamForMode(p){
   if(p==='delta_h')return mode==='simple';
   if(p==='rc'||p==='zs')return mode==='axis'||mode==='boundary';
   if(p==='etabar')return mode==='simple'||mode==='axis';
-  if(p==='Vp_override'||p==='Sw_override'||p==='iota')return mode==='boundary';
+  if(p==='Vp_override'||p==='Sw_override'||p==='iota')return mode==='boundary'||(mode==='equilibrium'&&p!=='Sw_override');
   if(p==='shape')return false;  // shape is opaque, never a UI field
   return true;
 }
@@ -396,7 +414,7 @@ function showTokParamForMode(p){
   return true;}
 
 const DENS=new Set(['ni0','n0']);const OUT_DENS=new Set(['ne0','ni0','n0','nbar','n_Sudo','nbar_geom']);
-const BOOLS=new Set(['use_tauE','geom_weighted']);const dsc=k=>DENS.has(k)?1e-20:1;  // density display in 10^20 m^-3
+const BOOLS=new Set(['use_tauE','use_tauC','cyclotron_B_nonuniform','geom_weighted']);const dsc=k=>DENS.has(k)?1e-20:1;  // density display in 10^20 m^-3
 const SELF_LOSS_PARAMS={
   tokamak:['H_fac'],
   mirror:['f_alpha','B_expand','phi_i_over_Te','lnLambda'],
@@ -416,6 +434,30 @@ const RANGES={
 };
 const jget=async u=>(await fetch(u)).json();
 const jpost=async(u,b)=>(await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})).json();
+const jpostBinary=async(u,data,name)=>(await fetch(u,{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Filename':encodeURIComponent(name)},body:data})).json();
+
+function applyImportedEquilibrium(imported){
+  const metrics=imported.metrics||{},iota=imported.iota||{};
+  VALS._geom_mode='equilibrium';VALS.equilibrium=imported;VALS.shape=imported.shape;
+  VALS.R0=+metrics.R0_m;VALS.a=+metrics.boundary_scale_m;VALS.N_fp=+imported.nfp;
+  VALS.iota=Math.abs(+iota.rho_2_3);VALS.Vp_override=+metrics.Vp_m3;VALS.Sw_override=0;
+  if(imported.B0_T!=null&&isFinite(+imported.B0_T)&&+imported.B0_T>0)VALS.B0=+imported.B0_T;
+  delete VALS.rc;delete VALS.zs;delete VALS.delta_h;
+}
+
+async function onEquilibriumFile(e){
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{
+    const imported=await jpostBinary('/api/stellarator/equilibrium/preview',await f.arrayBuffer(),f.name);
+    if(imported.error)throw new Error(imported.error);
+    const s=imported.source||{},q=imported.iota||{},m=imported.metrics||{};
+    const warnings=(imported.warnings||[]).join('\n');
+    const summary=`${L('导入平衡预览','Equilibrium import preview')}\n${s.format||''} · ${s.filename||''}\nNFP=${imported.nfp}\nR0=${fmt(m.R0_m)} m · a_vol=${fmt(m.a_vol_m)} m\nι(axis/2⁄3/edge)=${fmt(q.axis)} / ${fmt(q.rho_2_3)} / ${fmt(q.edge)}\nVp=${fmt(m.Vp_m3)} m³ · Sp=${fmt(m.Sp_m2)} m²\nmodes=${imported.mode_count||0}${warnings?`\n\n⚠ ${warnings}`:''}\n\n${L('应用并覆盖当前仿星器几何？','Apply and replace current stellarator geometry?')}`;
+    if(!confirm(summary))return;
+    applyImportedEquilibrium(imported);STELL_STASH={};stashStellGeom();ADVANCED=true;
+    buildParams();buildThresh();buildPlotOpts();fitScanRanges();await recompute();setView('shape');
+  }catch(err){document.getElementById('err').textContent=L('平衡导入失败：','equilibrium import failed: ')+(err.message||err);}
+}
 const fillSel=(s,it,v)=>s.innerHTML=it.map(i=>`<option ${i===v?'selected':''}>${i}</option>`).join('');
 function fillPresets(sel,presets,groups,val){
   if(!groups){fillSel(sel,presets,val);return;}
@@ -470,6 +512,7 @@ async function init(){
   saveP.onclick=()=>dl('polyfusion_'+CUR+'_params.json',JSON.stringify(VALS,null,2));
   loadP.onclick=()=>document.getElementById('fileIn').click();
   document.getElementById('fileIn').onchange=onLoadFile;
+  document.getElementById('equilibriumFileIn').onchange=onEquilibriumFile;
   expJson.onclick=()=>LASTRUN&&dl('polyfusion_'+CUR+'_point.json',JSON.stringify(LASTRUN,null,2));
   expCsv.onclick=()=>LASTSCAN&&dl('polyfusion_'+CUR+'_popcon.csv',scanCsv(LASTSCAN));
   applyLang();
@@ -501,7 +544,7 @@ function selectConfig(name){
   document.querySelectorAll('.cfg').forEach(b=>b.classList.toggle('on',b.dataset.c===name));
   const defP=(m.preset_groups&&Object.values(m.preset_groups).flat().find(n=>m.presets.includes(n)))||m.presets[0];
   refreshPresetOptions(defP);
-  const ps=m.params.filter(p=>p!=='icase'&&p!=='rc'&&p!=='zs'&&!BOOLS.has(p));
+  const ps=m.params.filter(p=>p!=='icase'&&p!=='rc'&&p!=='zs'&&!BOOLS.has(p)&&p!=='tauC');
   fillSel(xkey,ps,m.scan_defaults.xkey);fillSel(ykey,ps,m.scan_defaults.ykey);
   const sd=m.scan_defaults;xmin.value=sd.xmin*dsc(sd.xkey);xmax.value=sd.xmax*dsc(sd.xkey);ymin.value=sd.ymin*dsc(sd.ykey);ymax.value=sd.ymax*dsc(sd.ykey);
   xkey.onchange=()=>{const r=RANGES[xkey.value]||[0,1];xmin.value=r[0]*dsc(xkey.value);xmax.value=r[1]*dsc(xkey.value);fitAxis(xkey.value,xmin,xmax);};
@@ -509,6 +552,19 @@ function selectConfig(name){
   document.getElementById('stCfg').textContent=cfgL(name);
   PLOTSEL=new Set(m.contour_spec.filter(c=>c.on).map(c=>c.f));
   loadPreset();
+}
+function refreshCyclotronScanAxes(){
+  if(!['mirror','frc','dipole'].includes(CUR))return;
+  const manual=VALS.use_tauC===1,m=CONFIGS[CUR];
+  const ps=m.params.filter(p=>p!=='icase'&&p!=='rc'&&p!=='zs'&&!BOOLS.has(p)
+    &&p!==(manual?'Rw':'tauC'));
+  const reset=(el,def,minEl,maxEl)=>{
+    const old=el.value,next=ps.includes(old)?old:(ps.includes(def)?def:ps[0]);
+    fillSel(el,ps,next);
+    if(old!==next){const r=RANGES[next]||[0,1];minEl.value=r[0]*dsc(next);maxEl.value=r[1]*dsc(next);}
+  };
+  reset(xkey,m.scan_defaults.xkey,xmin,xmax);
+  reset(ykey,m.scan_defaults.ykey,ymin,ymax);
 }
 async function loadPreset(){
   updateDelState();
@@ -518,17 +574,21 @@ async function loadPreset(){
     const name=pv.slice(UMARK.length);const stored=upGet(CUR)[name];
     if(!stored){await selectConfig(CUR);return;}   // gone (e.g. cleared) -> reset
     VALS=JSON.parse(JSON.stringify(stored));
+    migrateTauC();
+    migrateCyclotronB();
     if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();}
-    buildParams();buildThresh();buildPlotOpts();fitScanRanges();
+    refreshCyclotronScanAxes();buildParams();buildThresh();buildPlotOpts();fitScanRanges();
     await recompute();setView(VIEW);
     return;
   }
   const r=await jpost('/api/run',{config:CUR,preset:pv});
   VALS=Object.assign({},r.inputs);
+  migrateTauC();
+  migrateCyclotronB();
   // auto-reveal advanced inputs if this preset carries any (measured machines)
   if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();}
   ADVANCED=(VALS.Vp_override>0)||(VALS.Sw_override>0)||Array.isArray(VALS.rc)||Array.isArray(VALS.zs)||isPlainObject(VALS.shape);
-  buildParams();buildThresh();buildPlotOpts();applyRun(r);fitScanRanges();setView(VIEW);
+  refreshCyclotronScanAxes();buildParams();buildThresh();buildPlotOpts();applyRun(r);fitScanRanges();setView(VIEW);
 }
 function savePreset(){
   const raw=prompt(L('预设名称','Preset name'));
@@ -582,8 +642,14 @@ function buildParams(){
       if(CUR==='stellarator'&&gk==='geo'&&!showParamForMode(p))continue;
       if(CUR==='tokamak'&&gk==='geo'&&!showTokParamForMode(p))continue;
       if(CUR==='tokamak'&&p==='geom_model')continue;
-      if(BOOLS.has(p)){const onTxt=p==='use_tauE'?L('开启：输入 τE','on: input tauE'):L('开启','on');
-        const offTxt=p==='use_tauE'?L('关闭：自洽损失','off: self-consistent losses'):L('关闭','off');
+      if(BOOLS.has(p)){const onTxt=p==='use_tauE'?L('开启：输入 τE','on: input tauE')
+        :p==='use_tauC'?L('开启：输入 τC','on: input tauC')
+        :p==='cyclotron_B_nonuniform'?L('开启：考虑 B 不均匀','on: include nonuniform B'):L('开启','on');
+        const offTxt=p==='use_tauE'?L('关闭：自洽损失','off: self-consistent losses')
+        :p==='use_tauC'?(CUR==='mirror'?L('关闭：磁镜 B²·⁵ 体积矩','off: mirror B^2.5 volume moment')
+          :CUR==='frc'?L('关闭：FRC B²·⁵ 体积矩','off: FRC B^2.5 volume moment')
+          :L('关闭：有限环赤道壳层代理','off: finite-ring equatorial-shell proxy'))
+        :p==='cyclotron_B_nonuniform'?L('关闭：使用均匀参考场','off: use uniform reference field'):L('关闭','off');
         html+=`<div class="fld full"><label title="${desc}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span></label><select data-p="${p}" data-bool="1"><option value="1" ${VALS[p]!==0?'selected':''}>${onTxt}</option><option value="0" ${VALS[p]===0?'selected':''}>${offTxt}</option></select></div>`;}
       else if(p==='m'){continue;}  // FRC paper shape index: derived from f_shape (API-only input); m_shape is shown as output
       else if(p==='sep_model'){const SM=[['superellipse',L('超椭圆(默认)','superellipse (default)')],['mrr',L('MRR 论文分离面','MRR paper separatrix')]];const cur=VALS.sep_model||'superellipse';
@@ -617,6 +683,7 @@ function buildParams(){
   }
   // stellarator geometry mode switch handlers
   box.querySelectorAll('[data-gmode]').forEach(b=>b.onclick=()=>{
+    if(b.dataset.gmode==='equilibrium'){setStellGeomMode('equilibrium');return;}
     setStellGeomMode(b.dataset.gmode);
     buildParams();buildThresh();buildPlotOpts();fitScanRanges();
     recompute();
@@ -667,6 +734,7 @@ function buildParams(){
     else if(el.dataset.p==='sep_model')VALS.sep_model=el.value;
     else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
     applyModeLocks();
+    if(el.dataset.p==='use_tauC')refreshCyclotronScanAxes();
     clearTimeout(timer);timer=setTimeout(()=>{updateA0();fitScanRanges();recompute();},280);});
   if(CUR==='tokamak'&&(+VALS.geom_model||0)===2){
     const geoGrid=box.querySelector('.pgrid[data-grp="geo"]');
@@ -698,10 +766,16 @@ function buildParams(){
 }
 function applyModeLocks(){
   const manual=VALS.use_tauE!==0;
+  const hasTauC=['mirror','frc','dipole'].includes(CUR);
+  const manualTauC=hasTauC&&VALS.use_tauC===1;
   const lock=(p,disabled)=>{document.querySelectorAll(`[data-p="${p}"]`).forEach(el=>{el.disabled=!!disabled;const f=el.closest('.fld');if(f)f.style.opacity=disabled?0.45:1;});};
-  if(FORCE_TAUE.has(CUR)){VALS.use_tauE=1;document.querySelectorAll('[data-p="use_tauE"]').forEach(el=>el.value='1');lock('use_tauE',true);lock('tauE',false);return;}
-  lock('tauE',!manual);
-  (SELF_LOSS_PARAMS[CUR]||[]).forEach(p=>lock(p,manual));
+  if(FORCE_TAUE.has(CUR)){VALS.use_tauE=1;document.querySelectorAll('[data-p="use_tauE"]').forEach(el=>el.value='1');lock('use_tauE',true);lock('tauE',false);}
+  else{lock('tauE',!manual);(SELF_LOSS_PARAMS[CUR]||[]).forEach(p=>lock(p,manual));}
+  if(hasTauC){lock('tauC',!manualTauC);lock('Rw',manualTauC);}
+  if(CUR==='stellarator'&&stellGeomMode()==='equilibrium'){
+    ['R0','a','N_fp','iota','Vp_override'].forEach(p=>lock(p,true));
+    document.querySelectorAll('[data-p]').forEach(el=>{if(['R0','a','N_fp','iota','Vp_override'].includes(el.dataset.p))el.classList.add('equilibriumLockedParam');});
+  }
   // stellarator: when iota is measured (>0) the near-axis transform is overridden,
   // but etabar still drives elongation/Sw — annotate (do NOT disable) the field.
   if(CUR==='stellarator'){
@@ -762,7 +836,7 @@ function cleanStellOverrides(o){
   if(CUR!=='stellarator')return o;
   const mode=stellGeomMode();
   delete o._geom_mode;
-  if(mode==='boundary'){
+  if(mode==='boundary'||mode==='equilibrium'){
     delete o.rc;delete o.zs;delete o.delta_h;
     if(!isPlainObject(o.shape))delete o.shape;
   }else if(mode==='axis'){
@@ -778,7 +852,7 @@ async function recompute(){const r=await jpost('/api/run',{config:CUR,overrides:
 function applyRun(r){
   r._geom_mode=CUR==='stellarator'?stellGeomMode():null;LASTRUN=r;const box=document.getElementById('results');
   if(r.errors){box.innerHTML=`<div class="err">${r.errors.join('\n')}</div>`;caseBadge.textContent='';return;}
-  const o=r.outputs;caseBadge.textContent=o.strcase||CUR;document.getElementById('stRx').textContent=o.strcase||'—';
+  const o=r.outputs;caseBadge.textContent=(o.strcase||CUR)+(o.cyclotron_model?' · '+o.cyclotron_model:'');document.getElementById('stRx').textContent=o.strcase||'—';
   let html='';for(const[g,keys]of RGRP){const rows=keys.filter(k=>k in o&&typeof o[k]==='number').map(k=>{
     const cls=HOT.has(k)?'hot':COOL.has(k)?'cool':WARN.has(k)?'warn':'';
     const isd=OUT_DENS.has(k);const val=isd?o[k]*1e-20:o[k];const uu=isd?'10²⁰ m⁻³':(UNIT[k]||'');
@@ -1118,7 +1192,7 @@ async function runScan(){
   }catch(e){err.textContent=String(e);}finally{run.disabled=false;run.textContent=t;}
 }
 function onLoadFile(e){const f=e.target.files[0];if(!f)return;const rd=new FileReader();
-  rd.onload=()=>{try{const d=JSON.parse(rd.result);Object.assign(VALS,d);if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();}buildParams();recompute();}catch(err){document.getElementById('err').textContent='JSON: '+err.message;}};
+  rd.onload=()=>{try{const d=JSON.parse(rd.result);Object.assign(VALS,d);migrateTauC();migrateCyclotronB();refreshCyclotronScanAxes();if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();}buildParams();recompute();}catch(err){document.getElementById('err').textContent='JSON: '+err.message;}};
   rd.readAsText(f);e.target.value='';}
 function dl(name,text){const b=new Blob([text],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();URL.revokeObjectURL(a.href);}
 function scanCsv(s){const F=Object.keys(s.fields);let out='# '+s.xkey+','+s.ykey+','+F.join(',')+'\n';

@@ -269,6 +269,45 @@ console.log(JSON.stringify({{axis, boundary, simple}}));
     assert data["simple"] == {"delta_h": 0.31, "etabar": 0.119, "hasShape": False, "hasRc": False, "hasIota": False}
 
 
+def test_frontend_restores_matching_authoritative_boundary_iota_from_stale_zero():
+    src = open(INDEX, encoding="utf-8").read()
+    support = [
+        _extract_function(src, "isPlainObject"),
+        _extract_function(src, "cloneJson"),
+        _extract_function(src, "isFiniteNum"),
+        _extract_function(src, "inferStellGeomMode"),
+        _extract_function(src, "stellGeomMode"),
+        _extract_function(src, "normalizeStellBoundaryIota"),
+    ]
+    shape = {
+        "kind": "fourier", "nfp": 5,
+        "R": [[1, 0, 1.0]], "Z": [[-1, 0, 1.0]],
+    }
+    vals = {
+        "_geom_mode": "boundary",
+        "shape": shape,
+        "iota": 0.0,
+        "geometry_variants": {
+            "authority": "boundary",
+            "boundary": {"shape": shape, "iota": 0.88},
+        },
+    }
+    js = f"""
+let CUR = 'stellarator';
+let VALS = {json.dumps(vals)};
+{chr(10).join(support)}
+normalizeStellBoundaryIota();
+const restored = VALS.iota;
+VALS.iota = 0;
+VALS.shape.R[0][2] = 0.9;
+normalizeStellBoundaryIota();
+console.log(JSON.stringify({{restored, edited: VALS.iota}}));
+"""
+    out = subprocess.check_output(["node", "-e", js], cwd=ROOT, text=True)
+    data = json.loads(out)
+    assert data == {"restored": 0.88, "edited": 0}
+
+
 def test_iota_uses_only_the_current_geometry_parameters():
     presets, _ = load_presets("stellarator")
     for mode in ("simple", "axis"):

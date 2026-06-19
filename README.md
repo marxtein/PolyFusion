@@ -97,6 +97,29 @@ PolyFusion/
 
 ---
 
+## 非环形位形的回旋辐射模式
+
+磁镜、FRC 和偶极场均提供两种互斥的 `Pcycl` 计算口径：
+
+- 默认 `use_tauC=0`：采用各位形自己的快速工程公式。磁镜和 FRC 使用
+  \(B^{2.5}\) 体积矩与全局光学半径；偶极场采用有限环赤道磁通壳代理。
+- `use_tauC=1`：用户输入等效损失时间 `tauC`，按电子热储能计算 `Pcycl = Eth_e/tauC`。
+
+输出 `tauC_eff` 表示当前口径对应的等效回旋辐射损失时间。内置公式是从
+Trubnikov/Kukushkin 标度外推的 0D 工程近似，不是完整辐射输运或射线追踪模型。
+公式背景见 [IAEA FEC 2008 TH/P3-10](https://www-pub.iaea.org/MTCD/Meetings/FEC2008/th_p3-10.pdf)。
+
+托卡马克和仿星器另提供 `cyclotron_B_nonuniform` 开关：
+
+- 关闭（默认）：沿用均匀参考磁场的原公式。
+- 开启：托卡马克采用 \(B_T(R)=B_0R_0/R\) 的 Miller 体积矩；仿星器采用
+  一阶近轴 \(B/B_0=1+\bar\eta r\cos\theta\) 的体积矩。
+
+输出 `cyclotron_B25_factor` 是乘到原 `Pcycl` 上的无量纲修正。该开关只评估
+磁场幅值不均匀性的快速影响，不包含 CYNEQ 类频率、吸收、反射和非局域输运。
+
+---
+
 ## License
 
 MIT

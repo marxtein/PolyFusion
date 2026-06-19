@@ -17,7 +17,9 @@
       "Zimp": 10,
       "Rw": 0.9,
       "use_tauE": 1.0,
-      "ring_model": 0
+      "use_tauC": 0.0,
+      "tauC": 1.0,
+      "ring_model": 1
     },
     "Dipole-DHe3": {
       "r_ring": 1.0,
@@ -36,7 +38,9 @@
       "Zimp": 10,
       "Rw": 0.9,
       "use_tauE": 1.0,
-      "ring_model": 0
+      "use_tauC": 0.0,
+      "tauC": 1.0,
+      "ring_model": 1
     },
     "LDX": {
       "r_ring": 0.3,
@@ -55,7 +59,9 @@
       "Zimp": 10,
       "Rw": 0.9,
       "use_tauE": 1.0,
-      "ring_model": 0
+      "use_tauC": 0.0,
+      "tauC": 1.0,
+      "ring_model": 1
     }
   },
   "groups": {

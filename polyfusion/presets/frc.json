@@ -17,6 +17,8 @@
       "fimp": 0.0,
       "Zimp": 10,
       "use_tauE": 1.0,
+      "use_tauC": 0.0,
+      "tauC": 1.0,
       "geom_weighted": 0.0
     },
     "Helion-DHe3": {
@@ -36,6 +38,8 @@
       "fimp": 0.0,
       "Zimp": 10,
       "use_tauE": 1.0,
+      "use_tauC": 0.0,
+      "tauC": 1.0,
       "geom_weighted": 0.0
     },
     "C-2W": {
@@ -55,6 +59,8 @@
       "fimp": 0.0,
       "Zimp": 10,
       "use_tauE": 1.0,
+      "use_tauC": 0.0,
+      "tauC": 1.0,
       "geom_weighted": 0.0
     }
   },

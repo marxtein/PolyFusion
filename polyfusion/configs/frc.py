@@ -35,6 +35,7 @@ from ..constants import QE, MP, MU0, MEC2
 from ..reactivity import reactivity
 from ..tokamak import _REACTIONS, twotemp_diagnostics
 from ..impurity import lz_line_net, SPECIES as _IMP_SPECIES
+from ..cyclotron import resolve_cyclotron_power
 
 _KEV_J = 1e3 * QE
 
@@ -55,6 +56,7 @@ class FRCResult:
     G1: float         # <n>/n_m volume-average factor used by the power account
     G2: float         # <n^2>/n_m^2 volume-average factor used by fusion/radiation
     GB: float         # <|B|>/B_e volume-average factor used by synchrotron estimate
+    GB25: float       # <|B/B_e|^2.5> volume moment used by synchrotron estimate
     p_shape: float    # superellipse exponent matching f_shape
     f_shape_calc: float  # volume factor recovered from p_shape
     geom_weighted: float # 1 = use finite-length superellipse weighting
@@ -78,6 +80,7 @@ class FRCResult:
     tau_classical: float  # resistive classical cross-field bound [s] (optimistic)
     tau_Bohm: float       # Bohm-diffusion bound [s] (pessimistic)
     P_line: float     # impurity line radiation [MW] (0 unless imp_name given)
+    tauC_eff: float   # effective cyclotron-radiation loss time [s]
     Ecrit: float; f_fast_ion: float; tau_eq_ie: float; P_ei: float
     strcase: str
 
@@ -98,6 +101,22 @@ def _solve_K(beta_avg: float) -> float:
         else:
             hi = mid
     return 0.5 * (lo + hi)
+
+
+def _rr_B25_moment(K: float, *, f_shape: float | None = None,
+                    m_shape: float | None = None, n: int = 401) -> float:
+    """Volume average of ``|B/B_e|**2.5`` for the selected FRC shell weight."""
+    x = np.linspace(0.0, 1.0, n)
+    if m_shape is not None:
+        weight = 2.0 * x * np.clip(1.0 - x**2, 0.0, 1.0) ** (1.0 / m_shape)
+    elif f_shape is not None:
+        p = _frc_p_from_f_shape(f_shape)
+        weight = 2.0 * x * np.clip(1.0 - x**p, 0.0, 1.0) ** (1.0 / p)
+    else:
+        weight = 2.0 * x
+    weight /= float(np.trapezoid(weight, x))
+    brel = np.abs(np.tanh(K * (2.0 * x**2 - 1.0)))
+    return float(np.trapezoid(weight * brel**2.5, x))
 
 
 def _beta_fn(a: float, b: float) -> float:
@@ -507,7 +526,8 @@ def frc_shape_outlines(r_s, l_s, r_w, f_shape=None, n_theta=181,
 def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
               f_shape=None, fsig=1.0, geom_weighted=0.0,
               Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
-              imp_name=None, sep_model="superellipse", m=None) -> FRCResult:
+              imp_name=None, sep_model="superellipse", m=None,
+              use_tauC=0.0, tauC=None) -> FRCResult:
     """Evaluate the 0-D FRC power balance at one operating point.
 
     Parameters (SI / keV); see docs/25 §3.  ``f_shape`` interpolates the
@@ -533,6 +553,8 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
         raise ValueError(f"B_e, Ti, Te must be > 0 (got {B_e}, {Ti}, {Te})")
     if manual_tauE and tauE <= 0:
         raise ValueError(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
+    if bool(use_tauC) and (tauC is None or tauC <= 0):
+        raise ValueError(f"tauC must be > 0 when use_tauC is enabled (got {tauC})")
     if not 2.0 / 3.0 - 1e-9 <= f_shape <= 1.0:
         raise ValueError(f"f_shape must be in [2/3, 1] (ellipse..racetrack), got {f_shape}")
     if not 0.0 <= f1 <= 1.0:
@@ -582,6 +604,12 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
             G2 = (tK - tK**3 / 3.0) / K          # <n^2>/n_m^2
             GB = math.log(math.cosh(K)) / K      # <|B|>/B_e
     GB_flux = math.log(math.cosh(K)) / K     # cross-section factor for trapped flux
+    if sep_model == "mrr":
+        GB25 = _rr_B25_moment(K, m_shape=m_shape)
+    elif use_geom_weight:
+        GB25 = _rr_B25_moment(K, f_shape=f_shape)
+    else:
+        GB25 = _rr_B25_moment(K)
 
     # ---------- composition (tokamak block) at the field null ----------
     d12 = rx["d12"]
@@ -618,8 +646,12 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
              * (Zeff + 0.7936 * t + 1.874 * t**2 + 3 / math.sqrt(2) * t)
              * 1e-6 * Vp)
     B_int = B_e * GB
-    Pcycl = (4.14e-7 * (ne_m * G1 / 1e20)**0.5 * Te**2.5 * B_int**2.5
-             * (1 - Rw)**0.5 * r_s**-0.5 * (1 + 2.5 * Te / 511) * Vp)
+    formula_Pcycl = (4.14e-7 * (ne_m * G1 / 1e20)**0.5 * Te**2.5
+                     * B_e**2.5 * GB25 * (1 - Rw)**0.5 * r_s**-0.5
+                     * (1 + 2.5 * Te / 511) * Vp)
+    Eth_e = 1.5 * ne_m * Te * _KEV_J * G1 * Vp * 1e-6
+    Pcycl, tauC_eff = resolve_cyclotron_power(
+        formula_Pcycl, Eth_e, use_tauC, tauC)
 
     # ---------- confinement ----------
     if manual_tauE:
@@ -681,7 +713,7 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
         Pbrem=Pbrem, Pcycl=Pcycl,
         Ptrans=Ptrans, Pn=Pn, Pwall=Pwall, Eth=Eth,
         tau_E=tau_E, ntau=ni_m * G1 * tau_E,
-        K_rr=K, G1=G1, G2=G2, GB=GB,
+        K_rr=K, G1=G1, G2=G2, GB=GB, GB25=GB25,
         p_shape=p_shape, f_shape_calc=f_shape_calc,
         geom_weighted=1.0 if use_geom_weight else 0.0,
         beta=beta_avg, beta_null=1.0, x_s=x_s, elongation=elongation,
@@ -690,6 +722,7 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
         Vp=Vp, Sp=Sp, Sw=Sw, sep_model=sep_model, m_shape=m_shape, Zeff=Zeff, M=M,
         tau_eta=tau_eta, tauN_o_taueta=tau_E / tau_eta,
         tau_classical=tau_classical, tau_Bohm=tau_Bohm, P_line=P_line,
+        tauC_eff=tauC_eff,
         Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq, P_ei=P_ei,
         strcase=rx["name"],
     )
