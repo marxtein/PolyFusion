@@ -129,23 +129,21 @@ def _points_in_polygon(px, pz, polyR, polyZ):
     return (np.count_nonzero(cross, axis=1) % 2 == 1)
 
 
-def _clamp_surface_inside(Rb, Zb, aR, aZ, scale, polyR, polyZ, iters=14):
-    """Place a nested flux surface at fractional ``scale`` along the rays
-    axis->boundary, but pulled in to the FIRST boundary crossing so it stays
-    strictly inside even where the boundary is concave (non-star-shaped about
-    the axis).  Per-vertex bisection of the scale between 0 (axis, always inside)
-    and ``scale``; vertices whose whole [0,scale] ray is interior keep ``scale``.
-    """
-    Rb = np.asarray(Rb, float); Zb = np.asarray(Zb, float)
-    dR = Rb - aR; dZ = Zb - aZ
-    lo = np.zeros_like(Rb); hi = np.full_like(Rb, float(scale))
+def _clamp_points_inside(Rs, Zs, cR, cZ, polyR, polyZ, iters=14):
+    """Pull any surface vertex that lies OUTSIDE the boundary back along the ray
+    from the magnetic axis ``(cR, cZ)`` to the first boundary crossing.  Vertices
+    already inside are left untouched (so the natural rounded fade shape is
+    preserved); only the few that poke through a concave boundary are clamped.
+    Bisection per vertex between 0 (axis, inside) and 1 (the given vertex)."""
+    Rs = np.asarray(Rs, float); Zs = np.asarray(Zs, float)
+    dR = Rs - cR; dZ = Zs - cZ
+    lo = np.zeros_like(Rs); hi = np.ones_like(Rs)
     for _ in range(iters):
         mid = 0.5 * (lo + hi)
-        ins = _points_in_polygon(aR + mid * dR, aZ + mid * dZ, polyR, polyZ)
+        ins = _points_in_polygon(cR + mid * dR, cZ + mid * dZ, polyR, polyZ)
         lo = np.where(ins, mid, lo)
         hi = np.where(ins, hi, mid)
-    sc = lo
-    return aR + sc * dR, aZ + sc * dZ
+    return cR + lo * dR, cZ + lo * dZ
 
 
 def axis_length(R0: float, N_fp: float, delta_h: float, n: int = 720) -> float:
@@ -420,33 +418,25 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
     def _build_cut(frac, label, clamp=True):
         phi = frac * 2 * math.pi / nfp
         Rb, Zb = _shape_RZ(phi, 1.0)              # boundary at this cut
-        # Nested flux surfaces by a self-similar morph from the magnetic axis to
-        # the boundary: S(rho) = axis + rho*(boundary - axis).  Every interior
-        # point lies on the segment [axis, boundary], so the surfaces are STRICTLY
-        # nested inside any star-shaped boundary (true for a real LCFS about its
-        # axis) and can never cross a strongly-shaped (bean) boundary.  The old
-        # per-harmonic fade (m>=2 ~ rho^1.5) rounded toward the axis but let the
-        # imported W7-X bean's flux surfaces poke OUTSIDE the boundary on the
-        # concave side ("磁面与边界交叠").  rho=1 still reproduces the boundary
-        # exactly, so the 0-D power account (boundary-only) is unchanged.
+        # Nested flux surfaces use the per-harmonic fade (m=0 axis fixed, m=1
+        # scales with rho, m>=2 shaping fades as rho^1.5): surfaces round smoothly
+        # toward the magnetic axis — the natural look, and the axis sits centred
+        # inside them.  For a strongly-shaped imported boundary (W7-X bean) the
+        # fade can let a surface poke just OUTSIDE the boundary on the concave
+        # side ("磁面与边界交叠"); clamp ONLY the offending vertices back toward
+        # the magnetic axis, preserving the rounded shape while guaranteeing
+        # containment.  rho=1 reproduces the boundary exactly, so the 0-D power
+        # account (boundary-only) is unchanged.
         aR, aZ = _axis_point(phi)                 # true magnetic axis (inside)
         Rclosed, Zclosed = _closed_list(Rb), _closed_list(Zb)
         surfaces = []
         for surface_scale, rho in zip(rhos, rho_labels or rhos):
             if surface_scale >= 1.0:
                 Rr, Zr = Rb, Zb                   # rho=1 IS the boundary, exactly
-            elif clamp:
-                # homothety about the axis can still poke a non-star-shaped
-                # (bean) boundary outward at concavities; clamp each vertex to
-                # the first boundary crossing so the surface stays strictly inside.
-                # (Static display cuts only — skipped for the ~120 scrub frames,
-                # where plain homothety is near-exact and clamping all frames is
-                # too slow for an interactive geometry build.)
-                Rr, Zr = _clamp_surface_inside(Rb, Zb, aR, aZ, surface_scale,
-                                               Rclosed, Zclosed)
             else:
-                Rr = aR + surface_scale * (Rb - aR)
-                Zr = aZ + surface_scale * (Zb - aZ)
+                Rr, Zr = _shape_RZ(phi, surface_scale)        # rounded fade nesting
+                if clamp:                                     # static cuts only
+                    Rr, Zr = _clamp_points_inside(Rr, Zr, aR, aZ, Rclosed, Zclosed)
             surfaces.append({"rho": float(rho),
                              "surface_scale": float(surface_scale),
                              "R": _closed_list(Rr),
