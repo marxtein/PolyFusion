@@ -378,6 +378,25 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
     rhos = _NEST_RHOS
     cuts = [(0.0, "φ=0"), (0.25, "φ=T/4"), (0.5, "φ=T/2")]
 
+    # When a real equilibrium was imported, the shape carries the actual interior
+    # flux surfaces (native VMEC Fourier, several radial surfaces).  Draw THOSE
+    # directly instead of synthesizing nested surfaces — they are nested by
+    # construction and the magnetic axis sits centred.  ``interior_surfaces`` is
+    # absent for the cartoon presets, which keep the synthesized fade unchanged.
+    INTERIOR = shape.get("interior_surfaces")
+
+    def _eval_native(surf, phi):
+        R = np.zeros_like(th); Z = np.zeros_like(th)
+        for m, n, c in surf.get("R_c", ()):
+            R += c * np.cos(m * th - n * nfp * phi)
+        for m, n, c in surf.get("R_s", ()):
+            R += c * np.sin(m * th - n * nfp * phi)
+        for m, n, c in surf.get("Z_s", ()):
+            Z += c * np.sin(m * th - n * nfp * phi)
+        for m, n, c in surf.get("Z_c", ()):
+            Z += c * np.cos(m * th - n * nfp * phi)
+        return R, Z
+
     def _fade(m, rho):
         # m=0 (axis position) fixed; m=1 (ellipse body) scales with size (rho);
         # m>=2 (bean/triangle shaping) fades one order above linear (rho^1.5) so
@@ -417,6 +436,27 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
 
     def _build_cut(frac, label, clamp=True):
         phi = frac * 2 * math.pi / nfp
+        if INTERIOR:
+            # REAL equilibrium: draw the wout's own nested flux surfaces. The
+            # outermost (rho=1) is the LCFS / display boundary; surfaces are
+            # nested by construction with the magnetic axis centred.
+            Rb, Zb = _eval_native(INTERIOR[-1], phi)
+            Rclosed, Zclosed = _closed_list(Rb), _closed_list(Zb)
+            surfaces = []
+            for surf in INTERIOR:
+                if surf["rho"] >= 1.0:
+                    Rr, Zr = Rb, Zb
+                else:
+                    Rr, Zr = _eval_native(surf, phi)
+                surfaces.append({"rho": float(surf["rho"]),
+                                 "surface_scale": float(surf["rho"]),
+                                 "R": _closed_list(Rr),
+                                 "Z": _closed_list(Zr)})
+            elong = float((Zb.max() - Zb.min()) / (Rb.max() - Rb.min()))
+            wR, wZ = _offset_closed_curve_normal(Rclosed, Zclosed, g)
+            return {"label": label, "elong": elong, "frac": float(frac),
+                    "R": Rclosed, "Z": Zclosed, "surfaces": surfaces,
+                    "wall": {"R": wR.tolist(), "Z": wZ.tolist()}}
         Rb, Zb = _shape_RZ(phi, 1.0)              # boundary at this cut
         # Nested flux surfaces use the per-harmonic fade (m=0 axis fixed, m=1
         # scales with rho, m>=2 shaping fades as rho^1.5): surfaces round smoothly

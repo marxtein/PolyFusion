@@ -99,8 +99,39 @@ def test_imported_equilibrium_flux_surfaces_inside_boundary():
                 f"outside boundary")
 
 
+def test_imported_equilibrium_uses_real_nested_interior_surfaces():
+    """When a VMEC equilibrium is imported the shape view must draw the wout's
+    OWN interior flux surfaces (nested by construction), not the synthesized
+    cartoon fade.  Non-imported presets keep the fade (no interior_surfaces)."""
+    import os
+    nc = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                      "app", "equilibria", "stellarator", "W7-X.nc")
+    if not os.path.isfile(nc):
+        return
+    from polyfusion import equilibrium_import as EI
+    from polyfusion.configs.stellarator import _machine_boundary_outlines
+
+    imp = EI._read_vmec(nc)
+    interior = imp["shape"].get("interior_surfaces")
+    assert interior and len(interior) >= 3, "import must carry real interior surfaces"
+    assert interior[-1]["rho"] == 1.0
+
+    out = _machine_boundary_outlines(imp["metrics"]["R0_m"],
+                                     imp["metrics"]["boundary_scale_m"],
+                                     imp["nfp"], 0.0, 0.05, imp["shape"], 200)
+    for s in out["sections"]:
+        sfc = s["surfaces"]
+        # each surface strictly inside the next one out (real nesting)
+        for k in range(len(sfc) - 1):
+            inner, outer = sfc[k], sfc[k + 1]
+            bad = sum(not _inside(x, y, outer["R"], outer["Z"])
+                      for x, y in zip(inner["R"], inner["Z"]))
+            assert bad == 0, f"{s['label']} surface {k} not nested inside {k+1}"
+
+
 if __name__ == "__main__":
     test_concave_section_wall_never_inside_plasma()
     test_convex_section_wall_outside_and_enlarged()
     test_imported_equilibrium_flux_surfaces_inside_boundary()
+    test_imported_equilibrium_uses_real_nested_interior_surfaces()
     print("PASS")

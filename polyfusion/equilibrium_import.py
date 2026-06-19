@@ -122,8 +122,12 @@ def _read_vmec(path):
         xn = np.rint(xn_raw / nfp).astype(int)
         if not np.allclose(xn * nfp, xn_raw):
             raise ValueError("VMEC xn values must be integer multiples of nfp")
-        rmnc = required("rmnc")[-1]
-        zmns = required("zmns")[-1]
+        rmnc_all = required("rmnc")
+        zmns_all = required("zmns")
+        rmns_all = np.asarray(ds.variables["rmns"][:]) if "rmns" in ds.variables else None
+        zmnc_all = np.asarray(ds.variables["zmnc"][:]) if "zmnc" in ds.variables else None
+        rmnc = rmnc_all[-1]
+        zmns = zmns_all[-1]
         if len(xm) > MAX_MODES:
             raise ValueError(f"equilibrium has {len(xm)} modes; limit is {MAX_MODES}")
 
@@ -146,6 +150,29 @@ def _read_vmec(path):
         axis_rc, axis_zs = _axis_lists(rc, zs)
         R0, scale, shape = _normalise_shape(
             nfp, r_phys, z_phys, axis_rc, axis_zs, "VMEC wout LCFS")
+
+        # Real interior flux surfaces from the wout (rmnc/zmns at several radial
+        # surfaces, NOT just the LCFS), kept in native VMEC Fourier so the shape
+        # view can draw the equilibrium's actual nested surfaces instead of a
+        # synthesized cartoon.  s = normalized toroidal flux, rho = sqrt(s).
+        ns = rmnc_all.shape[0]
+
+        def _native_modes(coeffs):
+            return [[int(m), int(n), float(c)]
+                    for m, n, c in zip(xm, xn, coeffs) if abs(float(c)) > 1e-9]
+
+        interior = []
+        for rho in (0.18, 0.344, 0.508, 0.672, 0.836, 1.0):
+            j = min(ns - 1, max(1, int(round(rho * rho * (ns - 1)))))
+            surf = {"rho": float(rho),
+                    "R_c": _native_modes(rmnc_all[j]),
+                    "Z_s": _native_modes(zmns_all[j])}
+            if rmns_all is not None:
+                surf["R_s"] = _native_modes(rmns_all[j])
+            if zmnc_all is not None:
+                surf["Z_c"] = _native_modes(zmnc_all[j])
+            interior.append(surf)
+        shape["interior_surfaces"] = interior
 
         iota_values = required("iotaf").reshape(-1)
         s_grid = np.linspace(0.0, 1.0, len(iota_values))
