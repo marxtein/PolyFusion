@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh" data-theme="light">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,19 +11,29 @@
 <style>
   :root{--ink:#080b12;--ink2:#0b0f18;--panel:#0e1320;--panel2:#11182a;--line:#1b2334;--line2:#26324a;
     --fg:#e9eef7;--mut:#7c8aa6;--dim:#4b566c;--amber:#ffb02e;--amber-d:#cf8a16;--teal:#36e2c4;--red:#ff5d73;--r:8px;
+    --btn-ink:#0a0f18;--app-grad-a:rgba(255,176,46,.07);--app-grad-b:rgba(54,226,196,.06);
+    --hdr-grad:linear-gradient(180deg,rgba(17,24,42,.9),rgba(10,14,22,.7));--scan-bg:rgba(8,11,18,.5);
+    --vignette:radial-gradient(120% 100% at 50% 0%,transparent 60%,rgba(0,0,0,.55));--micro-grid:rgba(255,255,255,.013);
     --glow:0 0 0 1px rgba(255,176,46,.4),0 0 18px -4px rgba(255,176,46,.55)}
+  /* ---- LIGHT THEME (default) ---- */
+  :root[data-theme=light]{--ink:#eceff5;--ink2:#ffffff;--panel:#ffffff;--panel2:#f2f5fb;--line:#e0e5ee;--line2:#c3cddc;
+    --fg:#16212f;--mut:#51607a;--dim:#8c9ab0;--amber:#a96a00;--amber-d:#855300;--teal:#0e9486;--red:#d23f54;
+    --app-grad-a:rgba(255,176,46,.10);--app-grad-b:rgba(14,148,134,.08);
+    --hdr-grad:linear-gradient(180deg,#ffffff,#eef2f8);--scan-bg:rgba(20,30,48,.03);
+    --vignette:none;--micro-grid:rgba(20,30,48,.018);
+    --glow:0 0 0 1px rgba(169,106,0,.35),0 0 16px -5px rgba(169,106,0,.4)}
   *{box-sizing:border-box}html,body{height:100%}
   body{margin:0;color:var(--fg);background:var(--ink);font-family:"Chakra Petch","Microsoft YaHei","PingFang SC",sans-serif;
     font-size:13.5px;-webkit-font-smoothing:antialiased;overflow:hidden;
-    background-image:radial-gradient(900px 520px at 74% -8%,rgba(255,176,46,.07),transparent 60%),
-      radial-gradient(760px 520px at 4% 108%,rgba(54,226,196,.06),transparent 60%),
+    background-image:radial-gradient(900px 520px at 74% -8%,var(--app-grad-a),transparent 60%),
+      radial-gradient(760px 520px at 4% 108%,var(--app-grad-b),transparent 60%),
       linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
-    background-size:auto,auto,40px 40px,40px 40px}
+    background-size:auto,auto,40px 40px,40px 40px;transition:background-color .25s,color .25s}
   body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
-    background:linear-gradient(rgba(255,255,255,.013) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.013) 1px,transparent 1px),
-      radial-gradient(120% 100% at 50% 0%,transparent 60%,rgba(0,0,0,.55));background-size:8px 8px,8px 8px,auto}
+    background:linear-gradient(var(--micro-grid) 1px,transparent 1px),linear-gradient(90deg,var(--micro-grid) 1px,transparent 1px),
+      var(--vignette);background-size:8px 8px,8px 8px,auto}
   header{position:relative;z-index:2;height:52px;display:flex;align-items:center;gap:16px;padding:0 18px;
-    border-bottom:1px solid var(--line2);background:linear-gradient(180deg,rgba(17,24,42,.9),rgba(10,14,22,.7));backdrop-filter:blur(6px)}
+    border-bottom:1px solid var(--line2);background:var(--hdr-grad);backdrop-filter:blur(6px)}
   .brand .logo{font-weight:700;letter-spacing:.14em;font-size:16px;text-shadow:0 0 16px rgba(255,176,46,.35)}
   .brand .logo b{color:var(--amber)}
   .brand .sub{font-size:10.5px;letter-spacing:.2em;color:var(--mut);text-transform:uppercase;margin-left:9px}
@@ -34,7 +44,7 @@
   .hbtn{font-family:"Chakra Petch";font-size:11px;letter-spacing:.06em;color:var(--mut);background:var(--panel2);
     border:1px solid var(--line2);border-radius:6px;padding:4px 9px;cursor:pointer;transition:.15s}
   .hbtn:hover{color:var(--fg);border-color:var(--teal)}
-  .hbtn.on{color:var(--ink);background:var(--amber);border-color:var(--amber);font-weight:700}
+  .hbtn.on{color:var(--btn-ink);background:var(--amber);border-color:var(--amber);font-weight:700}
   .wrap{position:relative;z-index:1;display:grid;grid-template-columns:362px 1fr 300px;height:calc(100vh - 52px)}
   .col{overflow-y:auto;overflow-x:hidden}
   .col::-webkit-scrollbar{width:8px}.col::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
@@ -49,8 +59,8 @@
     background:var(--panel);color:var(--mut);cursor:pointer;transition:.16s;font-size:12px;font-weight:500}
   .cfg:hover{color:var(--fg);background:var(--panel2)}
   .cfg .ic{width:20px;height:20px;flex:0 0 20px;opacity:.7}
-  .cfg.on{color:var(--ink);background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:var(--amber);box-shadow:var(--glow);font-weight:700}
-  .cfg.on .ic *{stroke:var(--ink)!important}.cfg:nth-child(5){grid-column:1/-1}
+  .cfg.on{color:var(--btn-ink);background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:var(--amber);box-shadow:var(--glow);font-weight:700}
+  .cfg.on .ic *{stroke:var(--btn-ink)!important}.cfg:nth-child(5){grid-column:1/-1}
   select,input,textarea{width:100%;padding:7px 9px;background:var(--ink2);color:var(--fg);border:1px solid var(--line2);
     border-radius:6px;font:13px/1.2 "JetBrains Mono",monospace;transition:.15s;outline:none}
   select:focus,input:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 1px rgba(255,176,46,.25)}select{cursor:pointer}
@@ -82,7 +92,7 @@
   .scanbox{border:1px solid var(--line);border-radius:var(--r);padding:10px;background:rgba(8,11,18,.5)}
   .axis{margin-bottom:8px}
   .axis .hd{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--teal);letter-spacing:.06em;margin-bottom:5px}
-  .axis .hd .tag{font-size:9px;color:var(--ink);background:var(--teal);border-radius:3px;padding:1px 5px;font-weight:700}
+  .axis .hd .tag{font-size:9px;color:var(--btn-ink);background:var(--teal);border-radius:3px;padding:1px 5px;font-weight:700}
   .row3{display:grid;grid-template-columns:1fr 1fr .65fr;gap:5px}.row3 .fld label{font-size:10.5px}
   .thr{display:grid;grid-template-columns:auto auto auto 1fr;gap:5px 7px;align-items:center;margin-bottom:5px}
   .thr .k{font-family:"JetBrains Mono";font-size:12px;color:var(--mut)}.thr .op{color:var(--amber);font-weight:700;text-align:center}
@@ -90,10 +100,10 @@
   .thr .off{opacity:.42}
   .opts{display:flex;flex-wrap:wrap;gap:5px}
   .opt{font-size:11.5px;letter-spacing:.03em;color:var(--mut);border:1px solid var(--line2);border-radius:20px;padding:3px 9px;cursor:pointer;user-select:none;transition:.15s}
-  .opt.on{color:var(--ink);font-weight:700}
+  .opt.on{color:var(--btn-ink);font-weight:700}
   button.run{width:100%;margin-top:10px;padding:11px;border:0;border-radius:var(--r);cursor:pointer;
     font-family:"Chakra Petch";font-weight:700;letter-spacing:.15em;font-size:12.5px;text-transform:uppercase;
-    color:var(--ink);background:linear-gradient(180deg,var(--amber),var(--amber-d));box-shadow:var(--glow);transition:.15s}
+    color:var(--btn-ink);background:linear-gradient(180deg,var(--amber),var(--amber-d));box-shadow:var(--glow);transition:.15s}
   button.run:hover{filter:brightness(1.08);transform:translateY(-1px)}button.run:disabled{filter:grayscale(.5) brightness(.7);cursor:wait;transform:none}
   .err{color:var(--red);font-size:11px;white-space:pre-wrap;margin-top:9px;font-family:"JetBrains Mono"}
   .tabs{display:flex;gap:2px;padding:9px 16px 0;border-bottom:1px solid var(--line)}
@@ -126,6 +136,16 @@
   .modal h3{margin:0 0 4px;color:var(--amber);letter-spacing:.05em}
   .modal p,.modal li{color:var(--mut);font-size:13px;line-height:1.7}.modal b{color:var(--fg)}
   .modal .x{float:right;cursor:pointer;color:var(--mut);font-size:20px;line-height:1}.modal .x:hover{color:var(--fg)}
+  /* tokamak G-EQDSK import button (Task 5) */
+  .eqbtn{display:flex;align-items:center;gap:8px;width:100%;margin-top:2px;padding:9px 11px;cursor:pointer;
+    font-family:"Chakra Petch";font-size:12px;font-weight:600;letter-spacing:.03em;color:var(--teal);
+    background:var(--panel2);border:1px solid var(--line2);border-radius:7px;transition:.15s}
+  .eqbtn:hover{border-color:var(--teal);background:var(--panel);transform:translateY(-1px);box-shadow:0 4px 14px -8px var(--teal)}
+  .eqbtn .ei{font-size:14px;line-height:1}.eqbtn .et{flex:1;text-align:left}
+  .eqbtn.ok{color:var(--btn-ink);background:linear-gradient(180deg,var(--teal),#0c7e72);border-color:var(--teal)}
+  .eqbtn.ok:hover{filter:brightness(1.06)}
+  .eqstat{margin-top:5px;font-size:10.5px;line-height:1.4;color:var(--dim);font-family:"JetBrains Mono"}
+  .eqstat.ok{color:var(--teal)}
 </style>
 </head>
 <body>
@@ -136,7 +156,8 @@
     <span id="stRxL">反应</span> <span class="val" id="stRx">—</span>
     <span><span class="dot"></span> <span class="val">CORE ONLINE</span></span>
     <button class="hbtn" id="helpBtn">?</button>
-    <button class="hbtn on" data-lang="zh">中</button><button class="hbtn" data-lang="en">EN</button>
+    <button class="hbtn" id="themeTog" title="主题 / Theme">☾ Dark</button>
+    <button class="hbtn" id="langTog" title="语言 / Language">EN</button>
   </div>
 </header>
 <div class="wrap">
@@ -164,8 +185,8 @@
   </div>
   <div class="center">
     <div class="tabs">
-      <div class="tab on" data-v="popcon">POPCON</div>
-      <div class="tab" data-v="shape" data-t="tabShape">几何/磁面 Geometry</div>
+      <div class="tab" data-v="popcon">POPCON</div>
+      <div class="tab on" data-v="shape" data-t="tabShape">几何/磁面 Geometry</div>
       <div class="tab" data-v="profile" data-t="tabProf">剖面 Profiles</div>
     </div>
     <div class="plotbar"><span id="plotTitle">—</span><div class="chip" id="plotMeta"></div><span class="phsel" id="phControls"></span></div>
@@ -281,7 +302,8 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   opPoint:'Operating Point',saveP:'⬇ Save Params',loadP:'⬆ Load Params',expJson:'⬇ Result JSON',expCsv:'⬇ Scan CSV',
   tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
   help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
-let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='popcon',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
+let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='shape',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
+let THEME=(()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}})();
 let STELL_STASH={};
 const ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override']);  // expert-only inputs
 const OPAQUE_PARAMS=new Set(['shape','geometry_variants','eq','equilibrium']);  // opaque JSON objects intentionally sent to backend
@@ -504,7 +526,10 @@ async function init(){
   buildConfigPick();
   document.getElementById('cfgN').textContent=Object.keys(CONFIGS).length+' '+L('种','cfgs');
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setView(t.dataset.v));
-  document.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>setLang(b.dataset.lang));
+  try{const sl=localStorage.getItem('polyfusion_lang');if(sl==='zh'||sl==='en')LANG=sl;}catch(e){}
+  applyTheme();
+  document.getElementById('themeTog').onclick=()=>setTheme(THEME==='light'?'dark':'light');
+  document.getElementById('langTog').onclick=()=>setLang(LANG==='zh'?'en':'zh');
   run.onclick=runScan;preset.onchange=loadPreset;
   document.getElementById('saveAsP').onclick=savePreset;document.getElementById('delP').onclick=deletePreset;
   helpBtn.onclick=()=>document.getElementById('help').classList.add('on');
@@ -524,9 +549,16 @@ function buildConfigPick(){
     `<button class="cfg ${n===CUR?'on':''}" data-c="${n}"><span class="ic"><svg viewBox="0 0 64 64" fill="none" stroke="#ffb02e" stroke-width="2">${SCHEMA[n]||''}</svg></span>${cfgL(n)}</button>`).join('');
   pick.querySelectorAll('.cfg').forEach(b=>b.onclick=()=>selectConfig(b.dataset.c));
 }
-function setLang(l){LANG=l;document.querySelectorAll('[data-lang]').forEach(b=>b.classList.toggle('on',b.dataset.lang===l));applyLang();buildConfigPick();if(CUR)document.getElementById('stCfg').textContent=cfgL(CUR);buildParams();buildThresh();buildPlotOpts();if(LASTRUN)applyRun(LASTRUN);setView(VIEW);}
+function setLang(l){LANG=l;try{localStorage.setItem('polyfusion_lang',l);}catch(e){}
+  const b=document.getElementById('langTog');if(b)b.textContent=l==='zh'?'EN':'中';
+  applyLang();buildConfigPick();if(CUR)document.getElementById('stCfg').textContent=cfgL(CUR);buildParams();buildThresh();buildPlotOpts();if(LASTRUN)applyRun(LASTRUN);setView(VIEW);}
+function applyTheme(){document.documentElement.setAttribute('data-theme',THEME);
+  const b=document.getElementById('themeTog');if(b)b.textContent=THEME==='light'?'☾ Dark':'☀ Light';}
+function setTheme(t){THEME=t;try{localStorage.setItem('polyfusion_theme',t);}catch(e){}
+  applyTheme();if(VIEW)setView(VIEW);}
 function applyLang(){
   document.documentElement.lang=LANG;
+  {const b=document.getElementById('langTog');if(b)b.textContent=LANG==='zh'?'EN':'中';}
   document.querySelectorAll('[data-t]').forEach(e=>{const k=e.dataset.t;if(T[LANG][k])e.firstChild&&e.childNodes[0].nodeType===3?e.childNodes[0].textContent=T[LANG][k]+' ':e.textContent=T[LANG][k];});
   // simpler: set known elements
   const set=(id,txt)=>{const e=document.getElementById(id);if(e)e.textContent=txt;};
@@ -541,6 +573,8 @@ function applyLang(){
 }
 function selectConfig(name){
   CUR=name;const m=CONFIGS[name];
+  // drop stellarator-only phase state so it can't bleed into another config's view
+  SHAPE_PHASE=-1;SLIDER_FRAC=null;
   document.querySelectorAll('.cfg').forEach(b=>b.classList.toggle('on',b.dataset.c===name));
   const defP=(m.preset_groups&&Object.values(m.preset_groups).flat().find(n=>m.presets.includes(n)))||m.presets[0];
   refreshPresetOptions(defP);
@@ -742,9 +776,12 @@ function buildParams(){
       const wrap=document.createElement('div');wrap.className='fld full';
       const loaded=isPlainObject(VALS.eq);
       wrap.innerHTML=`<label><span class="sym">eq</span><span class="nm">${L('平衡文件 G-EQDSK','equilibrium file G-EQDSK')}</span></label>`+
-        `<input type="file" id="eqFile" accept=".geqdsk,.eqdsk,.g,.txt"><div class="u" id="eqStat">${loaded?L('已加载 ✓ 已覆盖 R0/A/κ/δ/BT0/Ip · ','loaded ✓ overrode R0/A/κ/δ/BT0/Ip · ')+`Vp=${(+VALS.eq.Vp).toFixed(1)}`:L('未加载（用解析估计）','none (analytic estimate)')}</div>`;
+        `<button type="button" class="eqbtn${loaded?' ok':''}" id="eqBtn"><span class="ei">${loaded?'✓':'⬆'}</span><span class="et">${loaded?L('已加载平衡 · 重新导入','equilibrium loaded · reimport'):L('导入 G-EQDSK 平衡','import G-EQDSK equilibrium')}</span></button>`+
+        `<input type="file" id="eqFile" accept=".geqdsk,.eqdsk,.g,.txt" hidden>`+
+        `<div class="eqstat${loaded?' ok':''}" id="eqStat">${loaded?L('✓ 已覆盖 R0/A/κ/δ/BT0/Ip · ','✓ overrode R0/A/κ/δ/BT0/Ip · ')+`Vp=${(+VALS.eq.Vp).toFixed(1)} m³`:L('未加载（用解析估计）','none — analytic estimate')}</div>`;
       geoGrid.appendChild(wrap);
       const fi=document.getElementById('eqFile');
+      document.getElementById('eqBtn').onclick=()=>fi.click();
       fi.onchange=()=>{const f=fi.files[0];if(!f)return;const rd=new FileReader();
         rd.onload=async()=>{try{
           const r=await jpost('/api/tokamak/parse_eqdsk',{eqdsk:String(rd.result)});
@@ -872,9 +909,14 @@ function applyRun(r){
 }
 function fmt(v){if(v==null||typeof v!=='number'||!isFinite(v))return '—';const a=Math.abs(v);if(a!==0&&(a<1e-2||a>=1e5))return v.toExponential(3);return v.toFixed(a<1?4:3);}
 function setView(v){VIEW=v;document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));if(v==='popcon')drawPopcon();else if(v==='shape')drawShape();else drawProfiles();}
-const LAYOUT=(xt,yt)=>({paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(9,13,21,0.5)',font:{color:'#8b98a9',family:'JetBrains Mono',size:11},
-  margin:{l:64,r:16,t:10,b:50},xaxis:{title:{text:xt,font:{family:'Chakra Petch',size:13,color:'#e9eef7'}},gridcolor:'rgba(43,54,72,0.55)',zeroline:false,linecolor:'#2b3648'},
-  yaxis:{title:{text:yt,font:{family:'Chakra Petch',size:13,color:'#e9eef7'}},gridcolor:'rgba(43,54,72,0.55)',zeroline:false,linecolor:'#2b3648'},showlegend:true,legend:{orientation:'h',y:-0.18,font:{size:10,color:'#aab6cc'}}});
+// theme-aware plot palette: dark keeps the original neon-on-ink look, light
+// switches to ink-on-paper with darker grid/axis so every label stays legible.
+function plotTheme(){const d=THEME!=='light';return d?
+  {paper:'rgba(0,0,0,0)',plot:'rgba(9,13,21,0.5)',font:'#8b98a9',title:'#e9eef7',grid:'rgba(43,54,72,0.55)',axis:'#2b3648',legend:'#aab6cc'}:
+  {paper:'rgba(0,0,0,0)',plot:'rgba(248,250,253,0.85)',font:'#51607a',title:'#16212f',grid:'rgba(120,138,168,0.28)',axis:'#c3cddc',legend:'#46566f'};}
+const LAYOUT=(xt,yt)=>{const c=plotTheme();return{paper_bgcolor:c.paper,plot_bgcolor:c.plot,font:{color:c.font,family:'JetBrains Mono',size:11},
+  margin:{l:64,r:16,t:10,b:50},xaxis:{title:{text:xt,font:{family:'Chakra Petch',size:13,color:c.title}},gridcolor:c.grid,zeroline:false,linecolor:c.axis},
+  yaxis:{title:{text:yt,font:{family:'Chakra Petch',size:13,color:c.title}},gridcolor:c.grid,zeroline:false,linecolor:c.axis},showlegend:true,legend:{orientation:'h',y:-0.18,font:{size:10,color:c.legend}}};};
 function bestMarkerCloud(s,xs,ys){
   const x=[],y=[],seen=new Set(),rows=new Set(),cols=new Set();
   const add=(xx,yy)=>{const key=`${xx}|${yy}`;if(!seen.has(key)){seen.add(key);x.push(xx);y.push(yy);}};
@@ -926,18 +968,33 @@ function drawPopcon(){
 // assigned to one of a fixed set of legend GROUPS; traces in a group carry the
 // same legendgroup so a single legend click toggles the WHOLE feature (fixes
 // "click hides only part" + "some lines have no toggle"; groupclick=togglegroup).
-const SHAPE_GROUPS=()=>({boundary:[L('等离子体边界','plasma boundary'),'#36e2c4'],
-  wall:[L('壁面','wall'),'#ff5d8f'],flux:[L('磁面/磁力线','flux surfaces'),'#4fd1c5'],
-  open:[L('开放场线/SOL','open field lines'),'#7aa2ff'],coil:[L('线圈/结构','coils / structure'),'#ff5d8f'],
-  annot:[L('标注/尺寸','annotations'),'#c792ff']});
+// unified geometry palette, theme-aware so lines stay legible on light paper.
+// EVERY config maps its features onto the same six roles + line styles below,
+// so the legend reads identically across tokamak/mirror/FRC/dipole/stellarator.
+const GEO=()=>THEME!=='light'?
+  {boundary:'#36e2c4',wall:'#ff5d8f',flux:'#5fb6c7',open:'#7aa2ff',coil:'#ff5d8f',annot:'#c792ff',
+   bfill:'rgba(54,226,196,.06)'}:
+  {boundary:'#0e9486',wall:'#c33a5c',flux:'#3f8a9b',open:'#3a5fc8',coil:'#c33a5c',annot:'#7a47c4',
+   bfill:'rgba(14,148,134,.08)'};
+// fixed line style per role (color/type consistency, Task 3):
+//   boundary = solid 2.6 + fill   wall = solid 2.2   flux = dashed 1.2
+//   open = dotted 1.05            annot = whatever the marker needs
+const SHAPE_GROUPS=()=>{const g=GEO();return{boundary:[L('等离子体边界','plasma boundary'),g.boundary],
+  wall:[L('壁面','wall'),g.wall],flux:[L('磁面/磁力线','flux surfaces'),g.flux],
+  open:[L('开放场线/SOL','open field lines'),g.open],coil:[L('线圈/结构','coils / structure'),g.coil],
+  annot:[L('标注/尺寸','annotations'),g.annot]};};
 function drawShape(){
   document.getElementById('plotTitle').innerHTML=`${L('等离子体截面','Cross-section')} · <b>${cfgL(CUR)}</b>`;document.getElementById('plotMeta').innerHTML='';
+  // phase/φ control bar belongs to stellarator's multi-section view only; clear
+  // it for every other config so it can't linger after switching away (the
+  // stellarator branch rebuilds its own, guarded by pc.dataset.state).
+  if(CUR!=='stellarator'){const pc=document.getElementById('phControls');if(pc){pc.innerHTML='';pc.dataset.state='';}}
   const v=VALS;let lay=LAYOUT('R [m]','Z [m]');lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;
-  const GRP=SHAPE_GROUPS();const tr=[],seen=new Set();
+  const GRP=SHAPE_GROUPS(),GP=GEO();const tr=[],seen=new Set();
   // add a trace to a legend group: first trace of a group gets the legend entry
   // (named by the group), the rest are hidden but toggle together with it.
   const add=(t,grp)=>{t.legendgroup=grp;if(grp&&!seen.has(grp)){seen.add(grp);t.showlegend=true;t.name=GRP[grp][0];}else t.showlegend=false;if(!t.hoverinfo)t.hoverinfo='skip';tr.push(t);return t;};
-  const lin=(x,y,c,w,fill,fc)=>({type:'scatter',mode:'lines',x,y,line:{color:c,width:w||2.4},fill:fill?'toself':undefined,fillcolor:fc||'rgba(255,176,46,.06)'});
+  const lin=(x,y,c,w,fill,fc)=>({type:'scatter',mode:'lines',x,y,line:{color:c,width:w||2.4},fill:fill?'toself':undefined,fillcolor:fc||GP.bfill});
   const cv=(x,y,c,w,ds)=>({type:'scatter',mode:'lines',x,y,line:{color:c,width:w||1.4,dash:ds||'solid'}});
   const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
   const seg=(x1,y1,x2,y2,c,txt,sym)=>({type:'scatter',mode:txt?'lines+markers+text':'lines+markers',x:[x1,x2],y:[y1,y2],text:['',txt||''],
@@ -955,14 +1012,14 @@ function drawShape(){
     if(gm!==0&&sh){
       const close=o=>[o.R.concat([o.R[0]]),o.Z.concat([o.Z[0]])];
       const W=close(sh.wall),Lf=close(sh.lcfs);
-      add(lin(W[0],W[1],GC('wall'),3),'wall');
+      add(lin(W[0],W[1],GC('wall'),2.2),'wall');
       if(Array.isArray(sh.flux)&&sh.flux.length){
         sh.flux.forEach(s=>add(cv(s.R.concat([s.R[0]]),s.Z.concat([s.Z[0]]),GC('flux'),1.2,'dash'),'flux'));
       }else{
         const ax0=(sh.axis&&sh.axis.R&&sh.axis.R.length)?[sh.axis.R[0],sh.axis.Z[0]]:[R0,0];
         [0.15,0.35,0.55,0.75,0.9].forEach(s=>add(cv(sh.lcfs.R.map(R=>ax0[0]+s*(R-ax0[0])),sh.lcfs.Z.map(Z=>ax0[1]+s*(Z-ax0[1])),GC('flux'),1.2,'dash'),'flux'));
       }
-      add(lin(Lf[0],Lf[1],GC('boundary'),2.6,true,'rgba(54,226,196,.06)'),'boundary');
+      add(lin(Lf[0],Lf[1],GC('boundary'),2.6,true,GP.bfill),'boundary');
       const ax=(sh.axis&&sh.axis.R&&sh.axis.R.length)?[sh.axis.R[0],sh.axis.Z[0]]:[R0,0];
       add({type:'scatter',mode:'markers+text',x:[ax[0]],y:[ax[1]],text:[L('磁轴','axis')],textposition:'bottom center',textfont:{color:'#ff5d8f',size:10},marker:{color:'#ff5d8f',size:6}},'annot');
       const eqLoaded=isPlainObject(tok.eq);
@@ -976,8 +1033,8 @@ function drawShape(){
         for(let t=1.5*Math.PI;t<=2.502*Math.PI;t+=0.01){R.push(r*(1+d)*Math.cos(t)+R0-d*r);Z.push(r*(1+d)*Math.sin(t)*(k/(1+d)));}
         return[R,Z];};
       rr.forEach((r,j)=>{const ar=dshape(r);
-        if(j===rr.length-1)add(lin(ar[0],ar[1],GC('wall'),3),'wall');
-        else if(j===rr.length-2)add(lin(ar[0],ar[1],GC('boundary'),2.6,true,'rgba(54,226,196,.06)'),'boundary');
+        if(j===rr.length-1)add(lin(ar[0],ar[1],GC('wall'),2.2),'wall');
+        else if(j===rr.length-2)add(lin(ar[0],ar[1],GC('boundary'),2.6,true,GP.bfill),'boundary');
         else add(cv(ar[0],ar[1],GC('flux'),1.2,'dash'),'flux');});
       if(gm===0)document.getElementById('plotMeta').innerHTML=`<span>${L('传统解析几何（双椭圆示意）','legacy analytic geometry (double-ellipse sketch)')}</span>`;
     }
@@ -997,7 +1054,9 @@ function drawShape(){
     // physics rework (Scheme D) is a later phase; here we only unify the layers.
     const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.sections)?LASTRUN.shape:null;
     if(sh){
-      const cols=['#ff5d73','#e9eef7','#36e2c4'];
+      // per-toroidal-cut boundary colours: distinct so overlaid sections read
+      // apart; theme-aware so none vanishes on light paper (Task 3).
+      const cols=THEME!=='light'?['#ff5d73','#ffb02e','#36e2c4','#7aa2ff']:['#c33a5c','#a96a00','#0e9486','#3a5fc8'];
       const frames=sh.frames||null;
       const sliderOn=SLIDER_FRAC!==null&&frames;
       // stable equal-aspect view: fix the range to the union envelope of all
@@ -1009,8 +1068,8 @@ function drawShape(){
        if(Xb>xb&&Yb>yb)lay.__fixbox={xmn:xb,xmx:Xb,ymn:yb,ymx:Yb};}
       const drawCut=(s,col)=>{const surfs=s.surfaces||[{rho:1,R:s.R,Z:s.Z}];
         surfs.forEach((q,qi)=>{const isB=qi===surfs.length-1;
-          add({type:'scatter',mode:'lines',x:q.R,y:q.Z,line:{color:isB?col:'#8fb6c7',width:isB?2.5:1.18},opacity:isB?1:0.68},isB?'boundary':'flux');});
-        if(s.wall)add({type:'scatter',mode:'lines',x:s.wall.R,y:s.wall.Z,line:{color:GC('wall'),width:2.0,dash:'dash'},opacity:0.9},'wall');};
+          add({type:'scatter',mode:'lines',x:q.R,y:q.Z,line:{color:isB?col:GC('flux'),width:isB?2.6:1.18},opacity:isB?1:0.7},isB?'boundary':'flux');});
+        if(s.wall)add({type:'scatter',mode:'lines',x:s.wall.R,y:s.wall.Z,line:{color:GC('wall'),width:2.2},opacity:0.9},'wall');};
       if(sliderOn){
         // continuous phase scrub: linear interpolation between nearest frames
         const frac=SLIDER_FRAC;
@@ -1069,7 +1128,7 @@ function drawShape(){
       return a/Math.sqrt(1+(Rm-1)*Math.pow(Math.sin(Math.PI*t/2),2));};
     for(let i=0;i<=160;i++){const z=-Lc/2-Lth+(Lc+2*Lth)*i/160;Z.push(z);Rr.push(prof(z));}
     const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rr].reverse().map(r=>-r)];
-    add(lin(Zb,Rb,'#ffb02e',2.4,true),'boundary');
+    add(lin(Zb,Rb,GC('boundary'),2.6,true),'boundary');
     add(lin([-Lc/2-Lth,Lc/2+Lth],[a+gg,a+gg],GC('wall'),2.2),'wall');
     add(lin([-Lc/2-Lth,Lc/2+Lth],[-(a+gg),-(a+gg)],GC('wall'),2.2),'wall');
     [0.35,0.65,0.88].forEach(q=>{add(cv(Z,Rr.map(r=>q*r),GC('flux'),1.2,'dash'),'flux');add(cv(Z,Rr.map(r=>-q*r),GC('flux'),1.2,'dash'),'flux');});
@@ -1089,7 +1148,7 @@ function drawShape(){
       X.push(lam*(v.l_s/2)*cr);Y.push(lam*v.r_s*sr);}return[X,Y];};
     const ar=sh?[sh.separatrix.z,sh.separatrix.r]:superE(1);
     const rn=sh?Math.abs(sh.null_points.r[0]):v.r_s/Math.SQRT2;
-    add(lin(ar[0],ar[1],'#ffb02e',2.4,true),'boundary');
+    add(lin(ar[0],ar[1],GC('boundary'),2.6,true),'boundary');
     add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
     add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[-v.r_w,-v.r_w],GC('wall'),2.2),'wall');
     // nested poloidal flux surfaces: real backend psi=const loops (audit docs/42
@@ -1131,10 +1190,10 @@ function drawShape(){
       for(let i=0;i<=160;i++){const lam=-Math.PI/2+Math.PI*i/160;const rr=Lj*Math.pow(Math.cos(lam),2);
         X.push(rr*Math.cos(lam));Y.push(rr*Math.sin(lam));}
       const isBound=(j===0||j===NL-1);
-      add({type:'scatter',mode:'lines',x:X,y:Y,line:{color:isBound?'#ffb02e':GC('flux'),width:1.2+0.28*j,dash:'solid'}},isBound?'boundary':'flux');}
+      add({type:'scatter',mode:'lines',x:X,y:Y,line:{color:isBound?GC('boundary'):GC('flux'),width:isBound?2.6:1.2+0.28*j,dash:'solid'}},isBound?'boundary':'flux');}
     // vacuum vessel wall: Sw = 4*pi*R_p^2 sphere -> circle of radius R_p in (R,Z)
     {const X=[],Y=[];for(let i=0;i<=180;i++){const th=2*Math.PI*i/180;X.push(v.R_p*Math.cos(th));Y.push(v.R_p*Math.sin(th));}
-      add(cv(X,Y,GC('wall'),2.0,'dash'),'wall');}
+      add(cv(X,Y,GC('wall'),2.2),'wall');}
     add({type:'scatter',mode:'markers',x:[v.r_ring,-v.r_ring],y:[0,0],marker:{color:'#ff5d8f',size:10,symbol:'square'}},'coil');
     add({type:'scatter',mode:'markers+text',x:[Lin,v.R_p],y:[0,0],text:['L<sub>in</sub>','R<sub>p</sub>'],textposition:['bottom center','top center'],
       textfont:{color:'#ffd166',size:11},marker:{color:'#ffd166',size:7,symbol:'diamond'}},'annot');
