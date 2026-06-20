@@ -67,6 +67,9 @@
   textarea{min-height:104px;max-height:180px;resize:vertical;line-height:1.35;white-space:pre;overflow:auto;color:#dfe7f5;background:linear-gradient(180deg,#0a0f18,#080c14);box-shadow:inset 0 1px 0 rgba(255,255,255,.025),inset 0 0 0 1px rgba(8,11,18,.35);scrollbar-color:var(--line2) transparent}
   textarea::-webkit-scrollbar{width:8px;height:8px}textarea::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}textarea::-webkit-scrollbar-corner{background:transparent}
   textarea.fourierbox{font-size:12px;letter-spacing:0;border-color:#21304a;background-image:linear-gradient(180deg,rgba(14,19,32,.98),rgba(8,12,20,.98))}
+  /* light theme: lighten the (otherwise code-editor dark) textareas incl. the stellarator Fourier boxes */
+  :root[data-theme=light] textarea{color:#1c2840;background:linear-gradient(180deg,#f5f8fd,#eaeff8);box-shadow:inset 0 0 0 1px rgba(28,40,64,.10)}
+  :root[data-theme=light] textarea.fourierbox{border-color:#c3cddc;background-image:linear-gradient(180deg,#f5f8fd,#eaeff8)}
   .grp-h{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin:12px 0 6px;
     padding-bottom:3px;border-bottom:1px dashed var(--line2);opacity:.85;display:flex;justify-content:space-between}
   .grp-h .a0{color:var(--amber);font-family:"JetBrains Mono";text-transform:none;font-size:11.5px}
@@ -1123,15 +1126,22 @@ function drawShape(){
       const Zb=sh.lcfs.Z;let im=0;for(let i=1;i<Zb.length;i++)if(Zb[i]>Zb[im])im=i;
       Rapex=sh.lcfs.R[im];Zapex=Zb[im];
     }
-    // dimension callouts placed OUTSIDE the plasma so the labels/lines do not
-    // sit on top of the flux surfaces: R0 & a below the plasma, κa to the left,
-    // wall gap g outboard at the midplane, triangularity δ at the apex.
-    const Zd=-Math.abs(Zapex)*1.22, xK=R0-a*1.22;
-    add({type:'scatter',mode:'lines+markers+text',x:[0,R0],y:[Zd,Zd],line:{color:'#ff6b6b',width:1.5,dash:'dot'},marker:{color:'#ff6b6b',size:3},text:['',`R<sub>0</sub>=${(+R0).toFixed(2)} m`],textposition:'bottom center',textfont:{color:'#ff6b6b',size:10}},'annot');
-    add({type:'scatter',mode:'lines+markers+text',x:[R0,R0+a],y:[Zd,Zd],line:{color:'#ff9e3d',width:1.5,dash:'dot'},marker:{color:'#ff9e3d',size:3},text:['',`a=${a.toFixed(2)} m`],textposition:'top center',textfont:{color:'#ff9e3d',size:10}},'annot');
-    add({type:'scatter',mode:'lines+markers+text',x:[xK,xK],y:[0,Zapex],line:{color:'#7ddc6b',width:1.5,dash:'dot'},marker:{color:'#7ddc6b',size:3},text:['',`κa=${Zapex.toFixed(2)} m`],textposition:'middle left',textfont:{color:'#7ddc6b',size:10}},'annot');
-    if(Math.abs(d)>0.02)add({type:'scatter',mode:'lines+markers+text',x:[R0,Rapex],y:[Zapex,Zapex],line:{color:'#c792ff',width:1.4,dash:'dot'},marker:{color:'#c792ff',size:3},text:['',`δ=${(+d).toFixed(2)}`],textposition:'top center',textfont:{color:'#c792ff',size:10}},'annot');
-    if((g||0)>0)add({type:'scatter',mode:'lines+markers+text',x:[R0+a,R0+a+g],y:[0,0],line:{color:GC('wall'),width:1.5,dash:'dot'},marker:{color:GC('wall'),size:3},text:['',`g=${(+g).toFixed(2)} m`],textposition:'top center',textfont:{color:GC('wall'),size:10}},'annot');
+    // Dimension callouts use witness (extension) lines + tick ends so it is
+    // unambiguous WHICH distance each measures (no more far-floating dashes):
+    //   R0 (axis→centre) & a (centre→edge) sit just below the plasma, with thin
+    //   connectors up to x=0 / x=R0 / x=R0+a; κa (half height) sits just left,
+    //   with connectors across to the apex; δ above the apex; g at the gap.
+    const Zd=-Math.abs(Zapex)*1.14, xK=R0-a*1.16, GW='#9aa3b2';
+    const witness=(x1,y1,x2,y2)=>add(cv([x1,x2],[y1,y2],GW,0.8,'dot'),'annot');
+    const dimL=(x1,y1,x2,y2,c,sym)=>add({type:'scatter',mode:'lines+markers',x:[x1,x2],y:[y1,y2],line:{color:c,width:1.6},marker:{color:c,size:7,symbol:sym}},'annot');
+    const dimT=(x,y,t,c,pos)=>add({type:'scatter',mode:'text',x:[x],y:[y],text:[t],textposition:pos,textfont:{color:c,size:11,family:'JetBrains Mono'}},'annot');
+    witness(0,0,0,Zd);witness(R0,0,R0,Zd);witness(R0+a,0,R0+a,Zd);
+    dimL(0,Zd,R0,Zd,'#ff6b6b','line-ns-open');dimT(R0/2,Zd,`R₀=${(+R0).toFixed(2)} m`,'#ff6b6b','bottom center');
+    dimL(R0,Zd,R0+a,Zd,'#ff9e3d','line-ns-open');dimT(R0+a/2,Zd,`a=${a.toFixed(2)} m`,'#ff9e3d','top center');
+    witness(Rapex,Zapex,xK,Zapex);witness(Rapex,0,xK,0);
+    dimL(xK,0,xK,Zapex,'#7ddc6b','line-ew-open');dimT(xK,Zapex/2,`κa=${Zapex.toFixed(2)} m`,'#7ddc6b','middle left');
+    if(Math.abs(d)>0.02){const Zt=Zapex*1.13;witness(R0,Zapex,R0,Zt);witness(Rapex,Zapex,Rapex,Zt);dimL(R0,Zt,Rapex,Zt,'#c792ff','line-ns-open');dimT((R0+Rapex)/2,Zt,`δ=${(+d).toFixed(2)}`,'#c792ff','top center');}
+    if((g||0)>0)add({type:'scatter',mode:'lines+markers+text',x:[R0+a,R0+a+g],y:[0,0],line:{color:GC('wall'),width:1.8},marker:{color:GC('wall'),size:7,symbol:'line-ns-open'},text:['',` g=${(+g).toFixed(2)} m`],textposition:'middle right',textfont:{color:GC('wall'),size:10}},'annot');
   }else if(CUR==='stellarator'){
     // backend analytic flux surfaces (rotating-ellipse / near-axis).  Geometry
     // physics rework (Scheme D) is a later phase; here we only unify the layers.

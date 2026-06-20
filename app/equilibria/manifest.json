@@ -1,5 +1,5 @@
 {
-  "_about": "Real public plasma-equilibrium files bundled for one-click import per preset. Tokamak = G-EQDSK; stellarator = VMEC wout (netCDF). 'proxy' marks a file from a closely related machine used as a stand-in. Presets not listed have no public equilibrium available yet.",
+  "_about": "Real public plasma-equilibrium files bundled for one-click import per preset. Tokamak = G-EQDSK; stellarator = VMEC wout (netCDF). Only genuine machine/configuration equilibria are listed (no stand-ins/proxies). Presets not listed have no public equilibrium bundled yet.",
   "tokamak": {
     "ITER": {
       "file": "ITER.geqdsk",
@@ -14,38 +14,6 @@
       "source": "OMAS sample g145419.02100",
       "url": "https://github.com/gafusion/omas/blob/master/omas/samples/g145419.02100",
       "note": "DIII-D shot 145419 reconstructed equilibrium, R0~1.70 m."
-    },
-    "HL-3": {
-      "file": "EFIT.geqdsk",
-      "format": "geqdsk",
-      "source": "EFIT reconstruction (DIII-D shot #165908, 3000 ms)",
-      "url": "",
-      "note": "Real EFIT G-EQDSK (DIII-D #165908, RMAXIS~1.70 m) used as a conventional medium-size tokamak stand-in for HL-3 (R0~1.78 m).",
-      "proxy": true
-    },
-    "EAST": {
-      "file": "EFIT.geqdsk",
-      "format": "geqdsk",
-      "source": "EFIT reconstruction (DIII-D shot #165908, 3000 ms)",
-      "url": "",
-      "note": "Real EFIT G-EQDSK (DIII-D #165908, RMAXIS~1.70 m) used as a conventional medium-size tokamak stand-in for EAST (R0~1.85 m).",
-      "proxy": true
-    },
-    "EHL-2": {
-      "file": "CHEASE.geqdsk",
-      "format": "geqdsk",
-      "source": "CHEASE equilibrium (COCOS-02, SI units)",
-      "url": "",
-      "note": "CHEASE G-EQDSK, R0~1.0 m, used as a compact-tokamak stand-in for EHL-2 (R0~1.05 m).",
-      "proxy": true
-    },
-    "CFETR": {
-      "file": "SOLOVEV.geqdsk",
-      "format": "geqdsk",
-      "source": "Analytic Solov'ev positive-D equilibrium",
-      "url": "",
-      "note": "Exact analytic Solov'ev G-EQDSK, R0~6.2 m, used as a reactor-scale stand-in for CFETR (R0~6.6 m).",
-      "proxy": true
     }
   },
   "stellarator": {
@@ -77,22 +45,6 @@
       "url": "https://github.com/hiddenSymmetries/simsopt/blob/master/tests/test_files/wout_n3are_R7.75B5.7_lowres.nc",
       "note": "NFP=3 quasi-helical configuration (n3are, R~7.75 m, B~5.7 T)."
     },
-    "NAE-QA": {
-      "file": "precise-QA.nc",
-      "format": "vmec",
-      "source": "simsopt test_files (Landreman-Paul 2021)",
-      "url": "https://github.com/hiddenSymmetries/simsopt/blob/master/tests/test_files/wout_LandremanPaul2021_QA_lowres.nc",
-      "note": "Quasi-axisymmetric reference used as a stand-in for the near-axis QA preset.",
-      "proxy": true
-    },
-    "HELIAS": {
-      "file": "W7-X.nc",
-      "format": "vmec",
-      "source": "simsopt test_files (VMEC wout)",
-      "url": "https://github.com/hiddenSymmetries/simsopt/blob/master/tests/test_files/wout_W7-X_without_coil_ripple_beta0p05_d23p4_tm_reference.nc",
-      "note": "W7-X used as a HELIAS-line representative (HELIAS is the W7-X reactor extrapolation).",
-      "proxy": true
-    },
     "HSX": {
       "file": "HSX.nc",
       "format": "vmec",
@@ -106,14 +58,6 @@
       "source": "landreman/vmec_equilibria (LHD shot 090493 t=2330 ms)",
       "url": "https://github.com/landreman/vmec_equilibria/blob/master/LHD/090493t2330/wout_LHD_090493t2330.nc",
       "note": "Large Helical Device (LHD) heliotron, NFP=10, R0~3.9 m."
-    },
-    "CFQS": {
-      "file": "NCSX-li383.nc",
-      "format": "vmec",
-      "source": "simsopt test_files (NCSX li383 low-res reference)",
-      "url": "https://github.com/hiddenSymmetries/simsopt/blob/master/tests/test_files/wout_li383_low_res_reference.nc",
-      "note": "NCSX li383 quasi-axisymmetric VMEC equilibrium (NFP=3) used as a compact-QA stand-in for CFQS (NFP=2 QA).",
-      "proxy": true
     }
   }
 }
