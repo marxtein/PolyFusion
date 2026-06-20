@@ -1141,13 +1141,22 @@ function drawShape(){
     //   R0 (axis→centre) & a (centre→edge) sit just below the plasma, with thin
     //   connectors up to the geometric midplane; κa (half height) sits just left,
     //   with connectors across to the apex; δ above the apex; g at the wall gap.
-    const Zd=Zc-Hh*1.14, xK=R0d-ad*1.16, GW='#9aa3b2';
+    // magnetic axis (Shafranov-shifted) vs the geometric centre R0d
+    const Rmag=(sh&&sh.axis&&sh.axis.R&&sh.axis.R.length)?sh.axis.R[0]:R0d;
+    const Zax=(sh&&sh.axis&&sh.axis.Z&&sh.axis.Z.length)?sh.axis.Z[0]:Zc;
+    const shaf=Rmag-R0d;                 // Shafranov shift Δ = R_axis − R_geometric
+    const yA=Zc-Hh*1.12, yR=Zc-Hh*1.34, xK=R0d-ad*1.18, GW='#9aa3b2';
     const witness=(x1,y1,x2,y2)=>add(cv([x1,x2],[y1,y2],GW,0.8,'dot'),'annot');
     const dimL=(x1,y1,x2,y2,c,sym)=>add({type:'scatter',mode:'lines+markers',x:[x1,x2],y:[y1,y2],line:{color:c,width:1.6},marker:{color:c,size:7,symbol:sym}},'annot');
     const dimT=(x,y,t,c,pos)=>add({type:'scatter',mode:'text',x:[x],y:[y],text:[t],textposition:pos,textfont:{color:c,size:11,family:'JetBrains Mono'}},'annot');
-    witness(0,Zc,0,Zd);witness(R0d,Zc,R0d,Zd);witness(R0d+ad,Zc,R0d+ad,Zd);
-    dimL(0,Zd,R0d,Zd,'#ff6b6b','line-ns-open');dimT(R0d/2,Zd,`R₀=${(+R0d).toFixed(2)} m`,'#ff6b6b','bottom center');
-    dimL(R0d,Zd,R0d+ad,Zd,'#ff9e3d','line-ns-open');dimT(R0d+ad/2,Zd,`a=${ad.toFixed(2)} m`,'#ff9e3d','top center');
+    // a = minor radius, from the GEOMETRIC centre to the outboard edge
+    witness(R0d,Zc,R0d,yA);witness(R0d+ad,Zc,R0d+ad,yA);
+    dimL(R0d,yA,R0d+ad,yA,'#ff9e3d','line-ns-open');dimT(R0d+ad/2,yA,`a=${ad.toFixed(2)} m`,'#ff9e3d','top center');
+    // R0 = major radius measured to the MAGNETIC AXIS (Shafranov-shifted)
+    witness(0,Zc,0,yR);witness(Rmag,Zax,Rmag,yR);
+    dimL(0,yR,Rmag,yR,'#ff6b6b','line-ns-open');dimT(Rmag/2,yR,`R₀=${(+Rmag).toFixed(2)} m`,'#ff6b6b','bottom center');
+    // Shafranov shift Δ: geometric centre → magnetic axis (only when shifted)
+    if(Math.abs(shaf)>0.004){const yS=Zc-Hh*0.26;witness(R0d,Zc,R0d,yS);witness(Rmag,Zax,Rmag,yS);dimL(R0d,yS,Rmag,yS,'#ff5d8f','line-ns-open');dimT((R0d+Rmag)/2,yS,`Δ<sub>Shafranov</sub>=${shaf.toFixed(3)} m`,'#ff5d8f','bottom center');add({type:'scatter',mode:'markers',x:[R0d],y:[Zc],marker:{color:GW,size:7,symbol:'cross-thin-open'},hoverinfo:'skip'},'annot');}
     witness(Rapex,Zapex,xK,Zapex);witness(Rapex,Zc,xK,Zc);
     dimL(xK,Zc,xK,Zapex,'#7ddc6b','line-ew-open');dimT(xK,(Zc+Zapex)/2,`κa=${Hh.toFixed(2)} m`,'#7ddc6b','middle left');
     if(Math.abs(dd)>0.02){const Zt=Zapex+Hh*0.13;witness(R0d,Zapex,R0d,Zt);witness(Rapex,Zapex,Rapex,Zt);dimL(R0d,Zt,Rapex,Zt,'#c792ff','line-ns-open');dimT((R0d+Rapex)/2,Zt,`δ=${(+dd).toFixed(2)}`,'#c792ff','top center');}
