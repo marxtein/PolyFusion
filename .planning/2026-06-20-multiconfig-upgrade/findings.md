@@ -32,4 +32,16 @@
 - （待填）各位形关键无量纲判据：mirror（镜比 R_m、β、Q）、FRC（s 参数、归一化、β~1）、dipole（临界压强梯度 / 绝热判据 d(pV^γ)）。
 
 ### Q3 H 模 pedestal 剖面合理形式
-- （待填）tanh pedestal + 芯部抛物，pedestal 宽度/高度典型值。
+- tanh 台基 + 芯部峰化。托卡马克宽 Δ≈3-5%a，台顶≈0.3-0.6 芯部峰；仿星器仅弱密度台基、无 T 台基。已实现于 drawProfiles。
+
+## T7 best_window 物理审查结论（research + 代码核对）
+- **磁镜** beta≤0.6 合理（标注应为"元胞 β"；2XII-B 曾达~70%）。**缺**：镜比阈值 R_m≳5-10、最小-B 磁阱稳定、Pastukhov/Yushmanov 双极势、串联镜 Q≈5-10。这些多为输入量/未计算输出，best_window 只能门控输出场 → 仅文档化建议，不改默认门（避免破坏 POPCON）。
+- **FRC** β≈1 是定义（⟨β⟩=1−0.5(r_s/r_w)²），任何 β 上限无意义 → 现状正确（le 为空）。s≥2 合理。**最大缺漏=倾斜稳定 s/E≲3-4** → 已实现：frc.py 新增输出 `s_over_E=s_param/elongation`，base.py 加 `optional_window le s_over_E≤4`（默认关，零风险），index.html PR 标签 's/E'。C-2W 实测 s/E≈14.8（确会触发倾斜门，物理合理）。
+- **偶极** beta_in≤1 近乎无意义（偶极 β 局域、近环很高）。真正判据=可压缩交换稳定 δ(p·δV^γ)≤0，即 −dlnp/dlnV<γ=5/3（δV=∮dl/B∝R⁴）。需新增交换裕度输出（较大改动）→ 本轮文档化建议，保留 beta_in 默认门不动。
+
+## T10 Bug 审查（pytest 全量 = 98 通过 / 2 失败 + presets-io ITER）
+本轮我方改动**零**触碰 mirror.py / stellarator.py（git diff 证实）。以下 3 项均为**预存**（WIP 分支 nearaxis-r2-and-sw），非本次引入：
+1. `test_mirror_geometry::test_solve_mirror_multi_zone` — solve_mirror() 不接受 `geometry` 关键字（签名漂移，疑似未完成的 multi_zone 特性）。
+2. `test_stellarator_geometry_variants_sync::test_frontend_restores_...` — index.html 缺 `function normalizeStellBoundaryIota(`（测试引用了代码中不存在的函数）。
+3. `test_presets_io` ITER Pfus golden=381.39 但实际 433.55 — 上个提交 "correct ITER params" 改了机器参数，golden 未同步。**不擅自改物理 golden**，留给用户确认。
+本次我方引入并已修复：geometry_variants AUTHORITY 注册新预设；volume_rho 断言对齐（tokamak 也用体积 ρ）。

@@ -76,6 +76,6 @@ def test_stellarator_profile_ui_uses_volume_rho_label():
                      "app", "index.html"),
         encoding="utf-8",
     ).read()
-    assert "CUR==='stellarator'?L('体积半径 ρ=√(V/Vp)'" in html
+    assert "(CUR==='stellarator'||CUR==='tokamak')?L('体积半径 ρ=√(V/Vp)'" in html
     assert "边界旋转变换 (>0=使用当前边界携带值；0=由边界自身参数自洽计算)" in html
     assert "ρ=2/3 旋转变换" not in html

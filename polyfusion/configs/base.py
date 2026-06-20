@@ -429,6 +429,9 @@ FRC = ConfigSpec(
     # boundary; le-criteria stay empty deliberately — any Pwall cap empties the
     # compact-FRC Q>=1 region (docs/25 §8).
     best_window={"ge": {"Pfus": 1, "Qfus": 1, "s_param": 2}, "le": {}},
+    # tilt stability (opt-in): kinetic FRC stability needs s/E <~ 3-4
+    # (Belova/Steinhauer). OFF by default so the default POPCON is unchanged.
+    optional_window={"le": {"s_over_E": 4.0}},
     contour_spec=FRC_CONTOURS,
     preset_groups=FRC_GROUPS,
     _solve=solve_frc,

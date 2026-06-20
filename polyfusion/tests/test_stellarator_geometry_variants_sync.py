@@ -32,6 +32,7 @@ AUTHORITY = {
     "QH-nfp3": "axis",
     "HELIAS": "simple",
     "NAE-QA": "simple",
+    "用户设计 User Design": "simple",
 }
 
 

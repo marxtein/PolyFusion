@@ -63,6 +63,8 @@ class FRCResult:
     beta: float       # volume-averaged beta = 1 - x_s^2/2
     beta_null: float  # beta at the field null (=1 by pressure balance)
     x_s: float; elongation: float; s_param: float
+    s_over_E: float   # tilt-stability ratio s/E (kinetic stabilisation needs
+                      # s/E <~ 3-4; Belova/Steinhauer FRC kinetic-MHD stability)
     flux_p: float     # trapped poloidal flux [Wb] (THE FRC retention metric)
     # fields / densities
     B_int: float      # <|B|> inside separatrix [T]
@@ -717,7 +719,7 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
         p_shape=p_shape, f_shape_calc=f_shape_calc,
         geom_weighted=1.0 if use_geom_weight else 0.0,
         beta=beta_avg, beta_null=1.0, x_s=x_s, elongation=elongation,
-        s_param=s_param, flux_p=flux_p,
+        s_param=s_param, s_over_E=s_param / elongation, flux_p=flux_p,
         B_int=B_int, ni0=ni_m, ne0=ne_m, nbar=nbar,
         Vp=Vp, Sp=Sp, Sw=Sw, sep_model=sep_model, m_shape=m_shape, Zeff=Zeff, M=M,
         tau_eta=tau_eta, tauN_o_taueta=tau_E / tau_eta,
