@@ -1120,28 +1120,38 @@ function drawShape(){
         else add(cv(ar[0],ar[1],GC('flux'),1.2,'solid'),'flux');});
       if(gm===0)document.getElementById('plotMeta').innerHTML=`<span>${L('双椭圆解析几何（上/下半椭圆，由 κ、δ 控制）','double-ellipse analytic geometry (upper/lower half-ellipses set by κ, δ)')}</span>`;
     }
-    // apex (top) of the boundary: backend LCFS max-Z when available, else κa.
-    let Rapex=R0-d*a, Zapex=a*k;
-    if(sh&&sh.lcfs&&sh.lcfs.Z&&sh.lcfs.Z.length){
-      const Zb=sh.lcfs.Z;let im=0;for(let i=1;i<Zb.length;i++)if(Zb[i]>Zb[im])im=i;
-      Rapex=sh.lcfs.R[im];Zapex=Zb[im];
+    // Geometry for the dimension callouts. When a backend boundary exists
+    // (Miller / equilibrium / imported, possibly Shafranov-shifted), derive
+    // EVERY value from the ACTUAL drawn LCFS so the label, the dimension line and
+    // the boundary can never disagree: R0d=geometric centre (Rmin+Rmax)/2,
+    // ad=half-width, Zc=vertical centre, Hh=half-height, Rapex/Zapex=apex (max-Z),
+    // dd=triangularity from the apex. For the analytic double-ellipse (no sh) the
+    // input scalars already define the curve exactly, so use them.
+    let Rapex=R0-d*a, Zapex=a*k, R0d=R0, ad=a, dd=d, Zc=0, Hh=Math.abs(a*k);
+    if(sh&&sh.lcfs&&sh.lcfs.R&&sh.lcfs.R.length){
+      const Rb=sh.lcfs.R, Zb=sh.lcfs.Z;
+      let im=0;for(let i=1;i<Zb.length;i++)if(Zb[i]>Zb[im])im=i;
+      Rapex=Rb[im];Zapex=Zb[im];
+      const Rmn=Math.min(...Rb),Rmx=Math.max(...Rb),Zmn=Math.min(...Zb),Zmx=Math.max(...Zb);
+      R0d=(Rmn+Rmx)/2; ad=(Rmx-Rmn)/2; Zc=(Zmn+Zmx)/2; Hh=(Zmx-Zmn)/2;
+      dd=ad>0?(R0d-Rapex)/ad:d;
     }
     // Dimension callouts use witness (extension) lines + tick ends so it is
-    // unambiguous WHICH distance each measures (no more far-floating dashes):
+    // unambiguous WHICH distance each measures (no far-floating dashes):
     //   R0 (axis→centre) & a (centre→edge) sit just below the plasma, with thin
-    //   connectors up to x=0 / x=R0 / x=R0+a; κa (half height) sits just left,
-    //   with connectors across to the apex; δ above the apex; g at the gap.
-    const Zd=-Math.abs(Zapex)*1.14, xK=R0-a*1.16, GW='#9aa3b2';
+    //   connectors up to the geometric midplane; κa (half height) sits just left,
+    //   with connectors across to the apex; δ above the apex; g at the wall gap.
+    const Zd=Zc-Hh*1.14, xK=R0d-ad*1.16, GW='#9aa3b2';
     const witness=(x1,y1,x2,y2)=>add(cv([x1,x2],[y1,y2],GW,0.8,'dot'),'annot');
     const dimL=(x1,y1,x2,y2,c,sym)=>add({type:'scatter',mode:'lines+markers',x:[x1,x2],y:[y1,y2],line:{color:c,width:1.6},marker:{color:c,size:7,symbol:sym}},'annot');
     const dimT=(x,y,t,c,pos)=>add({type:'scatter',mode:'text',x:[x],y:[y],text:[t],textposition:pos,textfont:{color:c,size:11,family:'JetBrains Mono'}},'annot');
-    witness(0,0,0,Zd);witness(R0,0,R0,Zd);witness(R0+a,0,R0+a,Zd);
-    dimL(0,Zd,R0,Zd,'#ff6b6b','line-ns-open');dimT(R0/2,Zd,`R₀=${(+R0).toFixed(2)} m`,'#ff6b6b','bottom center');
-    dimL(R0,Zd,R0+a,Zd,'#ff9e3d','line-ns-open');dimT(R0+a/2,Zd,`a=${a.toFixed(2)} m`,'#ff9e3d','top center');
-    witness(Rapex,Zapex,xK,Zapex);witness(Rapex,0,xK,0);
-    dimL(xK,0,xK,Zapex,'#7ddc6b','line-ew-open');dimT(xK,Zapex/2,`κa=${Zapex.toFixed(2)} m`,'#7ddc6b','middle left');
-    if(Math.abs(d)>0.02){const Zt=Zapex*1.13;witness(R0,Zapex,R0,Zt);witness(Rapex,Zapex,Rapex,Zt);dimL(R0,Zt,Rapex,Zt,'#c792ff','line-ns-open');dimT((R0+Rapex)/2,Zt,`δ=${(+d).toFixed(2)}`,'#c792ff','top center');}
-    if((g||0)>0)add({type:'scatter',mode:'lines+markers+text',x:[R0+a,R0+a+g],y:[0,0],line:{color:GC('wall'),width:1.8},marker:{color:GC('wall'),size:7,symbol:'line-ns-open'},text:['',` g=${(+g).toFixed(2)} m`],textposition:'middle right',textfont:{color:GC('wall'),size:10}},'annot');
+    witness(0,Zc,0,Zd);witness(R0d,Zc,R0d,Zd);witness(R0d+ad,Zc,R0d+ad,Zd);
+    dimL(0,Zd,R0d,Zd,'#ff6b6b','line-ns-open');dimT(R0d/2,Zd,`R₀=${(+R0d).toFixed(2)} m`,'#ff6b6b','bottom center');
+    dimL(R0d,Zd,R0d+ad,Zd,'#ff9e3d','line-ns-open');dimT(R0d+ad/2,Zd,`a=${ad.toFixed(2)} m`,'#ff9e3d','top center');
+    witness(Rapex,Zapex,xK,Zapex);witness(Rapex,Zc,xK,Zc);
+    dimL(xK,Zc,xK,Zapex,'#7ddc6b','line-ew-open');dimT(xK,(Zc+Zapex)/2,`κa=${Hh.toFixed(2)} m`,'#7ddc6b','middle left');
+    if(Math.abs(dd)>0.02){const Zt=Zapex+Hh*0.13;witness(R0d,Zapex,R0d,Zt);witness(Rapex,Zapex,Rapex,Zt);dimL(R0d,Zt,Rapex,Zt,'#c792ff','line-ns-open');dimT((R0d+Rapex)/2,Zt,`δ=${(+dd).toFixed(2)}`,'#c792ff','top center');}
+    if((g||0)>0)add({type:'scatter',mode:'lines+markers+text',x:[R0d+ad,R0d+ad+g],y:[Zc,Zc],line:{color:GC('wall'),width:1.8},marker:{color:GC('wall'),size:7,symbol:'line-ns-open'},text:['',` g=${(+g).toFixed(2)} m`],textposition:'middle right',textfont:{color:GC('wall'),size:10}},'annot');
   }else if(CUR==='stellarator'){
     // backend analytic flux surfaces (rotating-ellipse / near-axis).  Geometry
     // physics rework (Scheme D) is a later phase; here we only unify the layers.
