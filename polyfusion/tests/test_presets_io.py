@@ -22,7 +22,8 @@ from polyfusion.io import run_preset  # noqa: E402
 # "用户设计 User Design" template preset (user-design starting point).
 EXPECTED_GROUPS = {
     "tokamak": {"实验装置 Experiments", "燃烧·反应堆 Burning·Reactor",
-                "ENN 概念 Concepts", "自定义 Custom"},
+                "ENN 概念 Concepts", "解析·重构平衡 Analytic·Reconstructed",
+                "自定义 Custom"},
     "mirror": {"实验装置 Experiments", "概念·反应堆 Concepts", "自定义 Custom"},
     "frc": {"实验装置 Experiments", "概念·反应堆 Concepts", "自定义 Custom"},
     "dipole": {"实验装置 Experiments", "概念·反应堆 Concepts", "自定义 Custom"},

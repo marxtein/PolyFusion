@@ -14,6 +14,27 @@
       "source": "OMAS sample g145419.02100",
       "url": "https://github.com/gafusion/omas/blob/master/omas/samples/g145419.02100",
       "note": "DIII-D shot 145419 reconstructed equilibrium, R0~1.70 m."
+    },
+    "CHEASE": {
+      "file": "CHEASE.geqdsk",
+      "format": "geqdsk",
+      "source": "CHEASE fixed-boundary equilibrium (COCOS-02, SI)",
+      "url": "",
+      "note": "CHEASE solver equilibrium, R0~1.0 m, a~0.65 m, kappa~1.83, delta~0.54, B0~1.0 T, Ip~1.05 MA."
+    },
+    "EFIT": {
+      "file": "EFIT.geqdsk",
+      "format": "geqdsk",
+      "source": "EFIT reconstruction (DIII-D shot #165908, 3000 ms)",
+      "url": "",
+      "note": "Real experimental EFIT reconstruction, R0~1.66 m, a~0.62 m, kappa~1.78, delta~0.70, B0~1.52 T, Ip~1.44 MA."
+    },
+    "SOLOVEV": {
+      "file": "SOLOVEV.geqdsk",
+      "format": "geqdsk",
+      "source": "Exact analytic Solov'ev positive-D equilibrium",
+      "url": "",
+      "note": "Analytic Solov'ev reference, R0~6.2 m, a~1.98 m, kappa~2.0, delta~0.45, B0~5.3 T, Ip~2.06 MA."
     }
   },
   "stellarator": {
