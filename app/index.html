@@ -1282,7 +1282,7 @@ function drawShape(){
     add(cv([-v.l_s/2,v.l_s/2],[v.r_s*1.04,v.r_s*1.04],'#ffd166',1.4,'dot'),'annot');
     add(txt([0],[v.r_s*1.18],[`l<sub>s</sub>=${(+v.l_s).toFixed(2)} m`],'#ffd166'),'annot');
     add(txt([v.l_s*0.40],[v.r_w*1.05],['r<sub>w</sub>'],GC('wall')),'annot');
-    add(txt([0],[v.r_w*1.30],[`E=l<sub>s</sub>/2r<sub>s</sub>=${(v.l_s/(2*v.r_s)).toFixed(2)} · ${L('倾斜稳定','tilt')} s/E≲3-4`],'#c792ff'),'annot');
+    add(txt([0],[v.r_w*1.30],[`E=l<sub>s</sub>/2r<sub>s</sub>=${v.r_s>0?(v.l_s/(2*v.r_s)).toFixed(2):'—'} · ${L('倾斜稳定','tilt')} s/E≲3-4`],'#c792ff'),'annot');
     document.getElementById('plotMeta').innerHTML=`<span>${L('分离面来自后端几何；壁 r_w；磁面/反向场为示意','separatrix from backend; wall r_w; flux/reversal schematic')}</span>`;
   }else if(CUR==='dipole'){
     const Lin=(v.L_in_fac!=null?v.L_in_fac:1.5)*v.r_ring;const NL=6;
