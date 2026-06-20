@@ -19,7 +19,7 @@
   :root[data-theme=light]{--ink:#eceff5;--ink2:#ffffff;--panel:#ffffff;--panel2:#f2f5fb;--line:#e0e5ee;--line2:#c3cddc;
     --fg:#16212f;--mut:#49586f;--dim:#61708a;--amber:#a35f00;--amber-d:#7d4900;--teal:#0c8678;--red:#cc3a50;
     --app-grad-a:rgba(255,176,46,.10);--app-grad-b:rgba(14,148,134,.08);
-    --hdr-grad:linear-gradient(180deg,#ffffff,#eef2f8);--scan-bg:rgba(20,30,48,.03);
+    --hdr-grad:linear-gradient(180deg,#ffffff,#eef2f8);--scan-bg:rgba(28,40,64,.05);
     --vignette:none;--micro-grid:rgba(20,30,48,.018);
     --glow:0 0 0 1px rgba(169,106,0,.35),0 0 16px -5px rgba(169,106,0,.4)}
   *{box-sizing:border-box}html,body{height:100%}
@@ -86,10 +86,10 @@
   .fld label .u{color:var(--dim);font-size:10.5px;flex:0 0 auto}.fld.full{grid-column:1/-1}
   .sym{font-family:Georgia,'Times New Roman','STIX Two Math',serif;font-style:italic;font-size:14.5px;color:var(--fg);line-height:1}
   .sym sub{font-size:68%;font-style:italic;line-height:0}
-  .kv .k .sym{font-size:13.5px;color:#b9c4d8}
+  .kv .k .sym{font-size:13.5px;color:var(--mut)}
   .thr .k .sym{font-size:13.5px}
   .opt .sym{font-size:12px;color:inherit;font-weight:inherit}
-  .scanbox{border:1px solid var(--line);border-radius:var(--r);padding:10px;background:rgba(8,11,18,.5)}
+  .scanbox{border:1px solid var(--line);border-radius:var(--r);padding:10px;background:var(--scan-bg)}
   .axis{margin-bottom:8px}
   .axis .hd{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--teal);letter-spacing:.06em;margin-bottom:5px}
   .axis .hd .tag{font-size:9px;color:var(--btn-ink);background:var(--teal);border-radius:3px;padding:1px 5px;font-weight:700}
@@ -929,9 +929,8 @@ function getWindow(){const ge={},le={};document.querySelectorAll('[data-thr]').f
   const v=parseFloat(el.value);if(isFinite(v))(el.dataset.op==='ge'?ge:le)[el.dataset.thr]=v;});return{ge,le};}
 function buildPlotOpts(){
   const box=document.getElementById('plotOpts');
-  box.innerHTML=CONFIGS[CUR].contour_spec.map(s=>{const on=PLOTSEL.has(s.f);
-    const lum=h=>{const x=h.replace('#','');return (0.299*parseInt(x.slice(0,2),16)+0.587*parseInt(x.slice(2,4),16)+0.114*parseInt(x.slice(4,6),16))/255;};
-    return `<span class="opt ${on?'on':''}" data-f="${s.f}" style="${on?'background:'+s.c+';border-color:'+s.c+';color:'+(lum(s.c)>0.55?'#0a0f18':'#fff'):'color:'+s.c+';border-color:'+s.c+'55'}">${chipLab(s)}</span>`;}).join('');
+  box.innerHTML=CONFIGS[CUR].contour_spec.map(s=>{const on=PLOTSEL.has(s.f);const c=readable(s.c);
+    return `<span class="opt ${on?'on':''}" data-f="${s.f}" style="${on?'background:'+c+';border-color:'+c+';color:'+(_lum(c)>0.55?'#0a0f18':'#fff'):'color:'+c+';border-color:'+c+'55'}">${chipLab(s)}</span>`;}).join('');
   box.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{const f=o.dataset.f;PLOTSEL.has(f)?PLOTSEL.delete(f):PLOTSEL.add(f);buildPlotOpts();if(VIEW==='popcon')drawPopcon();});
 }
 function fmtIn(v){if(typeof v!=='number'||!isFinite(v))return '';const a=Math.abs(v);if(a!==0&&(a<1e-3||a>=1e5))return v.toExponential(3);return +v.toFixed(6);}
@@ -974,7 +973,22 @@ function applyRun(r){
   if(VIEW==='popcon')document.getElementById('plotMeta').innerHTML=`<span>P_fus <b>${fmt(o.Pfus)}</b> MW</span><span>Q <b>${fmt(o.Qfus)}</b></span>`;
 }
 function fmt(v){if(v==null||typeof v!=='number'||!isFinite(v))return '—';const a=Math.abs(v);if(a!==0&&(a<1e-2||a>=1e5))return v.toExponential(3);return v.toFixed(a<1?4:3);}
-function setView(v){VIEW=v;document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));if(v==='popcon')drawPopcon();else if(v==='shape')drawShape();else drawProfiles();}
+function setView(v){VIEW=v;document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
+  // the φ phase bar belongs ONLY to the stellarator geometry view; clear it for
+  // every other view/config (POPCON, profiles, or any non-stellarator) so it
+  // can't linger after switching tabs or configs. drawShape rebuilds it for
+  // stellarator+shape.
+  if(!(CUR==='stellarator'&&v==='shape')){const pc=document.getElementById('phControls');if(pc){pc.innerHTML='';pc.dataset.state='';}}
+  if(v==='popcon')drawPopcon();else if(v==='shape')drawShape();else drawProfiles();}
+// luminance + readable(): on the light theme some contour colours (e.g. the
+// near-white nbar palette) vanish on the pale plot/panel; darken any too-light
+// colour so chips and contour lines stay visible. No-op in dark theme.
+function _lum(h){const x=h.replace('#','');return (0.299*parseInt(x.slice(0,2),16)+0.587*parseInt(x.slice(2,4),16)+0.114*parseInt(x.slice(4,6),16))/255;}
+function readable(c){if(THEME==='light'&&typeof c==='string'&&c[0]==='#'&&c.length>=7&&_lum(c)>0.6){
+  const x=c.replace('#','');const f=0.45;
+  const r=Math.round(parseInt(x.slice(0,2),16)*f),g=Math.round(parseInt(x.slice(2,4),16)*f),b=Math.round(parseInt(x.slice(4,6),16)*f);
+  return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');}
+  return c;}
 // theme-aware plot palette: dark keeps the original neon-on-ink look, light
 // switches to ink-on-paper with darker grid/axis so every label stays legible.
 function plotTheme(){const d=THEME!=='light';return d?
@@ -1015,12 +1029,13 @@ function drawPopcon(){
   CONFIGS[CUR].contour_spec.forEach(q=>{
     if(!PLOTSEL.has(q.f)||!(q.f in s.fields))return;
     const z=q.scale?s.fields[q.f].map(r=>r.map(v=>v*q.scale)):s.fields[q.f];
+    const qc=readable(q.c);   // keep light contour colours visible on light plot
     // size must scale with |level|: Plotly's level iterator dies of float
     // round-off when size << |start| (e.g. n*tau levels ~1e18 with size 1)
     q.lv.forEach(level=>tr.push({type:'contour',x:xs,y:ys,z,name:pl(q),legendgroup:q.f,autocontour:false,showscale:false,showlegend:false,hoverinfo:'name+z',
-      contours:{coloring:'lines',showlabels:true,labelfont:{size:9,color:q.c,family:'JetBrains Mono'},start:level,end:level,size:Math.max(1,Math.abs(level))},
-      line:{width:q.w||1.6,color:q.c,dash:q.dash||'solid'},colorscale:[[0,q.c],[1,q.c]]}));
-    tr.push({x:[null],y:[null],mode:'lines',line:{color:q.c,width:4,dash:q.dash||'solid'},name:pl(q),legendgroup:q.f,showlegend:true,hoverinfo:'skip'});
+      contours:{coloring:'lines',showlabels:true,labelfont:{size:9,color:qc,family:'JetBrains Mono'},start:level,end:level,size:Math.max(1,Math.abs(level))},
+      line:{width:q.w||1.6,color:qc,dash:q.dash||'solid'},colorscale:[[0,qc],[1,qc]]}));
+    tr.push({x:[null],y:[null],mode:'lines',line:{color:qc,width:4,dash:q.dash||'solid'},name:pl(q),legendgroup:q.f,showlegend:true,hoverinfo:'skip'});
   });
   const bm=bestMarkerCloud(s,xs,ys);
   if(bm.x.length)tr.push({type:'scatter',mode:'markers',x:bm.x,y:bm.y,name:L('最佳区域','best region'),marker:{color:'#36e2c4',size:bm.size,symbol:'x',opacity:bm.opacity},showlegend:true,hoverinfo:'skip'});
