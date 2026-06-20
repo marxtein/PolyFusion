@@ -1128,6 +1128,9 @@ function drawShape(){
       Rapex=sh.lcfs.R[im];Zapex=Zb[im];
     }
     add({type:'scatter',mode:'lines+markers+text',x:[Rapex,Rapex],y:[0,Zapex],line:{color:'#7ddc6b',width:1.5,dash:'dot'},marker:{color:'#7ddc6b',size:3},text:['',`κa=${Zapex.toFixed(2)} m`],textposition:'middle right',textfont:{color:'#7ddc6b',size:10}},'annot');
+    // triangularity δ = horizontal inward shift of the apex / a (Task 6): a
+    // dotted segment from the geometric-centre top (R0) to the actual apex.
+    if(Math.abs(d)>0.02)add({type:'scatter',mode:'lines+markers+text',x:[R0,Rapex],y:[Zapex,Zapex],line:{color:'#c792ff',width:1.4,dash:'dot'},marker:{color:'#c792ff',size:3},text:['',`δ=${(+d).toFixed(2)}`],textposition:'top center',textfont:{color:'#c792ff',size:10}},'annot');
   }else if(CUR==='stellarator'){
     // backend analytic flux surfaces (rotating-ellipse / near-axis).  Geometry
     // physics rework (Scheme D) is a later phase; here we only unify the layers.
@@ -1199,8 +1202,10 @@ function drawShape(){
           _sliderRAF=requestAnimationFrame(drawShape);
         };
       }
+      // geometry parameter labels (Task 6): stellarator inputs (abstract 3D
+      // shaping) shown compactly in the meta bar — R0, a, N_fp, iota
       document.getElementById('plotMeta').innerHTML=
-        `<span>${L('后端解析磁面：','backend flux surfaces: ')}${sh.mode} · ${L('壁面 = 边界沿外法向偏移 g','wall = boundary normal offset by g')}</span>`;
+        `<span>R<sub>0</sub>=${(+v.R0).toFixed(2)} m · a=${(+v.a).toFixed(2)} m · N<sub>fp</sub>=${+v.N_fp}${isFiniteNum(v.iota)?` · ι≈${(+v.iota).toFixed(2)}`:''} · ${L('后端解析磁面','backend flux surfaces')} ${sh.mode}</span>`;
     }else{document.getElementById('plotMeta').innerHTML=`<span>${L('等待后端解析磁面','waiting for backend flux surfaces')}</span>`;document.getElementById('phControls').innerHTML='';}
   }else if(CUR==='mirror'){
     const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
@@ -1218,6 +1223,13 @@ function drawShape(){
     add(cv([-zt,-zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
     add({type:'scatter',mode:'markers',x:[-zt,zt],y:[0,0],marker:{color:'#36e2c4',size:10,symbol:'line-ns-open'}},'annot');
     add(txt([-zt,zt],[-rt*1.35,rt*1.35],['B↑','B↑'],'#36e2c4'),'annot');
+    // geometry parameter labels (Task 6): L_c central-cell length, a_c radius,
+    // mirror ratio R_m + loss-cone formula
+    add(cv([-Lc/2,Lc/2],[-a*0.55,-a*0.55],'#ffd166',1.4,'dot'),'annot');
+    add(txt([0],[-a*0.8],[`L<sub>c</sub>=${(+Lc).toFixed(2)} m`],'#ffd166'),'annot');
+    add(cv([0,0],[0,a],'#9be564',1.4,'dot'),'annot');
+    add(txt([Lc*0.05],[a*0.5],[`a<sub>c</sub>=${(+a).toFixed(2)} m`],'#9be564'),'annot');
+    add(txt([0],[(a+gg)*1.5],[`R<sub>m</sub>=B<sub>max</sub>/B<sub>min</sub>=${(+Rm).toFixed(1)} · ${L('损失锥','loss cone')} sinθ=1/√R<sub>m</sub>=${(1/Math.sqrt(Rm)).toFixed(2)}`],'#c792ff'),'annot');
     lay=LAYOUT('z [m]',L('r [m]（径向放大）','r [m] (radial enlarged)'));
     lay.xaxis.range=[-Lc/2-Lth*1.15,Lc/2+Lth*1.15];lay.yaxis.range=[-(a+gg)*1.75,(a+gg)*1.75];
     document.getElementById('plotMeta').innerHTML=`<span>${L('径向放大显示磁通管收缩；壁含间隙 g；端面积为通量诊断','radial enlarged; wall includes gap g; throat area diagnostic')}</span>`;
@@ -1264,6 +1276,13 @@ function drawShape(){
     add(seg(-0.05*v.l_s,0.18*v.r_s,-0.38*v.l_s,0.18*v.r_s,'#ff6b6b',L('B←','B←'),'triangle-left'),'annot');
     add(seg(-0.50*v.l_s,1.08*v.r_s,-0.15*v.l_s,1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');
     add(seg(-0.50*v.l_s,-1.08*v.r_s,-0.15*v.l_s,-1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');
+    // geometry parameter labels (Task 6): r_s, l_s, r_w + elongation formula
+    add(cv([0,0],[0,v.r_s],'#9be564',1.4,'dot'),'annot');
+    add(txt([v.l_s*0.05],[v.r_s*0.5],['r<sub>s</sub>'],'#9be564'),'annot');
+    add(cv([-v.l_s/2,v.l_s/2],[v.r_s*1.04,v.r_s*1.04],'#ffd166',1.4,'dot'),'annot');
+    add(txt([0],[v.r_s*1.18],[`l<sub>s</sub>=${(+v.l_s).toFixed(2)} m`],'#ffd166'),'annot');
+    add(txt([v.l_s*0.40],[v.r_w*1.05],['r<sub>w</sub>'],GC('wall')),'annot');
+    add(txt([0],[v.r_w*1.30],[`E=l<sub>s</sub>/2r<sub>s</sub>=${(v.l_s/(2*v.r_s)).toFixed(2)} · ${L('倾斜稳定','tilt')} s/E≲3-4`],'#c792ff'),'annot');
     document.getElementById('plotMeta').innerHTML=`<span>${L('分离面来自后端几何；壁 r_w；磁面/反向场为示意','separatrix from backend; wall r_w; flux/reversal schematic')}</span>`;
   }else if(CUR==='dipole'){
     const Lin=(v.L_in_fac!=null?v.L_in_fac:1.5)*v.r_ring;const NL=6;
@@ -1279,6 +1298,9 @@ function drawShape(){
     add({type:'scatter',mode:'markers+text',x:[Lin,v.R_p],y:[0,0],text:['L<sub>in</sub>','R<sub>p</sub>'],textposition:['bottom center','top center'],
       textfont:{color:'#ffd166',size:11},marker:{color:'#ffd166',size:7,symbol:'diamond'}},'annot');
     add(txt([0.68*v.R_p],[0.55*v.R_p],[L('外壳 dV/dL 更大','larger dV/dL outward')],'#36e2c4'),'annot');
+    // geometry parameter labels (Task 6): ring radius + interchange-stability formula
+    add(txt([v.r_ring],[-v.R_p*0.12],['r<sub>ring</sub>'],GC('coil')),'annot');
+    add(txt([0],[-v.R_p*0.86],[`δV=∮dl/B ∝ R⁴ · ${L('交换稳定','interchange')} −dlnp/dlnV<5/3`],'#c792ff'),'annot');
     document.getElementById('plotMeta').innerHTML=`<span>${(v.ring_model?L('有限电流环示意','finite-loop schematic'):L('点偶极示意','point-dipole schematic'))}${L('；真空室壁 R_p；功率沿磁通壳积分','; vessel wall R_p; power integrates over flux shells')}</span>`;
   }
   lay.legend=Object.assign({},lay.legend,{groupclick:'togglegroup'});
