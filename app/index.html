@@ -438,7 +438,7 @@ function showParamForMode(p){
 function tokGeomMode(){return String(+VALS.geom_model||0);}
 function tokGeomModeHtml(){const m=tokGeomMode();
   const item=(k,zh,en)=>`<button type="button" class="modebtn${m===k?' on':''}" data-tgmode="${k}">${L(zh,en)}</button>`;
-  return `<div class="fld full modefld"><label><span class="sym">geom</span><span class="nm">${L('几何输入方式','geometry input mode')}</span></label><div class="modebar">${item('0','传统','legacy')}${item('1','Miller','Miller')}${item('2','平衡','equilibrium')}</div></div>`;}
+  return `<div class="fld full modefld"><label><span class="sym">geom</span><span class="nm">${L('几何输入方式','geometry input mode')}</span></label><div class="modebar">${item('0','双椭圆','double-ellipse')}${item('1','Miller','Miller')}${item('2','平衡','equilibrium')}</div></div>`;}
 function setTokGeomMode(k){const gm=+k;
   if(gm!==2){if(isPlainObject(VALS.eq))TOK_EQ_STASH=cloneJson(VALS.eq);delete VALS.eq;}
   else if(!isPlainObject(VALS.eq)&&isPlainObject(TOK_EQ_STASH))VALS.eq=cloneJson(TOK_EQ_STASH);
@@ -482,22 +482,18 @@ function applyImportedEquilibrium(imported){
 // shared stellarator equilibrium import: preview the bytes via the backend,
 // (optionally) confirm, then apply + rebuild. Used by both the file picker and
 // the per-preset bundled quick-load (Task 8).
-async function importStellEquilibriumBuffer(buf,name,confirmFirst){
+async function importStellEquilibriumBuffer(buf,name){
+  // import applies directly — no confirmation popup (preview is shown in the
+  // status line / geometry plot after apply, so a blocking confirm adds nothing)
   const imported=await jpostBinary('/api/stellarator/equilibrium/preview',buf,name);
   if(imported.error)throw new Error(imported.error);
-  if(confirmFirst){
-    const s=imported.source||{},q=imported.iota||{},m=imported.metrics||{};
-    const warnings=(imported.warnings||[]).join('\n');
-    const summary=`${L('导入平衡预览','Equilibrium import preview')}\n${s.format||''} · ${s.filename||''}\nNFP=${imported.nfp}\nR0=${fmt(m.R0_m)} m · a_vol=${fmt(m.a_vol_m)} m\nι(axis/2⁄3/edge)=${fmt(q.axis)} / ${fmt(q.rho_2_3)} / ${fmt(q.edge)}\nVp=${fmt(m.Vp_m3)} m³ · Sp=${fmt(m.Sp_m2)} m²\nmodes=${imported.mode_count||0}${warnings?`\n\n⚠ ${warnings}`:''}\n\n${L('应用并覆盖当前仿星器几何？','Apply and replace current stellarator geometry?')}`;
-    if(!confirm(summary))return false;
-  }
   applyImportedEquilibrium(imported);STELL_STASH={};stashStellGeom();ADVANCED=true;
   buildParams();buildThresh();buildPlotOpts();fitScanRanges();await recompute();setView('shape');
   return true;
 }
 async function onEquilibriumFile(e){
   const f=e.target.files[0];e.target.value='';if(!f)return;
-  try{await importStellEquilibriumBuffer(await f.arrayBuffer(),f.name,true);}
+  try{await importStellEquilibriumBuffer(await f.arrayBuffer(),f.name);}
   catch(err){document.getElementById('err').textContent=L('平衡导入失败：','equilibrium import failed: ')+(err.message||err);}
 }
 // apply a parsed tokamak G-EQDSK (same overrides as the eqFile picker) and
@@ -524,7 +520,7 @@ async function loadBundledEquilibrium(){
     const resp=await fetch(`/equilibria/${CUR}/${encodeURIComponent(ent.file)}`);
     if(!resp.ok)throw new Error('HTTP '+resp.status);
     if(CUR==='stellarator'){
-      await importStellEquilibriumBuffer(await resp.arrayBuffer(),ent.file,false);
+      await importStellEquilibriumBuffer(await resp.arrayBuffer(),ent.file);
     }else if(CUR==='tokamak'){
       const text=await resp.text();
       const r=await jpost('/api/tokamak/parse_eqdsk',{eqdsk:text});
@@ -1052,14 +1048,16 @@ function drawPopcon(){
 // unified geometry palette, theme-aware so lines stay legible on light paper.
 // EVERY config maps its features onto the same six roles + line styles below,
 // so the legend reads identically across tokamak/mirror/FRC/dipole/stellarator.
+// Unified palette across ALL configs (user request 2026-06-20):
+//   plasma boundary = cyan   wall = red (thicker)   flux surfaces = thin grey
 const GEO=()=>THEME!=='light'?
-  {boundary:'#36e2c4',wall:'#ff5d8f',flux:'#5fb6c7',open:'#7aa2ff',coil:'#ff5d8f',annot:'#c792ff',
+  {boundary:'#36e2c4',wall:'#ff5d5d',flux:'#8b93a3',open:'#7aa2ff',coil:'#ff9e7a',annot:'#c792ff',
    bfill:'rgba(54,226,196,.06)'}:
-  {boundary:'#0e9486',wall:'#c33a5c',flux:'#3f8a9b',open:'#3a5fc8',coil:'#c33a5c',annot:'#7a47c4',
+  {boundary:'#0e9486',wall:'#d23a3a',flux:'#7d8694',open:'#3a5fc8',coil:'#c06a3a',annot:'#7a47c4',
    bfill:'rgba(14,148,134,.08)'};
-// fixed line style per role (color/type consistency, Task 3):
-//   boundary = solid 2.6 + fill   wall = solid 2.2   flux = dashed 1.2
-//   open = dotted 1.05            annot = whatever the marker needs
+// fixed line style per role (color/type consistency):
+//   boundary = solid 2.6 cyan + fill   wall = solid 2.2 red   flux = dashed 1.2 grey
+//   open = dotted 1.05                 annot = whatever the marker needs
 const SHAPE_GROUPS=()=>{const g=GEO();return{boundary:[L('等离子体边界','plasma boundary'),g.boundary],
   wall:[L('壁面','wall'),g.wall],flux:[L('磁面/磁力线','flux surfaces'),g.flux],
   open:[L('开放场线/SOL','open field lines'),g.open],coil:[L('线圈/结构','coils / structure'),g.coil],
@@ -1117,7 +1115,7 @@ function drawShape(){
         if(j===rr.length-1)add(lin(ar[0],ar[1],GC('wall'),2.2),'wall');
         else if(j===rr.length-2)add(lin(ar[0],ar[1],GC('boundary'),2.6,true,GP.bfill),'boundary');
         else add(cv(ar[0],ar[1],GC('flux'),1.2,'dash'),'flux');});
-      if(gm===0)document.getElementById('plotMeta').innerHTML=`<span>${L('传统解析几何（双椭圆示意）','legacy analytic geometry (double-ellipse sketch)')}</span>`;
+      if(gm===0)document.getElementById('plotMeta').innerHTML=`<span>${L('双椭圆解析几何（上/下半椭圆，由 κ、δ 控制）','double-ellipse analytic geometry (upper/lower half-ellipses set by κ, δ)')}</span>`;
     }
     add({type:'scatter',mode:'lines+markers+text',x:[0,R0],y:[0,0],line:{color:'#ff6b6b',width:1.5,dash:'dot'},marker:{color:'#ff6b6b',size:3},text:['',`R<sub>0</sub>=${R0} m`],textposition:'top center',textfont:{color:'#ff6b6b',size:10}},'annot');
     add({type:'scatter',mode:'lines+markers+text',x:[R0,R0+a],y:[0,0],line:{color:'#ff9e3d',width:1.5,dash:'dot'},marker:{color:'#ff9e3d',size:3},text:['',`a=${a.toFixed(2)} m`],textposition:'bottom center',textfont:{color:'#ff9e3d',size:10}},'annot');
@@ -1149,7 +1147,9 @@ function drawShape(){
        if(Xb>xb&&Yb>yb)lay.__fixbox={xmn:xb,xmx:Xb,ymn:yb,ymx:Yb};}
       const drawCut=(s,col)=>{const surfs=s.surfaces||[{rho:1,R:s.R,Z:s.Z}];
         surfs.forEach((q,qi)=>{const isB=qi===surfs.length-1;
-          add({type:'scatter',mode:'lines',x:q.R,y:q.Z,line:{color:isB?col:GC('flux'),width:isB?2.6:1.18},opacity:isB?1:0.7},isB?'boundary':'flux');});
+          // boundary unified to cyan across all toroidal cuts (was per-cut colour);
+          // cuts stay distinguishable by the φ-phase selector / slider.
+          add({type:'scatter',mode:'lines',x:q.R,y:q.Z,line:{color:isB?GC('boundary'):GC('flux'),width:isB?2.6:1.18},opacity:isB?1:0.7},isB?'boundary':'flux');});
         if(s.wall)add({type:'scatter',mode:'lines',x:s.wall.R,y:s.wall.Z,line:{color:GC('wall'),width:2.2},opacity:0.9},'wall');};
       if(sliderOn){
         // continuous phase scrub: linear interpolation between nearest frames
@@ -1325,9 +1325,25 @@ function drawProfiles(){
       const g=Math.exp(-Math.pow((rho-x0)/w,2));
       N.push(g);TT.push(0.55+0.45*g);  // T flatter than n (rigid-rotor T≈const + bump)
     }else if(CUR==='dipole'){const Li=(v.L_in_fac!=null?v.L_in_fac:1.5);const r=1+rho*(v.R_p/(Li*v.r_ring)-1);N.push(Math.pow(1/r,4));TT.push(Math.pow(1/r,8/3));}
+    else if(CUR==='tokamak'||CUR==='stellarator'){
+      // H-mode-like: peaked core + tanh edge pedestal. ped(rho)=top at the
+      // pedestal shoulder, rising to 1 on axis (core bump ∝ peaking exponent),
+      // dropping to sep at the separatrix. Tokamak gets a full n+T pedestal
+      // (EPED-ish, width ~4% a). Stellarator (W7-AS H-mode / HDH) gets a WEAK
+      // density pedestal and essentially NO temperature pedestal — at the edge
+      // transition its T profile is barely changed — so T stays a plain peaked core.
+      const stell=CUR==='stellarator';
+      const ped=(rho,top,sep,pk,pos,wid)=>{const s=Math.tanh((rho-pos)/wid);
+        return top*0.5*(1-s)+sep*0.5*(1+s)+(1-top)*Math.pow(Math.max(1-Math.pow(Math.min(rho/pos,1),2),0),pk);};
+      const pos=stell?0.88:0.93,wid=stell?0.06:0.04;
+      N.push(ped(rho, stell?0.80:0.65, stell?0.35:0.10, Sn, pos, wid));
+      TT.push(stell?Math.pow(Math.max(1-rho*rho,0),ST):ped(rho,0.45,0.05,ST,0.93,0.04));
+    }
     else{N.push(Math.pow(Math.max(1-rho*rho,0),Sn));TT.push(Math.pow(Math.max(1-rho*rho,0),ST));}}
   if(CUR==='frc')note=L('刚体转子 FRC：密度在磁场零点(≈0.71 r_s)峰化、轴上与分离面为零','rigid-rotor FRC: density peaks at the field null (≈0.71 r_s), zero on axis & separatrix');
   else if(CUR==='dipole')note=L('偶极绝热剖面：n∝r⁻⁴, T∝r⁻⁸ᐟ³（环→外壳）','dipole adiabatic profile: n∝r⁻⁴, T∝r⁻⁸ᐟ³ (ring→outer shell)');
+  else if(CUR==='tokamak')note=L(`H 模剖面：峰化芯部 + 边缘 tanh 台基（n、T 均有台基，宽≈4%a）· Sn=${Sn}, ST=${ST}`,`H-mode: peaked core + edge tanh pedestal (both n & T, width ≈4% a) · Sn=${Sn}, ST=${ST}`);
+  else if(CUR==='stellarator')note=L(`仿星器 H 模：弱密度台基 + 无温度台基（W7-AS/HDH，边缘 T 几乎不变）· Sn=${Sn}, ST=${ST}`,`stellarator H-mode: weak density pedestal, no T pedestal (W7-AS/HDH) · Sn=${Sn}, ST=${ST}`);
   else note=L(`峰化模型：n=(1−ρ²)^Sn, T=(1−ρ²)^ST  ·  Sn=${Sn}, ST=${ST}`,`peaking model: n=(1−ρ²)^Sn, T=(1−ρ²)^ST  ·  Sn=${Sn}, ST=${ST}`);
   document.getElementById('plotMeta').innerHTML=`<span>${note}</span>`;
   const xl=CUR==='dipole'?L('归一化半径 (环→外)','normalized radius (ring→edge)'):

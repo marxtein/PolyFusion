@@ -2033,6 +2033,103 @@
           "source": "synthetic from axis Fourier near-axis"
         }
       }
+    },
+    "用户设计 User Design": {
+      "R0": 10.0,
+      "a": 1.0,
+      "N_fp": 4,
+      "delta_h": 0.3,
+      "etabar": 0.1,
+      "Sn": 0.5,
+      "ST": 1.0,
+      "ni0": 1e+20,
+      "Ti0": 15.0,
+      "fT": 1.0,
+      "fsig": 1.0,
+      "f1": 0.5,
+      "B0": 5.0,
+      "tauE": 1.0,
+      "fHe": 0.04,
+      "fimp": 0.01,
+      "Zimp": 10,
+      "Rw": 0.7,
+      "g": 0.1,
+      "icase": 1,
+      "f_ren": 1.0,
+      "use_tauE": 1.0,
+      "f_aux_e": 0.5,
+      "H_fac": 1.0,
+      "iota": 0.0,
+      "Vp_override": 0.0,
+      "Sw_override": 0.0,
+      "geometry_variants": {
+        "authority": "simple",
+        "simple": {
+          "delta_h": 0.3,
+          "etabar": 0.1
+        },
+        "axis": {
+          "rc": [
+            10.0,
+            0.3
+          ],
+          "zs": [
+            0.0,
+            -0.3
+          ],
+          "etabar": 0.1,
+          "source": "synthetic from simple near-axis"
+        },
+        "boundary": {
+          "shape": {
+            "kind": "fourier",
+            "nfp": 4,
+            "R": [
+              [
+                0,
+                0,
+                0.0
+              ],
+              [
+                1,
+                0,
+                1.0
+              ],
+              [
+                0,
+                1,
+                0.1
+              ]
+            ],
+            "Z": [
+              [
+                -1,
+                0,
+                1.0
+              ],
+              [
+                0,
+                -1,
+                -0.1
+              ]
+            ],
+            "axis_rc": [
+              10.0,
+              0.3
+            ],
+            "axis_zs": [
+              0.0,
+              -0.3
+            ],
+            "source": "synthetic from simple near-axis"
+          },
+          "iota": 0.0,
+          "Vp_override": 0.0,
+          "Sw_override": 0.0,
+          "etabar": 0.1,
+          "source": "synthetic from simple near-axis"
+        }
+      }
     }
   },
   "_notes": {
@@ -2055,6 +2152,9 @@
       "precise-QA",
       "precise-QH",
       "QH-nfp3"
+    ],
+    "自定义 Custom": [
+      "用户设计 User Design"
     ]
   }
 }

@@ -111,6 +111,34 @@
       "B_expand": 100.0,
       "lnLambda": 17.0,
       "phi_i_over_Te": 0.0
+    },
+    "用户设计 User Design": {
+      "a_c": 0.3,
+      "L_c": 10.0,
+      "B_vac": 3.0,
+      "R_mirror": 10.0,
+      "ni0": 1e+20,
+      "Ti0": 20.0,
+      "Te0": 15.0,
+      "tauE": 1.0,
+      "Sn": 0.5,
+      "ST": 1.0,
+      "g": 0.05,
+      "fsig": 1.0,
+      "f_throat": 0.1,
+      "Rw": 0.8,
+      "icase": 1,
+      "f1": 0.5,
+      "fHe": 0.0,
+      "fimp": 0.0,
+      "Zimp": 10,
+      "use_tauE": 1.0,
+      "use_tauC": 0.0,
+      "tauC": 1.0,
+      "f_aux_e": 0.5,
+      "B_expand": 100.0,
+      "lnLambda": 17.0,
+      "phi_i_over_Te": 0.0
     }
   },
   "groups": {
@@ -121,6 +149,9 @@
     "概念·反应堆 Concepts": [
       "BEAM",
       "pB-mirror"
+    ],
+    "自定义 Custom": [
+      "用户设计 User Design"
     ]
   }
 }

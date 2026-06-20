@@ -399,6 +399,31 @@
       "use_tauE": 1.0,
       "f_aux_e": 0.5,
       "H_fac": 1.0
+    },
+    "用户设计 User Design": {
+      "icase": 1,
+      "R0": 2.0,
+      "A": 2.5,
+      "kappa": 1.8,
+      "delta": 0.5,
+      "Sn": 1.0,
+      "ST": 1.0,
+      "ni0": 1e+20,
+      "Ti0": 20,
+      "fT": 0.5,
+      "fsig": 1.0,
+      "f1": 0.5,
+      "BT0": 4.0,
+      "Ip": 5.0,
+      "tauE": 1.0,
+      "fHe": 0.02,
+      "fimp": 0.01,
+      "Zimp": 10,
+      "Rw": 0.8,
+      "g": 0.0,
+      "use_tauE": 1.0,
+      "f_aux_e": 0.5,
+      "H_fac": 1.0
     }
   },
   "groups": {
@@ -423,6 +448,9 @@
       "pB-reactor",
       "CT",
       "ST"
+    ],
+    "自定义 Custom": [
+      "用户设计 User Design"
     ]
   }
 }

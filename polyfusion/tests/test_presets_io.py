@@ -18,13 +18,15 @@ from polyfusion.presets_io import load_presets, _USER_DIR  # noqa: E402
 from polyfusion.io import run_preset  # noqa: E402
 
 # expected group-label sets per config (keys only; order not asserted)
+# every config also ships a "自定义 Custom" group holding the editable
+# "用户设计 User Design" template preset (user-design starting point).
 EXPECTED_GROUPS = {
     "tokamak": {"实验装置 Experiments", "燃烧·反应堆 Burning·Reactor",
-                "ENN 概念 Concepts"},
-    "mirror": {"实验装置 Experiments", "概念·反应堆 Concepts"},
-    "frc": {"实验装置 Experiments", "概念·反应堆 Concepts"},
-    "dipole": {"实验装置 Experiments", "概念·反应堆 Concepts"},
-    "stellarator": {"实验装置 Experiments", "反应堆 Reactor"},
+                "ENN 概念 Concepts", "自定义 Custom"},
+    "mirror": {"实验装置 Experiments", "概念·反应堆 Concepts", "自定义 Custom"},
+    "frc": {"实验装置 Experiments", "概念·反应堆 Concepts", "自定义 Custom"},
+    "dipole": {"实验装置 Experiments", "概念·反应堆 Concepts", "自定义 Custom"},
+    "stellarator": {"实验装置 Experiments", "反应堆 Reactor", "自定义 Custom"},
 }
 # one representative preset per config that must run valid
 REP_PRESET = {
