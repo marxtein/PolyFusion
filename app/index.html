@@ -1093,10 +1093,10 @@ function drawShape(){
       const W=close(sh.wall),Lf=close(sh.lcfs);
       add(lin(W[0],W[1],GC('wall'),2.2),'wall');
       if(Array.isArray(sh.flux)&&sh.flux.length){
-        sh.flux.forEach(s=>add(cv(s.R.concat([s.R[0]]),s.Z.concat([s.Z[0]]),GC('flux'),1.2,'dash'),'flux'));
+        sh.flux.forEach(s=>add(cv(s.R.concat([s.R[0]]),s.Z.concat([s.Z[0]]),GC('flux'),1.2,'solid'),'flux'));
       }else{
         const ax0=(sh.axis&&sh.axis.R&&sh.axis.R.length)?[sh.axis.R[0],sh.axis.Z[0]]:[R0,0];
-        [0.15,0.35,0.55,0.75,0.9].forEach(s=>add(cv(sh.lcfs.R.map(R=>ax0[0]+s*(R-ax0[0])),sh.lcfs.Z.map(Z=>ax0[1]+s*(Z-ax0[1])),GC('flux'),1.2,'dash'),'flux'));
+        [0.15,0.35,0.55,0.75,0.9].forEach(s=>add(cv(sh.lcfs.R.map(R=>ax0[0]+s*(R-ax0[0])),sh.lcfs.Z.map(Z=>ax0[1]+s*(Z-ax0[1])),GC('flux'),1.2,'solid'),'flux'));
       }
       add(lin(Lf[0],Lf[1],GC('boundary'),2.6,true,GP.bfill),'boundary');
       const ax=(sh.axis&&sh.axis.R&&sh.axis.R.length)?[sh.axis.R[0],sh.axis.Z[0]]:[R0,0];
@@ -1114,23 +1114,24 @@ function drawShape(){
       rr.forEach((r,j)=>{const ar=dshape(r);
         if(j===rr.length-1)add(lin(ar[0],ar[1],GC('wall'),2.2),'wall');
         else if(j===rr.length-2)add(lin(ar[0],ar[1],GC('boundary'),2.6,true,GP.bfill),'boundary');
-        else add(cv(ar[0],ar[1],GC('flux'),1.2,'dash'),'flux');});
+        else add(cv(ar[0],ar[1],GC('flux'),1.2,'solid'),'flux');});
       if(gm===0)document.getElementById('plotMeta').innerHTML=`<span>${L('双椭圆解析几何（上/下半椭圆，由 κ、δ 控制）','double-ellipse analytic geometry (upper/lower half-ellipses set by κ, δ)')}</span>`;
     }
-    add({type:'scatter',mode:'lines+markers+text',x:[0,R0],y:[0,0],line:{color:'#ff6b6b',width:1.5,dash:'dot'},marker:{color:'#ff6b6b',size:3},text:['',`R<sub>0</sub>=${R0} m`],textposition:'top center',textfont:{color:'#ff6b6b',size:10}},'annot');
-    add({type:'scatter',mode:'lines+markers+text',x:[R0,R0+a],y:[0,0],line:{color:'#ff9e3d',width:1.5,dash:'dot'},marker:{color:'#ff9e3d',size:3},text:['',`a=${a.toFixed(2)} m`],textposition:'bottom center',textfont:{color:'#ff9e3d',size:10}},'annot');
-    // kappa*a height marker drawn AT the boundary apex (R0-delta*a for a
-    // triangular plasma), so the tip touches the actual top instead of floating
-    // on the descending side at R0.
+    // apex (top) of the boundary: backend LCFS max-Z when available, else κa.
     let Rapex=R0-d*a, Zapex=a*k;
     if(sh&&sh.lcfs&&sh.lcfs.Z&&sh.lcfs.Z.length){
       const Zb=sh.lcfs.Z;let im=0;for(let i=1;i<Zb.length;i++)if(Zb[i]>Zb[im])im=i;
       Rapex=sh.lcfs.R[im];Zapex=Zb[im];
     }
-    add({type:'scatter',mode:'lines+markers+text',x:[Rapex,Rapex],y:[0,Zapex],line:{color:'#7ddc6b',width:1.5,dash:'dot'},marker:{color:'#7ddc6b',size:3},text:['',`κa=${Zapex.toFixed(2)} m`],textposition:'middle right',textfont:{color:'#7ddc6b',size:10}},'annot');
-    // triangularity δ = horizontal inward shift of the apex / a (Task 6): a
-    // dotted segment from the geometric-centre top (R0) to the actual apex.
+    // dimension callouts placed OUTSIDE the plasma so the labels/lines do not
+    // sit on top of the flux surfaces: R0 & a below the plasma, κa to the left,
+    // wall gap g outboard at the midplane, triangularity δ at the apex.
+    const Zd=-Math.abs(Zapex)*1.22, xK=R0-a*1.22;
+    add({type:'scatter',mode:'lines+markers+text',x:[0,R0],y:[Zd,Zd],line:{color:'#ff6b6b',width:1.5,dash:'dot'},marker:{color:'#ff6b6b',size:3},text:['',`R<sub>0</sub>=${(+R0).toFixed(2)} m`],textposition:'bottom center',textfont:{color:'#ff6b6b',size:10}},'annot');
+    add({type:'scatter',mode:'lines+markers+text',x:[R0,R0+a],y:[Zd,Zd],line:{color:'#ff9e3d',width:1.5,dash:'dot'},marker:{color:'#ff9e3d',size:3},text:['',`a=${a.toFixed(2)} m`],textposition:'top center',textfont:{color:'#ff9e3d',size:10}},'annot');
+    add({type:'scatter',mode:'lines+markers+text',x:[xK,xK],y:[0,Zapex],line:{color:'#7ddc6b',width:1.5,dash:'dot'},marker:{color:'#7ddc6b',size:3},text:['',`κa=${Zapex.toFixed(2)} m`],textposition:'middle left',textfont:{color:'#7ddc6b',size:10}},'annot');
     if(Math.abs(d)>0.02)add({type:'scatter',mode:'lines+markers+text',x:[R0,Rapex],y:[Zapex,Zapex],line:{color:'#c792ff',width:1.4,dash:'dot'},marker:{color:'#c792ff',size:3},text:['',`δ=${(+d).toFixed(2)}`],textposition:'top center',textfont:{color:'#c792ff',size:10}},'annot');
+    if((g||0)>0)add({type:'scatter',mode:'lines+markers+text',x:[R0+a,R0+a+g],y:[0,0],line:{color:GC('wall'),width:1.5,dash:'dot'},marker:{color:GC('wall'),size:3},text:['',`g=${(+g).toFixed(2)} m`],textposition:'top center',textfont:{color:GC('wall'),size:10}},'annot');
   }else if(CUR==='stellarator'){
     // backend analytic flux surfaces (rotating-ellipse / near-axis).  Geometry
     // physics rework (Scheme D) is a later phase; here we only unify the layers.
@@ -1217,7 +1218,7 @@ function drawShape(){
     add(lin(Zb,Rb,GC('boundary'),2.6,true),'boundary');
     add(lin([-Lc/2-Lth,Lc/2+Lth],[a+gg,a+gg],GC('wall'),2.2),'wall');
     add(lin([-Lc/2-Lth,Lc/2+Lth],[-(a+gg),-(a+gg)],GC('wall'),2.2),'wall');
-    [0.35,0.65,0.88].forEach(q=>{add(cv(Z,Rr.map(r=>q*r),GC('flux'),1.2,'dash'),'flux');add(cv(Z,Rr.map(r=>-q*r),GC('flux'),1.2,'dash'),'flux');});
+    [0.35,0.65,0.88].forEach(q=>{add(cv(Z,Rr.map(r=>q*r),GC('flux'),1.2,'solid'),'flux');add(cv(Z,Rr.map(r=>-q*r),GC('flux'),1.2,'solid'),'flux');});
     const zt=Lc/2+Lth,rt=prof(zt);
     add(cv([zt,zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
     add(cv([-zt,-zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
@@ -1229,6 +1230,7 @@ function drawShape(){
     add(txt([0],[-a*0.8],[`L<sub>c</sub>=${(+Lc).toFixed(2)} m`],'#ffd166'),'annot');
     add(cv([0,0],[0,a],'#9be564',1.4,'dot'),'annot');
     add(txt([Lc*0.05],[a*0.5],[`a<sub>c</sub>=${(+a).toFixed(2)} m`],'#9be564'),'annot');
+    if(gg>0)add({type:'scatter',mode:'lines+markers+text',x:[-Lc*0.25,-Lc*0.25],y:[a,a+gg],line:{color:GC('wall'),width:1.4,dash:'dot'},marker:{color:GC('wall'),size:3},text:['',`g=${(+gg).toFixed(2)} m`],textposition:'middle left',textfont:{color:GC('wall'),size:10}},'annot');
     add(txt([0],[(a+gg)*1.5],[`R<sub>m</sub>=B<sub>max</sub>/B<sub>min</sub>=${(+Rm).toFixed(1)} · ${L('损失锥','loss cone')} sinθ=1/√R<sub>m</sub>=${(1/Math.sqrt(Rm)).toFixed(2)}`],'#c792ff'),'annot');
     lay=LAYOUT('z [m]',L('r [m]（径向放大）','r [m] (radial enlarged)'));
     lay.xaxis.range=[-Lc/2-Lth*1.15,Lc/2+Lth*1.15];lay.yaxis.range=[-(a+gg)*1.75,(a+gg)*1.75];
@@ -1247,11 +1249,11 @@ function drawShape(){
     // nested poloidal flux surfaces: real backend psi=const loops (audit docs/42
     // P0) when a run is present, else a schematic fallback.
     if(sh&&Array.isArray(sh.surfaces)&&sh.surfaces.length){
-      sh.surfaces.forEach(srf=>add(cv(srf.z,srf.r,GC('flux'),1.18,'dash'),'flux'));
+      sh.surfaces.forEach(srf=>add(cv(srf.z,srf.r,GC('flux'),1.18,'solid'),'flux'));
     }else{
       [-1,1].forEach(sgn=>[0.30,0.48,0.66,0.84].forEach(q=>{const X=[],Y=[];for(let i=0;i<=180;i++){const th=2*Math.PI*i/180;
           X.push((v.l_s/2)*0.78*q*Math.cos(th));Y.push(sgn*rn+sgn*(v.r_s-rn)*0.86*q*Math.sin(th));}
-        add(cv(X,Y,GC('flux'),1.18,'dash'),'flux');}));
+        add(cv(X,Y,GC('flux'),1.18,'solid'),'flux');}));
     }
     // open SOL field lines outside the separatrix: real backend curves (audit
     // docs/42 P2) when a run is present, else a schematic fallback.
@@ -1347,26 +1349,10 @@ function drawProfiles(){
       const g=Math.exp(-Math.pow((rho-x0)/w,2));
       N.push(g);TT.push(0.55+0.45*g);  // T flatter than n (rigid-rotor T≈const + bump)
     }else if(CUR==='dipole'){const Li=(v.L_in_fac!=null?v.L_in_fac:1.5);const r=1+rho*(v.R_p/(Li*v.r_ring)-1);N.push(Math.pow(1/r,4));TT.push(Math.pow(1/r,8/3));}
-    else if(CUR==='tokamak'||CUR==='stellarator'){
-      // H-mode-like: peaked core + tanh edge pedestal. ped(rho)=top at the
-      // pedestal shoulder, rising to 1 on axis (core bump ∝ peaking exponent),
-      // dropping to sep at the separatrix. Tokamak gets a full n+T pedestal
-      // (EPED-ish, width ~4% a). Stellarator (W7-AS H-mode / HDH) gets a WEAK
-      // density pedestal and essentially NO temperature pedestal — at the edge
-      // transition its T profile is barely changed — so T stays a plain peaked core.
-      const stell=CUR==='stellarator';
-      const ped=(rho,top,sep,pk,pos,wid)=>{const s=Math.tanh((rho-pos)/wid);
-        return top*0.5*(1-s)+sep*0.5*(1+s)+(1-top)*Math.pow(Math.max(1-Math.pow(Math.min(rho/pos,1),2),0),pk);};
-      const pos=stell?0.88:0.93,wid=stell?0.06:0.04;
-      N.push(ped(rho, stell?0.80:0.65, stell?0.35:0.10, Sn, pos, wid));
-      TT.push(stell?Math.pow(Math.max(1-rho*rho,0),ST):ped(rho,0.45,0.05,ST,0.93,0.04));
-    }
     else{N.push(Math.pow(Math.max(1-rho*rho,0),Sn));TT.push(Math.pow(Math.max(1-rho*rho,0),ST));}}
   if(CUR==='frc')note=L('刚体转子 FRC：密度在磁场零点(≈0.71 r_s)峰化、轴上与分离面为零','rigid-rotor FRC: density peaks at the field null (≈0.71 r_s), zero on axis & separatrix');
   else if(CUR==='dipole')note=L('偶极绝热剖面：n∝r⁻⁴, T∝r⁻⁸ᐟ³（环→外壳）','dipole adiabatic profile: n∝r⁻⁴, T∝r⁻⁸ᐟ³ (ring→outer shell)');
-  else if(CUR==='tokamak')note=L(`H 模剖面：峰化芯部 + 边缘 tanh 台基（n、T 均有台基，宽≈4%a）· Sn=${Sn}, ST=${ST}`,`H-mode: peaked core + edge tanh pedestal (both n & T, width ≈4% a) · Sn=${Sn}, ST=${ST}`);
-  else if(CUR==='stellarator')note=L(`仿星器 H 模：弱密度台基 + 无温度台基（W7-AS/HDH，边缘 T 几乎不变）· Sn=${Sn}, ST=${ST}`,`stellarator H-mode: weak density pedestal, no T pedestal (W7-AS/HDH) · Sn=${Sn}, ST=${ST}`);
-  else note=L(`峰化模型：n=(1−ρ²)^Sn, T=(1−ρ²)^ST  ·  Sn=${Sn}, ST=${ST}`,`peaking model: n=(1−ρ²)^Sn, T=(1−ρ²)^ST  ·  Sn=${Sn}, ST=${ST}`);
+  else note=L(`峰化模型（与功率账积分一致）：n=(1−ρ²)^Sn, T=(1−ρ²)^ST  ·  Sn=${Sn}, ST=${ST}`,`peaking model (consistent with the power-balance integral): n=(1−ρ²)^Sn, T=(1−ρ²)^ST  ·  Sn=${Sn}, ST=${ST}`);
   document.getElementById('plotMeta').innerHTML=`<span>${note}</span>`;
   const xl=CUR==='dipole'?L('归一化半径 (环→外)','normalized radius (ring→edge)'):
     CUR==='frc'?L('径向 ρ = r / r_s','radial ρ = r / r_s'):

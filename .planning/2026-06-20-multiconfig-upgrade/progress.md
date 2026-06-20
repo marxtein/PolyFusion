@@ -22,3 +22,9 @@
   - T6 各位形标注(浏览器 eval 实测)：托卡马克 a/κa/δ；磁镜 L_c/a_c/R_m+损失锥公式；FRC r_s/l_s/r_w/E+s/E；偶极 r_ring+交换稳定公式；仿星器 R0/a/N_fp/ι(meta)。
   - 验收：5 位形几何图颜色统一(青边界/红壁/灰磁面)实测通过；控制台零错误；T8 剖面实测(托卡马克双台基 n 1→0.12、仿星器弱密度台基 n→0.36 且 T 无台基→0)；node 语法检查 OK；mirror 几何截图无重叠。
   - 预存失败(非本次)：solve_mirror multi_zone kwarg；normalizeStellBoundaryIota 缺失；ITER Pfus golden 漂移(433.55 vs 381.39)。
+
+- **用户反馈轮 (2026-06-20)**：
+  - 大问题核查：`drawProfiles()` 是纯前端画图(零 POST/fetch)，**积分全在 Python 后端，T8 没碰一行 tokamak.py** → 所有 golden/benchmark 数字逐位不变。但 T8 造成"显示↔物理不一致"(后端积分峰化 (1-x²)^Sn，前端却画 H 模台基)。
+  - **采用方案 A：回退 drawProfiles 显示为峰化模型**，与功率账积分一致(note 加注"与功率账积分一致")。实测托卡马克 n 边缘→0。H 模"体制"由约束标度(tauE/H98/H_ISS04)体现，非假台基。方案 B(真做 H 模物理:数值重算所有矩+golden 重基线)留作可选大改。
+  - UI 修：1)托卡马克/磁镜/FRC 磁面 dash→solid(实测 solid)；2)壁间隙 g 显示(托卡马克外侧 g=0.02、磁镜 g=0.02)；3)托卡马克 R0/a 移到等离子体下方(y=-1.04)、κa 移到左侧、避免被磁面线遮挡。
+  - 验收：node 语法 OK；控制台零错误；index.html 串测 test_stellarator_volume_rho 通过(剩 1 预存 normalizeStellBoundaryIota 失败)。
