@@ -327,6 +327,58 @@ def miller_flux_surfaces(R0, a, kappa, delta, shaf=0.0,
     return out
 
 
+@lru_cache(maxsize=256)
+def tokamak_profile_volume_fraction(R0, a, kappa, delta, shaf=0.0,
+                                    geom_model=1, n_rho=64, n_theta=180):
+    """Map nested-flux-surface internal scale ``s`` to volume radius ``rho``.
+
+    Builds the tapered Miller nested surface at each internal scale ``s`` in
+    [0, 1] (same shaping taper as :func:`miller_flux_surfaces`: elongation
+    excess fades toward the axis, triangularity ~ ``rho**2``, parabolic
+    Shafranov centre), integrates its surface-of-revolution volume, and returns
+
+        ``surface_scale``, ``rho = sqrt(V(s)/V(1))``, ``vfrac = V(s)/V(1)``.
+
+    This is the tokamak analogue of the stellarator's
+    ``_profile_volume_fraction``: it makes the radial coordinate the volume
+    radius *derived by integrating the nested flux surfaces*, rather than an
+    a-priori self-similar label.  The 0-D power account is unaffected (profiles
+    stay defined in the volume radius and ``V_p`` is the real total), but the
+    ``s <-> rho`` map is the coordinate infrastructure for importing real
+    flux-surface-based profiles later.
+
+    ``geom_model == 0`` (legacy closed-form fits) has no drawn boundary, so the
+    self-similar circular mapping ``vfrac = s**2`` is returned unchanged.
+
+    Memoized on the geometry arguments only, so a POPCON scan over non-geometry
+    axes (Ti0, ni0, ...) reuses one computation across the whole grid.
+    """
+    s = np.linspace(0.0, 1.0, int(n_rho))
+    if int(geom_model) == 0:
+        vfrac = s ** 2
+        return s, np.sqrt(vfrac), vfrac
+    f = _KAPPA_EXCESS_AXIS_FRAC
+    t = np.linspace(0.0, 2 * math.pi, int(n_theta), endpoint=False)
+    vol = np.zeros_like(s)
+    for i in range(1, len(s)):
+        rho = s[i]
+        ar = a * rho
+        kr = 1.0 + (kappa - 1.0) * (f + (1.0 - f) * rho ** 4)
+        dr = max(-0.999, min(0.999, delta * rho ** 2))
+        cR = R0 + shaf * (1.0 - rho ** 2)
+        R = cR + ar * np.cos(t + math.asin(dr) * np.sin(t))
+        Z = kr * ar * np.sin(t)
+        vol[i], _ = revolution_metrics(R, Z)
+    total = float(vol[-1])
+    if total <= 0.0 or not math.isfinite(total):
+        raise ValueError("tokamak nested-surface volume must be positive")
+    vol = np.maximum.accumulate(vol)        # guard tiny non-monotone numeric noise
+    vol[0] = 0.0
+    vol[-1] = total
+    vfrac = vol / total
+    return s, np.sqrt(np.clip(vfrac, 0.0, 1.0)), vfrac
+
+
 def legacy_metrics(R0, A, kappa, delta, g):
     """Original closed-form D-shape fits (funsc verbatim) — geom model 0."""
     a = R0 / A
@@ -373,10 +425,17 @@ def tokamak_geometry(geom_model, R0, A, kappa, delta, g, eq,
         raise ValueError(f"geom_model must be 0, 1 or 2 (got {geom_model})")
     Vp = Vp_override if Vp_override and Vp_override > 0 else Vp_g
     Sw = Sw_override if Sw_override and Sw_override > 0 else Sw_g
+    # volume radius from nested-flux-surface layer integration (rho = sqrt(V/Vp));
+    # power account is unaffected, this exposes the s<->rho map for profile import
+    p_scale, p_rho, p_vfrac = tokamak_profile_volume_fraction(
+        R0, a, kappa, delta, shaf, int(geom_model))
     return {
         "a": a, "Vp": Vp, "Sp": Sp_g, "Sw": Sw,
         "Vp_geom": Vp_g, "Sp_geom": Sp_g, "Sw_geom": Sw_g,
         "geom_volume_ratio": Vp_g / Vp if Vp else float("nan"),
         "geom_wall_ratio": Sw_g / Sw if Sw else float("nan"),
         "shaf_shift": shaf, "geom_model": float(geom_model),
+        "profile_surface_scale": p_scale.tolist(),
+        "profile_rho": p_rho.tolist(),
+        "profile_vfrac": p_vfrac.tolist(),
     }

@@ -352,9 +352,14 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
 
     # --- density limits and confinement scalings ---
     nbar = ne0 * _line_average_factor(Sn)
-    nbar_geom = _line_average_value(ne0, Sn, x, vfrac)
-    Te_line_geom = _line_average_value(Te0, ST, x, vfrac)
-    Ti_line_geom = _line_average_value(Ti0, ST, x, vfrac)
+    # volume radius from nested-flux-surface layer integration (rho=sqrt(V/Vp));
+    # for profiles defined in the volume radius this still equals the analytic
+    # Gamma factor, but the coordinate is now derived from the real surfaces.
+    prho = np.asarray(geom["profile_rho"], dtype=float)
+    pvfrac = np.asarray(geom["profile_vfrac"], dtype=float)
+    nbar_geom = _line_average_value(ne0, Sn, prho, pvfrac)
+    Te_line_geom = _line_average_value(Te0, ST, prho, pvfrac)
+    Ti_line_geom = _line_average_value(Ti0, ST, prho, pvfrac)
     nGw = 1e20 * Ip / (math.pi * a**2)
     nbar_o_nGw = nbar / nGw
     PL = rx["fion"] * Pfus + Pheat
