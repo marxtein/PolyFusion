@@ -325,9 +325,18 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     neff = ne0 / 1e20 / (1 + Sn)
     aeff = a * math.sqrt(kappa)
     Teff = Te0 * np.sum((1 - x**2) ** ST) * dx
-    cyclotron_B25_factor = (
-        tokamak_B25_factor(R0, a, kappa, delta)
-        if bool(cyclotron_B_nonuniform) else 1.0)
+    # Non-uniform-field cyclotron correction. For a real imported equilibrium
+    # (geom_model=2 with eq) use the actual field modulus <(|B|/B0)^2.5> from the
+    # G-EQDSK psi(R,Z)/F(psi); otherwise the analytic Miller 1/R proxy.
+    if bool(cyclotron_B_nonuniform):
+        eq_b25 = eq.get("cyclotron_B25") if isinstance(eq, dict) else None
+        if (int(geom_model) == 2 and isinstance(eq_b25, (int, float))
+                and math.isfinite(eq_b25) and eq_b25 > 0):
+            cyclotron_B25_factor = float(eq_b25)
+        else:
+            cyclotron_B25_factor = tokamak_B25_factor(R0, a, kappa, delta)
+    else:
+        cyclotron_B25_factor = 1.0
     Pcycl = (4.14e-7 * neff**0.5 * Teff**2.5 * BT0**2.5 * (1 - Rw)**0.5
              * aeff**-0.5 * (1 + 2.5 * Teff / 511) * Vp
              * cyclotron_B25_factor)

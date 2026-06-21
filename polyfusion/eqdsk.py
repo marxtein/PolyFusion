@@ -49,7 +49,7 @@ def parse_geqdsk(text: str) -> dict:
     rmaxis, zmaxis, simag, sibry, bcentr = take(5)
     current = take(5)[0]   # current, simag(dup), xdum, rmaxis(dup), xdum
     take(5)            # zmaxis(dup), xdum, sibry(dup), xdum, xdum
-    take(nw)           # fpol
+    fpol = np.array(take(nw))   # F(psi) = R*B_T on the uniform psi grid (kept for |B|)
     take(nw)           # pres
     take(nw)           # ffprim
     take(nw)           # pprime
@@ -76,9 +76,54 @@ def parse_geqdsk(text: str) -> dict:
         "nw": nw, "nh": nh, "rdim": rdim, "zdim": zdim, "rcentr": rcentr,
         "rleft": rleft, "zmid": zmid, "rmaxis": rmaxis, "zmaxis": zmaxis,
         "simag": simag, "sibry": sibry, "bcentr": bcentr, "current": current,
-        "psirz": psirz,
+        "psirz": psirz, "fpol": fpol,
         "rbbbs": np.array(bnd[0::2]), "zbbbs": np.array(bnd[1::2]),
     }
+
+
+def cyclotron_b25_from_eqdsk(g: dict) -> float:
+    """Volume average ``<(|B|/B0_axis)**2.5>`` from the REAL equilibrium field.
+
+    The non-uniform-field cyclotron correction computed from the actual field
+    modulus rather than the Miller ``1/R`` proxy::
+
+        |B| = sqrt(B_T**2 + B_p**2),   B_T = F(psi)/R,   B_p = |grad psi|/R,
+
+    with ``F(psi)`` the G-EQDSK ``fpol`` profile and ``psi(R,Z)`` the ``psirz``
+    grid.  ``B0_axis = |F(psi_axis)|/Rmaxis`` is the on-axis toroidal field
+    (``B_p = 0`` there), the same reference role ``B0`` plays in the Miller
+    proxy ``<(B_T/B0)**2.5>``.  Averaged over grid cells inside the last closed
+    flux surface (``psi`` between ``simag`` and ``sibry``), weighted by the
+    toroidal volume element ``dV = 2*pi*R dR dZ`` (the constant ``2*pi dR dZ``
+    cancels in the ratio).  Cheap: the field is already on the EQDSK grid.
+    """
+    psirz = np.asarray(g["psirz"], float)            # (nh, nw), indexed [Z, R]
+    fpol = np.asarray(g["fpol"], float)              # F(psi) on uniform psi simag->sibry
+    nh, nw = psirz.shape
+    Rg = np.linspace(g["rleft"], g["rleft"] + g["rdim"], nw)
+    Zg = np.linspace(g["zmid"] - g["zdim"] / 2.0, g["zmid"] + g["zdim"] / 2.0, nh)
+    RR = np.broadcast_to(Rg[None, :], (nh, nw))
+    dR = Rg[1] - Rg[0]
+    dZ = Zg[1] - Zg[0]
+    dpsi_dZ, dpsi_dR = np.gradient(psirz, dZ, dR)
+    Bp = np.hypot(dpsi_dR, dpsi_dZ) / RR
+    simag, sibry = float(g["simag"]), float(g["sibry"])
+    dpsi = sibry - simag
+    if dpsi == 0.0:
+        raise ValueError("degenerate equilibrium: simag == sibry")
+    psin = (psirz - simag) / dpsi                    # 0 at axis, 1 at boundary
+    F = np.interp(np.clip(psin, 0.0, 1.0), np.linspace(0.0, 1.0, nw), fpol)
+    Bt = F / RR
+    Bmod = np.hypot(Bt, Bp)
+    B0_axis = abs(float(fpol[0])) / float(g["rmaxis"])
+    if not (B0_axis > 0.0):
+        raise ValueError("non-positive on-axis toroidal field")
+    inside = (psin >= 0.0) & (psin <= 1.0) & np.isfinite(Bmod)
+    if not np.any(inside):
+        raise ValueError("no grid cells inside the separatrix")
+    w = RR[inside]                                   # dV proportional to R dR dZ
+    ratio = (Bmod[inside] / B0_axis) ** 2.5
+    return float(np.sum(w * ratio) / np.sum(w))
 
 
 # nested flux surfaces for display; psi_n ~ rho^2, so these map to roughly
@@ -161,6 +206,11 @@ def equilibrium_geometry(g: dict) -> dict:
     shaf_shift = float(g["rmaxis"]) - R0
     Vp, Sp = _revolution_metrics(Rb, Zb)
 
+    try:
+        b25 = cyclotron_b25_from_eqdsk(g)            # real <(|B|/B0)^2.5>
+    except Exception:
+        b25 = None                                   # fall back to Miller proxy downstream
+
     psi, Rg, Zg = _psi_interpolator(g)
     sign = math.copysign(1.0, g["sibry"] - g["simag"])
     s_cap = 0.95 * min(g["rmaxis"] - Rg[0], Rg[-1] - g["rmaxis"],
@@ -180,4 +230,5 @@ def equilibrium_geometry(g: dict) -> dict:
         "shaf_shift": shaf_shift, "Vp": Vp, "Sp": Sp,
         "bt0": abs(float(g["bcentr"])),          # file's vacuum toroidal field BCENTR [T]
         "ip": abs(float(g["current"])) / 1e6,    # plasma current [MA]
+        "cyclotron_B25": b25,                    # real <(|B|/B0)^2.5> (None if uncomputable)
     }
