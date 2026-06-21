@@ -23,7 +23,7 @@ from ..presets import (PRESETS as TOKAMAK_PRESETS, PARAM_ORDER as TOKAMAK_PARAMS
 from ..presets_io import load_presets
 from .mirror import solve_mirror
 from .frc import solve_frc, frc_shape_outlines
-from .dipole import solve_dipole
+from .dipole import solve_dipole, dipole_shape_outlines
 from .stellarator import solve_stellarator, section_outlines
 
 # Inputs each solver accepts (positional/keyword names).
@@ -454,6 +454,7 @@ DIPOLE = ConfigSpec(
     contour_spec=DIPOLE_CONTOURS,
     preset_groups=DIPOLE_GROUPS,
     _solve=solve_dipole,
+    shape_fn=lambda params: dipole_shape_outlines(**params),
 )
 
 STELLARATOR = ConfigSpec(

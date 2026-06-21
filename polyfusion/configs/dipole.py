@@ -77,6 +77,88 @@ class DipoleResult:
         return asdict(self)
 
 
+def _point_dipole_surface(L: float, n: int = 181) -> dict:
+    """Poloidal field line of a point dipole with equatorial crossing ``L``."""
+    lat = np.linspace(-math.pi / 2.0, math.pi / 2.0, n)
+    radius = L * np.cos(lat) ** 2
+    return {
+        "L": float(L),
+        "r": (radius * np.cos(lat)).tolist(),
+        "z": (radius * np.sin(lat)).tolist(),
+    }
+
+
+def _finite_ring_surface(lam: float, r_ring: float, n: int = 181) -> dict:
+    """Exact current-loop flux contour through ``(R=lam*r_ring, Z=0)``.
+
+    Rays are cast from the singular current ring in the poloidal plane.  Along
+    each ray the vacuum flux decreases from infinity to zero, so bisection gives
+    the unique contour point without a plotting-library dependency.
+    """
+    target = float(ringfield.psi_norm(lam, 0.0))
+    theta = np.linspace(0.0, 2.0 * math.pi, n)
+    rr, zz = [], []
+    for angle in theta:
+        ca, sa = math.cos(angle), math.sin(angle)
+        lo = 1.0e-5
+        if ca < -1.0e-12:
+            hi = (1.0 - 1.0e-8) / (-ca)  # stop just before cylindrical R=0
+        else:
+            hi = max(2.0, 1.25 * (lam - 1.0))
+            while float(ringfield.psi_norm(1.0 + hi * ca, hi * sa)) > target:
+                hi *= 1.6
+                if hi > 4.0 * lam + 4.0:
+                    break
+        for _ in range(52):
+            mid = 0.5 * (lo + hi)
+            value = float(ringfield.psi_norm(1.0 + mid * ca, mid * sa))
+            if value > target:
+                lo = mid
+            else:
+                hi = mid
+        q = 0.5 * (lo + hi)
+        rr.append((1.0 + q * ca) * r_ring)
+        zz.append(q * sa * r_ring)
+    return {"L": float(lam * r_ring), "r": rr, "z": zz}
+
+
+def dipole_shape_outlines(r_ring, R_p, L_in_fac=1.5, ring_model=0,
+                          n_surfaces=7, n_profile=101, **_ignored) -> dict:
+    """JSON-able dipole flux surfaces and the profile coordinate used by the UI."""
+    L_in = float(L_in_fac) * float(r_ring)
+    if r_ring <= 0 or L_in >= R_p:
+        raise ValueError("dipole shape needs 0 < r_ring < L_in < R_p")
+    L = np.geomspace(L_in, float(R_p), n_surfaces)
+    if ring_model:
+        surfaces = [_finite_ring_surface(float(x / r_ring), float(r_ring)) for x in L]
+        mode = "finite_ring"
+    else:
+        surfaces = [_point_dipole_surface(float(x)) for x in L]
+        mode = "point_dipole"
+
+    Lp = np.geomspace(L_in, float(R_p), n_profile)
+    if ring_model:
+        Ufac = ringfield.u_spec(Lp / r_ring) / float(ringfield.u_spec(L_in / r_ring))
+    else:
+        Ufac = (Lp / L_in) ** 4
+    U_ratio = float(Ufac[-1])
+    rho_U = np.log(Ufac) / math.log(U_ratio)
+    profile = {
+        "rho_U": rho_U.tolist(),
+        "L": Lp.tolist(),
+        "n": (1.0 / Ufac).tolist(),
+        "T": (Ufac ** (-2.0 / 3.0)).tolist(),
+        "U_ratio": U_ratio,
+    }
+    return {
+        "type": "dipole",
+        "mode": mode,
+        "wall_model": "spherical_area_proxy",
+        "surfaces": surfaces,
+        "profile": profile,
+    }
+
+
 def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
                  L_in_fac=1.5, fsig=1.0,
                  icase=2, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
@@ -87,7 +169,10 @@ def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
     Parameters (SI / keV)
     ----------
     r_ring, R_p : ring (coil) radius and plasma outer equatorial radius [m]
-    B_ring      : field at the ring surface [T]
+    B_ring      : point-dipole-equivalent field scale at L=r_ring [T].
+                  In finite-ring mode it calibrates the current through
+                  mu0*I = 4*r_ring*B_ring; it is not the singular loop-surface
+                  magnetic field.
     n0, Ti0, Te0 : ion density [m^-3] and temperatures [keV] at the INNER
                    plasma boundary L_in = L_in_fac * r_ring (peak values)
     tauE        : energy confinement time [s] (input; no dipole scaling exists)
@@ -176,7 +261,7 @@ def solve_dipole(r_ring, R_p, B_ring, n0, Ti0, Te0, tauE,
     p_keV = (ni * Ti + ne * Te)             # [keV*m^-3]
     beta_loc = 2 * MU0 * p_keV * _KEV_J / B_L**2
     beta_in, beta_out = float(beta_loc[0]), float(beta_loc[-1])
-    U_ratio = (R_p / L_in) ** 4
+    U_ratio = float(Ufac[-1]) if ring_model else (R_p / L_in) ** 4
 
     # outboard-equator line-averaged density (interferometer chord)
     nbar = float(np.trapezoid(ne, L) / (R_p - L_in))
