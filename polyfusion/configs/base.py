@@ -76,7 +76,8 @@ TOKAMAK_CONTOURS = [
     {"f": "betaN", "c": "#ffd166", "lv": [1, 3, 10], "label": "βN", "on": True},
     {"f": "H98", "c": "#c792ff", "lv": [0.5, 1, 2, 5, 10], "label": "H98", "on": True},
     {"f": "HST", "c": "#c792ff", "lv": [0.5, 1, 2, 5, 10], "dash": "dash", "label": "HST", "on": False},
-    {"f": "q", "c": "#5ad1ff", "lv": [2, 3, 5, 8], "dash": "dot", "label": "q", "on": False},
+    {"f": "q", "c": "#5ad1ff", "lv": [2, 3, 5, 8], "dash": "dot", "label": "q (cyl)", "on": False},
+    {"f": "q95", "c": "#5ad1ff", "lv": [2, 3, 5, 8], "dash": "dash", "label": "q95", "on": False},
     {"f": "betaT", "c": "#36e2c4", "lv": [0.01, 0.1, 0.5, 1], "label": "βt", "on": False},
     {"f": "Pbrem", "c": "#ff9e3d", "lv": [0.1, 0.5, 1, 5, 10], "label": "Pbrem [MW]", "on": False},
     {"f": "Eth", "c": "#b388ff", "lv": [10, 50, 100, 500, 1000], "label": "Eth [MJ]", "on": False},
@@ -384,7 +385,7 @@ TOKAMAK = ConfigSpec(
     # betaN <= 3.5 Troyon-ish, H98 <= 1.5 confinement aggressiveness) are
     # offered as OPT-IN criteria so the default POPCON matches the original.
     best_window={"ge": {"Pfus": 10, "Qfus": 1}, "le": {"nbar_o_nGw": 1, "Pheat": 100}},
-    optional_window={"ge": {"q": 2}, "le": {"betaN": 3.5, "H98": 1.5}},
+    optional_window={"ge": {"q95": 3}, "le": {"betaN": 3.5, "H98": 1.5}},
     contour_spec=TOKAMAK_CONTOURS,
     preset_groups=TOKAMAK_GROUPS,
     shape_fn=lambda params: tokamak_shape_outlines(**params),

@@ -126,7 +126,8 @@ class Result:
     betaN: float    # normalized beta
     betaT: float    # toroidal beta
     nbar_o_nGw: float  # line-avg density / Greenwald limit
-    q: float        # safety factor
+    q: float        # cylindrical safety factor (JS-parity)
+    q95: float      # ITER-IPB shaped edge safety factor at psi_n=0.95
     Pbrem: float    # bremsstrahlung power [MW]
     Pcycl: float    # cyclotron radiation power [MW]
     cyclotron_B25_factor: float  # optional nonuniform toroidal-field correction
@@ -398,6 +399,14 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     LH_ratio = Pth / P_LH if P_LH > 0 else 0.0
 
     q = 5 * BT0 * a**2 * kappa / (R0 * Ip)
+    # engineering edge safety factor at the 95% flux surface (ITER Physics Basis,
+    # NF 39 (1999) 2175; Uckan/IPDG shaping factor).  q (above) is the bare
+    # cylindrical value kept for JS-reference parity; q95 adds the full
+    # elongation+triangularity+aspect-ratio shaping the kink/operational limit uses.
+    eps = a / R0
+    q95 = (5 * a**2 * BT0 / (R0 * Ip)
+           * (1.0 + kappa**2 * (1.0 + 2.0 * delta**2 - 1.2 * delta**3)) / 2.0
+           * (1.17 - 0.65 * eps) / (1.0 - eps**2) ** 2)
     Pwall = (Pfus + Pheat) / Sw
 
     # --- two-temperature channel diagnostics (docs/30 P1-1) ---
@@ -416,7 +425,7 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     return Result(
         Eth=Eth, H98=H98, HST=HST, Pheat=Pheat, Pn=Pn, Pfus=Pfus, Pwall=Pwall,
         Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
-        betaN=betaN, betaT=betaT, nbar_o_nGw=nbar_o_nGw, q=q,
+        betaN=betaN, betaT=betaT, nbar_o_nGw=nbar_o_nGw, q=q, q95=q95,
         Pbrem=Pbrem, Pcycl=Pcycl,
         cyclotron_B25_factor=cyclotron_B25_factor,
         Vp=Vp, betap=betap, Sp=Sp, ne0=ne0, M=M,
