@@ -15,7 +15,7 @@ Tokamak-parity treatment (docs/24, mirroring docs/01 section by section):
   diamagnetic field B0.
 * CONFINEMENT: Pastukhov + gas-dynamic + radial channels (unchanged physics,
   verified in test_mirror_benchmark.py), evaluated at peak values.
-* END LOSS: P_trans = Int n(phi+T) dV / tau_c  (MCTrans form, volume-integrated
+* END LOSS: P_trans = Int n(phi+T) dV / tau_m  (MCTrans form, volume-integrated
   over the radial profiles).
 
 Flat-profile limit (Sn=ST=0, g=0, f_throat=0) reproduces v1 numbers exactly
@@ -60,7 +60,7 @@ class MirrorResult:
     Past_domain: float  # 1 = Pastukhov formula in validity domain, 0 = fallback used
     Eth: float        # stored thermal energy [MJ]
     # confinement
-    tau_E: float; tau_c: float; tau_Past: float; tau_gd: float; tau_rho: float
+    tau_E: float; tau_m: float; tau_Past: float; tau_gd: float; tau_rho: float
     phi_i: float      # ion confining potential [keV]
     phi_e: float      # electron confining potential [keV]
     lambda_ii: float  # ion mean free path [m]
@@ -68,7 +68,7 @@ class MirrorResult:
     a_over_rhoi: float  # a_c/rho_i: DCLC micro-stability proxy — small values
                         # (~<20) historically drove drift-cyclotron loss-cone
                         # modes; large is favourable (docs/30 batch 3a)
-    ntau: float       # ni0 * tau_c
+    ntau: float       # ni0 * tau_m
     # stability / fields
     beta: float       # peak beta
     beta_avg: float   # volume-averaged beta
@@ -197,7 +197,7 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
             # electron share of the end loss (phi_e + Te per escaping electron)
             Ptrans_e = ((res.ne0 * res.phi_e / (1 + Sn)
                          + res.ne0 * te / (1 + Sn + ST))
-                        * _KEV_J * res.Vp / res.tau_c * 1e-6)
+                        * _KEV_J * res.Vp / res.tau_m * 1e-6)
             heat = ((1 - res.f_fast_ion) * res.f_alpha_used * (res.Pfus - res.Pn)
                     + res.P_ei + f_aux_e * max(res.Pheat, 0.0))
             return heat - (res.Pbrem + res.Pcycl + res.P_line + Ptrans_e)
@@ -328,7 +328,7 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
     rho_i = v_th / (Z1 * QE * B0 / mi)
     a_over_rhoi = a_c / rho_i
     tau_rho = a_over_rhoi ** 2 * tau_ii
-    tau_c = 1.0 / (1.0 / (tau_Past + tau_gd) + 1.0 / tau_rho)
+    tau_m = 1.0 / (1.0 / (tau_Past + tau_gd) + 1.0 / tau_rho)
 
     # ---------- fusion power: radial profile integral (tokamak form) ----------
     Tx = Ti0 * (1 - x**2) ** ST
@@ -358,7 +358,7 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
         # loss power density n(phi+T)/tau integrated over profiles:
         #   Int n dV = n0 V/(1+Sn);  Int nT dV = n0T0 V/(1+Sn+ST)
         Ptrans = ((ni0 * phi_i + ne0 * phi_e) / (1 + Sn)
-                  + (ni0 * Ti0 + ne0 * Te0) / (1 + Sn + ST)) * _KEV_J * Vp / tau_c * 1e-6
+                  + (ni0 * Ti0 + ne0 * Te0) / (1 + Sn + ST)) * _KEV_J * Vp / tau_m * 1e-6
 
     # alpha/charged-product deposition: in an open trap part of the charged
     # fusion power escapes through the loss cone before slowing down
@@ -396,10 +396,10 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
         Ptrans=Ptrans, Pn=Pn, Pwall=Pwall, P_end_flux=P_end_flux,
         P_coll_flux=P_coll_flux, P_alpha_loss=P_alpha_loss, Past_domain=Past_domain,
         Eth=Eth,
-        tau_E=tauE if manual_tauE else tau_c,
-        tau_c=tau_c, tau_Past=tau_Past, tau_gd=tau_gd, tau_rho=tau_rho,
+        tau_E=tauE if manual_tauE else tau_m,
+        tau_m=tau_m, tau_Past=tau_Past, tau_gd=tau_gd, tau_rho=tau_rho,
         phi_i=phi_i, phi_e=phi_e, lambda_ii=lambda_ii, coll_ratio=coll_ratio,
-        a_over_rhoi=a_over_rhoi, ntau=ni0 * (tauE if manual_tauE else tau_c),
+        a_over_rhoi=a_over_rhoi, ntau=ni0 * (tauE if manual_tauE else tau_m),
         beta=beta, beta_avg=beta_avg, B0=B0, R_mc=R_mc,
         Vp=Vp, Sp=Sp, Sw=Sw, A_throat=A_throat,
         ne0=ne0, nbar=nbar, Zeff=Zeff, M=M, fTavg=fTavg, fnavg=fnavg,

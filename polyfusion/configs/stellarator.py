@@ -1171,10 +1171,35 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     Vp_geom_report = Vp_geom
     Sw_geom_report = Sw_geom
     boundary_iota = float(iota) if shape is not None and iota is not None and iota > 0 else None
-    iota_used = boundary_iota if boundary_iota is not None else iota_geom
     iota_geom_authoritative = 0.0
     if boundary_iota is not None:
+        # explicit measured/published transform supplied with the boundary
+        iota_used = boundary_iota
         iota_geom = boundary_iota
+    elif shape is not None:
+        # Boundary Fourier mode without an explicit iota.  The rotational
+        # transform is a property of the FULL MHD equilibrium and is NOT
+        # derivable from a truncated |m|,|n|<=2 boundary cartoon in a 0-D code
+        # (the same boundary with different p/J profiles has different iota —
+        # you need VMEC/DESC).  The only legitimate near-axis estimate is when
+        # the boundary was SYNTHESISED from a near-axis model and still carries
+        # that real axis (axis_rc/axis_zs metadata); then iota_geom was solved on
+        # the actual axis.  For a real-machine boundary (W7-X etc.) there is no
+        # such axis, _axis_from_shape falls back to the m=0 centerline, and the
+        # near-axis solve there is garbage (W7-X gives ~2.32 vs the real 0.88).
+        # Refuse rather than emit that centerline number.
+        has_axis_meta = (isinstance(shape.get("axis_rc"), list)
+                         and isinstance(shape.get("axis_zs"), list)
+                         and shape.get("axis_rc") and shape.get("axis_zs"))
+        if not has_axis_meta:
+            raise ValueError(
+                "boundary Fourier without a near-axis axis cannot derive iota "
+                "(the rotational transform needs a full equilibrium, not a "
+                "truncated boundary cartoon); supply the measured 'iota' input")
+        iota_used = iota_geom        # near-axis on the stored real axis: legitimate
+    else:
+        # simple / axis near-axis mode: iota_geom is the self-consistent solve
+        iota_used = iota_geom
     if iota_used <= _IOTA_MIN:
         raise ValueError("rotational transform is ~0: boundary Fourier needs "
                          "its own iota parameter, while near-axis/axis Fourier "

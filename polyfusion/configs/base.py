@@ -264,6 +264,9 @@ _COMMON_BOUNDS = {
 }
 
 
+_TAUE_SCALING_CHOICES = ("ipb98", "st", "itpa20")
+
+
 def _tokamak_cross(p: dict) -> list[str]:
     errors = []
     if _uses_tauE(p):
@@ -274,6 +277,10 @@ def _tokamak_cross(p: dict) -> list[str]:
         H = _num(p, "H_fac")
         if H is not None and H <= 0:
             errors.append(f"H_fac must be > 0 when use_tauE is disabled (got {H})")
+    sc = p.get("tauE_scaling")
+    if sc is not None and sc not in _TAUE_SCALING_CHOICES:
+        errors.append(
+            f"tauE_scaling must be one of {_TAUE_SCALING_CHOICES} (got {sc!r})")
     return errors
 
 
@@ -368,7 +375,8 @@ def _stell_cross(p: dict) -> list[str]:
 TOKAMAK = ConfigSpec(
     name="tokamak", label="托卡马克 Tokamak",
     params=["use_tauE", "cyclotron_B_nonuniform"] + TOKAMAK_PARAMS + ["imp_name", "H_fac",
-            "geom_model", "eq", "Vp_override", "Sw_override"],
+            "geom_model", "eq", "Vp_override", "Sw_override", "tauE_scaling",
+            "f_aux_e"],
     required=TOKAMAK_PARAMS,
     positive=["R0", "A", "kappa", "ni0", "Ti0", "BT0", "Ip", "Zimp"],
     bounds={**_COMMON_BOUNDS, "delta": (-0.999, 0.999),
@@ -376,7 +384,8 @@ TOKAMAK = ConfigSpec(
             "cyclotron_B_nonuniform": (0.0, 1.0),
             "H_fac": (0.0, None),
             "geom_model": (0.0, 2.0),
-            "Vp_override": (0.0, None), "Sw_override": (0.0, None)},
+            "Vp_override": (0.0, None), "Sw_override": (0.0, None),
+            "f_aux_e": (0.0, 1.0)},
     cross=_tokamak_cross,
     presets=TOKAMAK_PRESETS,
     contour_fields=["Pfus", "Qfus", "Pheat", "betaN", "nbar_o_nGw", "H98"],

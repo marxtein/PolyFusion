@@ -225,6 +225,7 @@ def test_frontend_mode_switch_prefers_geometry_variants():
         _extract_function(src, "stashStellGeom"),
         _extract_function(src, "defaultBoundaryShape"),
         _extract_function(src, "stellVariant"),
+        _extract_function(src, "normalizeStellBoundaryIota"),
         _extract_function(src, "applyStellVariant"),
         _extract_function(src, "setStellGeomMode"),
     ]

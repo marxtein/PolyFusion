@@ -100,8 +100,8 @@ def main():
     ok(res.Past_domain == 1.0, "BEAM inside Pastukhov domain (no fallback)")
 
     # ---- 4. order-of-magnitude anchor: WHAM/BEAM class tau ~ 0.1-1 s ----
-    ok(0.03 < res.tau_c < 3.0,
-       f"BEAM-class tau_c = {res.tau_c:.3f}s, order of WHAM target tau_p~1s")
+    ok(0.03 < res.tau_m < 3.0,
+       f"BEAM-class tau_m = {res.tau_m:.3f}s, order of WHAM target tau_p~1s")
 
     print("\nRESULT:", "MIRROR BENCHMARK PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1

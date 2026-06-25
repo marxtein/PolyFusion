@@ -70,3 +70,43 @@ def test_funsc_uses_real_b25_for_real_equilibrium():
     assert real.cyclotron_B25_factor == pytest.approx(eq["cyclotron_B25"], rel=1e-9)
     miller = tokamak_B25_factor(R0, a, kappa, delta)
     assert real.cyclotron_B25_factor != pytest.approx(miller, rel=1e-6)
+
+
+def _load_app_eqdsk(name):
+    path = os.path.join(os.path.dirname(__file__), "..", "..",
+                        "app", "equilibria", "tokamak", f"{name}.geqdsk")
+    return eqdsk.parse_geqdsk(open(path).read())
+
+
+def test_iter_real_b25_is_physical():
+    """ITER (conventional aspect ratio A~3.1, diverted) must give a
+    real <(|B|/B0)^2.5> only modestly above the Miller proxy.
+
+    Before the dual fix (LCFS-polygon mask + psi unit-scale detection) the
+    psin-only mask + ``psi`` stored in Wb (the ITER sample's convention,
+    not the standard Wb/rad) blew this up to ~2.27, ~97% above Miller. With
+    the fix it must land within ~15% of Miller, matching the textbook
+    expectation that Bp/BT is small at conventional aspect ratio.
+    """
+    g = _load_app_eqdsk("ITER")
+    eq = eqdsk.equilibrium_geometry(g)
+    real = eq["cyclotron_B25"]
+    miller = tokamak_B25_factor(eq["R0"], eq["a"], eq["kappa"], eq["delta"])
+    assert math.isfinite(real)
+    assert 1.0 < real < 1.4, f"ITER real B25={real} out of physical band"
+    assert abs(real - miller) / miller < 0.15, (
+        f"ITER real {real:.3f} vs Miller {miller:.3f} disagree by "
+        f"{(real-miller)/miller*100:.1f}% (limit 15%) — likely a regression "
+        "in the LCFS-polygon mask or psi unit scaling")
+
+
+def test_psi_scale_detection_picks_correct_convention():
+    """ITER sample uses psi in Wb (with 2*pi); DIII-D uses Wb/rad."""
+    g_iter = _load_app_eqdsk("ITER")
+    g_d3d = _load_app_eqdsk("DIII-D")
+    s_iter = eqdsk._psi_to_wbrad_scale(g_iter)
+    s_d3d = eqdsk._psi_to_wbrad_scale(g_d3d)
+    assert 5.5 < s_iter < 7.0, (
+        f"ITER psi-scale {s_iter:.2f} should be near 2*pi=6.28")
+    assert 0.8 < s_d3d < 1.2, (
+        f"DIII-D psi-scale {s_d3d:.2f} should be near 1.0 (Wb/rad)")

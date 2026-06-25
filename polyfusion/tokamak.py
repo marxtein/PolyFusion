@@ -174,11 +174,15 @@ class Result:
         return asdict(self)
 
 
+_TAUE_SCALINGS = ("ipb98", "st", "itpa20")
+
+
 def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
           BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
           imp_name=None, f_aux_e=0.5, H_fac=1.0, use_tauE=1.0,
           geom_model=0.0, eq=None, Vp_override=0.0, Sw_override=0.0,
-          cyclotron_B_nonuniform=0.0) -> Result:
+          cyclotron_B_nonuniform=0.0,
+          tauE_scaling="ipb98") -> Result:
     """Evaluate the 0-D power balance for one operating point.
 
     See parameter table in ``docs/01_托卡马克代码说明文档.md`` (§3) for units.
@@ -209,6 +213,9 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         raise ValueError(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
     if not manual_tauE:
         tauE = 0.0
+    if tauE_scaling not in _TAUE_SCALINGS:
+        raise ValueError(
+            f"tauE_scaling must be one of {_TAUE_SCALINGS} (got {tauE_scaling!r})")
 
     if tauE == 0:
         def _eval_t(t):
@@ -218,13 +225,36 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
                          use_tauE=1.0,
                          geom_model=geom_model, eq=eq,
                          Vp_override=Vp_override, Sw_override=Sw_override,
-                         cyclotron_B_nonuniform=cyclotron_B_nonuniform)
+                         cyclotron_B_nonuniform=cyclotron_B_nonuniform,
+                         tauE_scaling=tauE_scaling)
+
+        # Predictive target: H_<chosen scaling> = H_fac. All three H factors
+        # are monotone increasing in tauE (numerator linear in tauE, denominator
+        # ~P_L^{-alpha} with alpha<1 so weakly opposing), so bisection on
+        # H_fac - H(t) is unconditionally stable.
+        if tauE_scaling == "ipb98":
+            _h_of = lambda res: res.H98
+        elif tauE_scaling == "st":
+            _h_of = lambda res: res.HST
+        else:  # "itpa20"
+            _h_of = lambda res: res.H_ITPA20
 
         def _resid_t(t, res):
-            # H98(t) is monotone increasing in t; root at H98 = H_fac
-            return H_fac - res.H98
+            return H_fac - _h_of(res)
 
-        t, res, r, conv = solve_channel_balance(_eval_t, _resid_t, 1e-3, 50.0)
+        # Monotonicity of H_scl(tauE):
+        # * fT > 0 (Te fixed): P_L = A + B/tauE with A, B constants in tauE,
+        #   so d/dtauE [tauE * P_L^(-alpha)]^{-1} = (A+B/tauE)^(alpha-1) *
+        #   [A + (1-alpha) B/tauE] > 0 strictly (alpha ~ 0.6-0.7 < 1) —
+        #   safe to skip the geomspace scan.
+        # * fT == 0 (nested Te self-consistency): Te = Te(tauE), so
+        #   A = P_brem+P_cycl+P_line and B = E_th now depend on tauE
+        #   indirectly. P_cycl ~ Te^2.5 in particular can rise fast enough
+        #   to make H_scl(tauE) non-monotone at edge POPCON points.
+        #   Keep the scan + bisect path for that case.
+        _mono = fT != 0
+        t, res, r, conv = solve_channel_balance(
+            _eval_t, _resid_t, 1e-3, 50.0, monotone=_mono)
         return _dc_replace(res, taue_mode=1.0 if conv else 0.5,
                            tauE_used=t)
     if fT == 0:
@@ -235,7 +265,8 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
                          use_tauE=1.0,
                          geom_model=geom_model, eq=eq,
                          Vp_override=Vp_override, Sw_override=Sw_override,
-                         cyclotron_B_nonuniform=cyclotron_B_nonuniform)
+                         cyclotron_B_nonuniform=cyclotron_B_nonuniform,
+                         tauE_scaling=tauE_scaling)
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6

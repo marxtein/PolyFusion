@@ -241,6 +241,15 @@ def cf_boundary(R0, a, kappa, delta, n_theta=360):
     psi_mid = _cf_psi_value(xs, np.zeros_like(xs), coeffs)
     x_axis = xs[int(np.argmin(psi_mid))]
     shaf_shift = (x_axis - 1.0) * R0
+    # Some extreme low-aspect/high-elongation parameter combinations do not
+    # produce a star-shaped closed CF limiter about (R0, 0): whole angular
+    # sectors have no bracketed psi=0 crossing.  Joining the old ``s=eps``
+    # placeholders to valid roots creates large triangular spikes and corrupts
+    # the integrated volume.  Keep the CF magnetic-axis estimate, but use the
+    # requested Miller LCFS as a continuous conservative fallback.  Fully
+    # bracketed conventional cases remain bit-for-bit on the CF path.
+    if not np.all(bracketed):
+        R, Z = miller_boundary(R0, a, kappa, delta, n_theta)
     R.flags.writeable = False           # shared cache entry: read-only to callers
     Z.flags.writeable = False
     return R, Z, shaf_shift

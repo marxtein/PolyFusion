@@ -49,3 +49,62 @@ console.log(JSON.stringify(tokamakAnnotationGeometry(
     assert geom["a"] == pytest.approx(2.0)
     assert geom["Raxis"] == pytest.approx(6.4)
     assert geom["shafranov"] == pytest.approx(0.2)
+
+
+def test_tokamak_geometry_mode_uses_explicit_cf_or_real_equilibrium_label():
+    html = open(os.path.join(ROOT, "app", "index.html"), encoding="utf-8").read()
+    fn = _extract_js_function(html, "tokGeomModeHtml")
+    js = f"""
+function tokGeomMode(){{return '2';}}
+function L(zh,en){{return zh;}}
+{fn}
+console.log(tokGeomModeHtml());
+"""
+    rendered = subprocess.check_output(
+        ["node", "-e", js], cwd=ROOT, text=True, encoding="utf-8"
+    )
+    assert "CF 解析/真实平衡" in rendered
+    assert ">平衡<" not in rendered
+
+
+def test_zero_gap_backend_wall_is_drawn_dashed_after_boundary():
+    html = open(os.path.join(ROOT, "app", "index.html"), encoding="utf-8").read()
+    fn = _extract_js_function(html, "tokamakWallDrawSpec")
+    js = f"""
+{fn}
+console.log(JSON.stringify([tokamakWallDrawSpec(0),tokamakWallDrawSpec(0.02)]));
+"""
+    zero, finite = json.loads(
+        subprocess.check_output(
+            ["node", "-e", js], cwd=ROOT, text=True, encoding="utf-8"
+        )
+    )
+    assert zero == {"afterBoundary": True, "dash": "dash"}
+    assert finite == {"afterBoundary": False, "dash": "solid"}
+
+
+def test_tokamak_axis_trace_labels_analytic_double_ellipse_axis():
+    html = open(os.path.join(ROOT, "app", "index.html"), encoding="utf-8").read()
+    fn = _extract_js_function(html, "tokamakAxisTrace")
+    js = f"""
+{fn}
+console.log(JSON.stringify(tokamakAxisTrace(3.2,0,'磁轴')));
+"""
+    trace = json.loads(
+        subprocess.check_output(
+            ["node", "-e", js], cwd=ROOT, text=True, encoding="utf-8"
+        )
+    )
+    assert trace["x"] == [3.2]
+    assert trace["y"] == [0]
+    assert trace["text"] == ["磁轴"]
+    assert trace["mode"] == "markers+text"
+
+
+def test_double_ellipse_uses_shared_zero_gap_wall_overlay_rule():
+    html = open(os.path.join(ROOT, "app", "index.html"), encoding="utf-8").read()
+    branch = html[html.index("const rr=[0.2*a"):html.index(
+        "// Geometry for the dimension callouts"
+    )]
+    assert "tokamakWallDrawSpec(g)" in branch
+    assert "if(wallSpec.afterBoundary)" in branch

@@ -131,6 +131,16 @@ def test_cf_low_aspect_no_log_domain_warning():
     assert np.all(R > 0)
 
 
+def test_cf_extreme_st_shape_falls_back_to_continuous_boundary():
+    # The analytic CF ray trace has no LCFS crossing over a broad angular
+    # sector for this low-aspect, highly elongated ST case.  It must not join
+    # missed-ray placeholders into the large triangular spikes seen in the UI.
+    R0, a, kappa, delta = 3.2, 3.2 / 1.7, 3.3, 0.6
+    R, Z, _ = tg.cf_boundary(R0, a, kappa, delta, n_theta=181)
+    ds = np.hypot(np.roll(R, -1) - R, np.roll(Z, -1) - Z)
+    assert ds.max() < 5.0 * np.median(ds)
+
+
 def test_dispatch_eq_uses_equilibrium_boundary():
     import os
     from polyfusion import eqdsk
