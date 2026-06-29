@@ -209,6 +209,7 @@
       <div class="exports">
         <button id="saveP" data-t="saveP">⬇ 保存参数</button><button id="loadP" data-t="loadP">⬆ 加载参数</button>
         <button id="expJson" data-t="expJson">⬇ 结果 JSON</button><button id="expCsv" data-t="expCsv">⬇ 扫描 CSV</button>
+        <button id="expPng" data-t="expPng">⬇ 当前图像 PNG</button>
       </div>
       <input id="fileIn" type="file" accept=".json" style="display:none">
       <input id="equilibriumFileIn" type="file" accept=".nc,.h5,.hdf5" style="display:none">
@@ -308,12 +309,12 @@ const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 2
   stellarator:'<ellipse cx="32" cy="32" rx="22" ry="12"/><path d="M12 32Q22 20 32 32T52 32"/>'};
 const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'参数 Parameters',liveN:'编辑即重算',window:'最佳区判据 Operating Window',
   contours:'显示等值线 Contours',scan:'POPCON 扫描轴 Scan Axes',xax:'横轴',yax:'纵轴',runBtn:'▶ 运行 POPCON 扫描',
-  opPoint:'工作点 Operating Point',saveP:'⬇ 保存参数',loadP:'⬆ 加载参数',expJson:'⬇ 结果 JSON',expCsv:'⬇ 扫描 CSV',
+  opPoint:'工作点 Operating Point',saveP:'⬇ 保存参数',loadP:'⬆ 加载参数',expJson:'⬇ 结果 JSON',expCsv:'⬇ 扫描 CSV',expPng:'⬇ 当前图像 PNG',
   tabShape:'几何/磁面 Geometry',tabProf:'剖面 Profiles',sub:'多位形零维系统设计台',cfgL:'位形',rxL:'反应',
   help:'<h3>PolyFusion 使用说明</h3><p><b>1. 选位形</b>：顶部 5 选 1（托卡马克/磁镜/FRC/偶极/仿星器）。<br><b>2. 选预设</b>：加载真实/概念机型参数。<br><b>3. 改参数</b>：左栏字段可编辑，改完即时重算右栏工作点。<br><b>4. 最佳区判据</b>：编辑阈值（如 Q≥1、P_fus≥10MW、n̄/极限≤1）。<br><b>5. 选等值线</b>：勾选 POPCON 显示哪些量。<br><b>6. 扫描轴</b>：选 X/Y 两参数与范围 → 运行 POPCON。<br><b>7. 标签页</b>：POPCON / 截面 / 剖面。<br><b>8. 保存/加载参数</b>：JSON 存读；导出结果/扫描。</p><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
  en:{config:'Configuration',preset:'Preset',params:'Parameters',liveN:'live recompute',window:'Operating Window',
   contours:'Contours shown',scan:'POPCON Scan Axes',xax:'X axis',yax:'Y axis',runBtn:'▶ Run POPCON Scan',
-  opPoint:'Operating Point',saveP:'⬇ Save Params',loadP:'⬆ Load Params',expJson:'⬇ Result JSON',expCsv:'⬇ Scan CSV',
+  opPoint:'Operating Point',saveP:'⬇ Save Params',loadP:'⬆ Load Params',expJson:'⬇ Result JSON',expCsv:'⬇ Scan CSV',expPng:'⬇ Current Plot PNG',
   tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
   help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='shape',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
@@ -650,6 +651,7 @@ async function init(){
   document.getElementById('equilibriumFileIn').onchange=onEquilibriumFile;
   expJson.onclick=()=>LASTRUN&&dl('polyfusion_'+CUR+'_point.json',JSON.stringify(LASTRUN,null,2));
   expCsv.onclick=()=>LASTSCAN&&dl('polyfusion_'+CUR+'_popcon.csv',scanCsv(LASTSCAN));
+  expPng.onclick=exportPlotImage;
   applyLang();
   selectConfig(Object.keys(CONFIGS)[0]);
 }
@@ -1118,8 +1120,28 @@ function plotTheme(){const d=THEME!=='light';return d?
 const LAYOUT=(xt,yt)=>{const c=plotTheme();return{paper_bgcolor:c.paper,plot_bgcolor:c.plot,font:{color:c.font,family:'JetBrains Mono',size:11},
   margin:{l:64,r:16,t:10,b:50},xaxis:{title:{text:xt,font:{family:'Chakra Petch',size:13,color:c.title}},gridcolor:c.grid,zeroline:false,linecolor:c.axis},
   yaxis:{title:{text:yt,font:{family:'Chakra Petch',size:13,color:c.title}},gridcolor:c.grid,zeroline:false,linecolor:c.axis},showlegend:true,legend:{orientation:'h',y:-0.18,font:{size:10,color:c.legend}}};};
+function plotlyReady(){return !!(window.Plotly&&Plotly.react&&Plotly.downloadImage);}
+function showPlotlyMissing(){
+  const msg=L('Plotly 没有加载：请通过 app server 打开页面，并确认 /vendor/plotly-2.32.0.min.js 可访问。',
+              'Plotly is not loaded: open the page through the app server and check /vendor/plotly-2.32.0.min.js.');
+  const pe=document.getElementById('plot');if(pe)pe.innerHTML=`<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#cc3a50;font-size:13px;text-align:center;padding:24px">${msg}</div>`;
+  const ee=document.getElementById('err');if(ee)ee.textContent=msg;
+}
+async function exportPlotImage(){
+  const ee=document.getElementById('err');if(ee)ee.textContent='';
+  if(!plotlyReady()){showPlotlyMissing();return;}
+  const gd=document.getElementById('plot');
+  if(!gd||!gd.data||!gd.data.length){if(ee)ee.textContent=L('当前没有可保存的图像：请先生成 POPCON、几何或剖面图。','No plot to save yet: generate a POPCON, geometry, or profile plot first.');return;}
+  const stamp=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  const name=['polyfusion',CUR||'case',VIEW||'plot',stamp].join('_');
+  const width=Math.max(900,Math.round(gd.clientWidth||1200));
+  const height=Math.max(600,Math.round(gd.clientHeight||760));
+  try{await Plotly.downloadImage(gd,{format:'png',filename:name,width,height,scale:2});}
+  catch(e){if(ee)ee.textContent=L('保存图像失败：','Save image failed: ')+(e&&e.message?e.message:String(e));}
+}
 function drawPopcon(){
   document.getElementById('plotTitle').innerHTML=`POPCON · <b>${cfgL(CUR)}</b>`;
+  if(!plotlyReady()){showPlotlyMissing();return;}
   if(!LASTSCAN){Plotly.purge('plot');document.getElementById('plot').innerHTML=`<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#4b566c;font-size:13px">${L('▶ 运行 POPCON 扫描以生成等值线图','▶ Run POPCON scan to generate contours')}</div>`;return;}
   const s=LASTSCAN,tr=[];
   const xs=DENS.has(s.xkey)?s.x.map(v=>v*1e-20):s.x, ys=DENS.has(s.ykey)?s.y.map(v=>v*1e-20):s.y;
@@ -1196,6 +1218,7 @@ function tokamakAnnotationGeometry(tok,sh){
 }
 function drawShape(){
   document.getElementById('plotTitle').innerHTML=`${L('等离子体截面','Cross-section')} · <b>${cfgL(CUR)}</b>`;document.getElementById('plotMeta').innerHTML='';
+  if(!plotlyReady()){showPlotlyMissing();return;}
   // phase/φ control bar belongs to stellarator's multi-section view only; clear
   // it for every other config so it can't linger after switching away (the
   // stellarator branch rebuilds its own, guarded by pc.dataset.state).
@@ -1498,6 +1521,7 @@ function drawProfiles(){
   //   dipole                     : adiabatic-marginal n∝U^-1, T∝U^-2/3 on the
   //                                shared flux-tube-volume coordinate rho_U
   document.getElementById('plotTitle').innerHTML=`${L('剖面','Profiles')} n(ρ), T(ρ) · <b>${cfgL(CUR)}</b>`;
+  if(!plotlyReady()){showPlotlyMissing();return;}
   const v=VALS,X=[],N=[],TT=[];
   const Sn=isFiniteNum(v.Sn)?v.Sn:0.5,ST=isFiniteNum(v.ST)?v.ST:1.0;
   let note='';
