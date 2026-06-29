@@ -73,7 +73,7 @@ class FRCResult:
     nbar: float       # line-averaged electron density [m^-3]
     # geometry
     Vp: float; Sp: float; Sw: float
-    sep_model: str    # separatrix geometry family used ("superellipse" | "mrr")
+    sep_model: str    # separatrix geometry family used ("superellipse" | "ma_xie")
     m_shape: float    # paper shape index (m=2 ellipse, large m racetrack)
     Zeff: float; M: float
     # flux & channel physics (docs/30 P1)
@@ -204,16 +204,28 @@ def _frc_profile_factors(x_s: float, f_shape: float, n: int = 801) -> tuple[floa
 
 
 # ---------------------------------------------------------------------------
-# MRR (paper) separatrix geometry — Ma/Xie et al. GSEQ-FRC, arXiv:2103.00839.
+# Ma-Xie paper separatrix geometry — Ma/Xie et al. GSEQ-FRC, arXiv:2103.00839.
 # The FRC separatrix is the revolution about the z axis of
 #     r(z) = r_s * (1 - |z/(l_s/2)|^m)^(1/2),   z in [-l_s/2, l_s/2],
 # with shape index m: m=2 is an ellipse, large m is racetrack-like.  The volume
 # factor is m/(m+1), identical to the existing f_shape via f_shape = m/(m+1).
-# Added as an OPTIONAL geometry mode (sep_model="mrr"); the symmetric-
+# Added as an OPTIONAL geometry mode (sep_model="ma_xie"); the symmetric-
 # superellipse path above is the default and stays numerically unchanged.
 # ---------------------------------------------------------------------------
 
 _M_MAX = 1.0e6   # racetrack limit; matches the superellipse p_max convention
+_SEP_MODEL_ALIASES = {"superellipse": "superellipse", "ma_xie": "ma_xie", "mrr": "ma_xie"}
+
+
+def _canonical_sep_model(sep_model: str | None) -> str:
+    """Canonical separatrix model name; keep legacy 'mrr' as an input alias."""
+    key = "superellipse" if sep_model is None else str(sep_model)
+    try:
+        return _SEP_MODEL_ALIASES[key]
+    except KeyError as exc:
+        raise ValueError(
+            f"sep_model must be 'superellipse' or 'ma_xie' "
+            f"(legacy alias 'mrr' is accepted; got {sep_model!r})") from exc
 
 
 def _f_shape_from_m(m: float) -> float:
@@ -284,20 +296,20 @@ def _mrr_surface(r_s: float, l_s: float, m: float, n: int = 4001) -> float:
 
 
 def _mrr_profile_factors(x_s: float, m: float, n: int = 801):
-    """Rigid-rotor profile factors weighted by the MRR volume shell.
+    """Rigid-rotor profile factors weighted by the Ma-Xie volume shell.
 
     Same structure as ``_frc_profile_factors`` but the volume element is the
     paper-separatrix shell ``w(x) ~ x (1 - x^2)^(1/m)`` (x = r/r_s) instead of
     the symmetric superellipse one.  K is solved so the volume-averaged beta is
     still ``1 - x_s^2/2``; G1/G2/GB therefore differ from the superellipse path,
-    which is what changes the MRR-mode power account.
+    which is what changes the Ma-Xie-mode power account.
     """
     x = np.linspace(0.0, 1.0, n)
     shell = np.clip(1.0 - x ** 2, 0.0, 1.0)
     weight = 2.0 * x * shell ** (1.0 / m)
     norm = float(np.trapezoid(weight, x))
     if norm <= 0.0:
-        raise ValueError("invalid MRR volume weight")
+        raise ValueError("invalid Ma-Xie volume weight")
     weight /= norm
 
     beta_avg = 1.0 - x_s ** 2 / 2.0
@@ -463,10 +475,10 @@ def frc_shape_outlines(r_s, l_s, r_w, f_shape=None, n_theta=181,
     """JSON-able FRC separatrix geometry for front-end shape views.
 
     ``sep_model="superellipse"`` (default) draws the symmetric superellipse;
-    ``sep_model="mrr"`` draws the paper (Ma/Xie) separatrix.
+    ``sep_model="ma_xie"`` draws the paper (Ma/Xie) separatrix.  The legacy
+    value ``"mrr"`` is accepted as an alias.
     """
-    if sep_model not in ("superellipse", "mrr"):
-        raise ValueError(f"sep_model must be 'superellipse' or 'mrr' (got {sep_model!r})")
+    sep_model = _canonical_sep_model(sep_model)
     f_shape, m_shape = _resolve_shape(f_shape, m)
     rn = r_s / math.sqrt(2.0)
     b = l_s / 2.0
@@ -487,7 +499,7 @@ def frc_shape_outlines(r_s, l_s, r_w, f_shape=None, n_theta=181,
     # polyline drew a spurious vertical connector across the axis).
     K = _solve_K(1.0 - (r_s / r_w) ** 2 / 2.0)
     za = np.linspace(-b, b, 91)
-    if sep_model == "mrr":
+    if sep_model == "ma_xie":
         ra = r_s * np.sqrt(np.clip(1.0 - np.abs(za / b) ** m_shape, 0.0, 1.0))
     else:
         p_arch = _frc_p_from_f_shape(float(f_shape))
@@ -509,11 +521,11 @@ def frc_shape_outlines(r_s, l_s, r_w, f_shape=None, n_theta=181,
         "wall": wall, "null_points": nulls, "o_points": o_points,
         "x_points": x_points, "surfaces": surfaces, "open_lines": open_lines,
     }
-    if sep_model == "mrr":
+    if sep_model == "ma_xie":
         zt, rt = _mrr_separatrix(r_s, l_s, m_shape, n_theta)
         z = np.concatenate([zt, zt[::-1]])
         r = np.concatenate([rt, -rt[::-1]])
-        return {**common, "mode": "mrr",
+        return {**common, "mode": "ma_xie",
                 "separatrix": {"z": z.tolist(), "r": r.tolist()}}
     p = _frc_p_from_f_shape(float(f_shape))
     th = np.linspace(0.0, 2.0 * math.pi, n_theta)
@@ -535,12 +547,12 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
     Parameters (SI / keV); see docs/25 §3.  ``f_shape`` interpolates the
     separatrix volume between ellipse (2/3) and racetrack (1).  ``sep_model``
     selects the separatrix geometry family: ``"superellipse"`` (default, the
-    symmetric superellipse) or ``"mrr"`` (the Ma/Xie GSEQ-FRC paper separatrix,
-    arXiv:2103.00839).  ``m`` is the paper shape index (>=2), interchangeable
-    with ``f_shape`` via ``f_shape = m/(m+1)``.
+    symmetric superellipse) or ``"ma_xie"`` (the Ma/Xie GSEQ-FRC paper
+    separatrix, arXiv:2103.00839).  Legacy ``"mrr"`` inputs are accepted as
+    aliases.  ``m`` is the paper shape index (>=2), interchangeable with
+    ``f_shape`` via ``f_shape = m/(m+1)``.
     """
-    if sep_model not in ("superellipse", "mrr"):
-        raise ValueError(f"sep_model must be 'superellipse' or 'mrr' (got {sep_model!r})")
+    sep_model = _canonical_sep_model(sep_model)
     f_shape, m_shape = _resolve_shape(f_shape, m)
     rx = _REACTIONS[icase]
 
@@ -579,7 +591,7 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
     Sw = 2 * math.pi * r_w * l_s + 2 * math.pi * r_w**2
     beta_avg = 1.0 - x_s**2 / 2.0
 
-    if sep_model == "mrr":
+    if sep_model == "ma_xie":
         # paper (Ma/Xie) separatrix: one boundary supplies Vp, Sp and the
         # volume-weighted profile factors.  Vp closed form == f_shape volume;
         # G1/G2/GB use the paper-shell weight (differs from the superellipse).
@@ -606,7 +618,7 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
             G2 = (tK - tK**3 / 3.0) / K          # <n^2>/n_m^2
             GB = math.log(math.cosh(K)) / K      # <|B|>/B_e
     GB_flux = math.log(math.cosh(K)) / K     # cross-section factor for trapped flux
-    if sep_model == "mrr":
+    if sep_model == "ma_xie":
         GB25 = _rr_B25_moment(K, m_shape=m_shape)
     elif use_geom_weight:
         GB25 = _rr_B25_moment(K, f_shape=f_shape)

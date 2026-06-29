@@ -4,10 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>PolyFusion &middot; 多位形零维系统设计台</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<script src="/vendor/plotly-2.32.0.min.js"></script>
 <style>
   :root{--ink:#080b12;--ink2:#0b0f18;--panel:#0e1320;--panel2:#11182a;--line:#1b2334;--line2:#26324a;
     --fg:#e9eef7;--mut:#7c8aa6;--dim:#4b566c;--amber:#ffb02e;--amber-d:#cf8a16;--teal:#36e2c4;--red:#ff5d73;--r:8px;
@@ -23,7 +20,7 @@
     --vignette:none;--micro-grid:rgba(20,30,48,.018);
     --glow:0 0 0 1px rgba(169,106,0,.35),0 0 16px -5px rgba(169,106,0,.4)}
   *{box-sizing:border-box}html,body{height:100%}
-  body{margin:0;color:var(--fg);background:var(--ink);font-family:"Chakra Petch","Microsoft YaHei","PingFang SC",sans-serif;
+  body{margin:0;color:var(--fg);background:var(--ink);font-family:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
     font-size:13.5px;-webkit-font-smoothing:antialiased;overflow:hidden;
     background-image:radial-gradient(900px 520px at 74% -8%,var(--app-grad-a),transparent 60%),
       radial-gradient(760px 520px at 4% 108%,var(--app-grad-b),transparent 60%),
@@ -41,7 +38,7 @@
   .status .val{color:var(--fg)}
   .dot{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal);animation:pulse 2.4s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-  .hbtn{font-family:"Chakra Petch";font-size:11px;letter-spacing:.06em;color:var(--mut);background:var(--panel2);
+  .hbtn{font-family:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;font-size:11px;letter-spacing:.06em;color:var(--mut);background:var(--panel2);
     border:1px solid var(--line2);border-radius:6px;padding:4px 9px;cursor:pointer;transition:.15s}
   .hbtn:hover{color:var(--fg);border-color:var(--teal)}
   .hbtn.on{color:var(--btn-ink);background:var(--amber);border-color:var(--amber);font-weight:700}
@@ -105,7 +102,7 @@
   .opt{font-size:11.5px;letter-spacing:.03em;color:var(--mut);border:1px solid var(--line2);border-radius:20px;padding:3px 9px;cursor:pointer;user-select:none;transition:.15s}
   .opt.on{color:var(--btn-ink);font-weight:700}
   button.run{width:100%;margin-top:10px;padding:11px;border:0;border-radius:var(--r);cursor:pointer;
-    font-family:"Chakra Petch";font-weight:700;letter-spacing:.15em;font-size:12.5px;text-transform:uppercase;
+    font-family:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;font-weight:700;letter-spacing:.15em;font-size:12.5px;text-transform:uppercase;
     color:var(--btn-ink);background:linear-gradient(180deg,var(--amber),var(--amber-d));box-shadow:var(--glow);transition:.15s}
   button.run:hover{filter:brightness(1.08);transform:translateY(-1px)}button.run:disabled{filter:grayscale(.5) brightness(.7);cursor:wait;transform:none}
   .err{color:var(--red);font-size:11px;white-space:pre-wrap;margin-top:9px;font-family:"JetBrains Mono"}
@@ -131,7 +128,7 @@
   .kv.hot .v{color:var(--amber)}.kv.cool .v{color:var(--teal)}.kv.warn .v{color:var(--red)}
   .exports{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
   .exports button{padding:7px;font-size:10.5px;letter-spacing:.04em;background:var(--panel2);color:var(--mut);
-    border:1px solid var(--line2);border-radius:6px;cursor:pointer;font-family:"Chakra Petch";transition:.15s}
+    border:1px solid var(--line2);border-radius:6px;cursor:pointer;font-family:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;transition:.15s}
   .exports button:hover{color:var(--fg);border-color:var(--teal)}
   .modal{position:fixed;inset:0;z-index:50;background:rgba(4,7,12,.72);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center}
   .modal.on{display:flex}
@@ -511,7 +508,7 @@ const RANGES={
   R0:[1,25],A:[2,15],a:[0.05,3],kappa:[1,3.5],a_c:[0.05,1.5],L_c:[1,30],
   r_s:[0.05,1.5],l_s:[0.5,10],r_w:[0.1,2],R_mirror:[2,50],
   r_ring:[0.1,3],R_p:[1,20],etabar:[0.01,0.2],N_fp:[1,10],delta_h:[0,3],
-  Sn:[0,2],ST:[0,3],fsig:[0.1,2],fimp:[0,0.05],fHe:[0,0.2],Zimp:[1,74]
+  Sn:[0,2],ST:[0,3],fsig:[0.1,2],f_shape:[2/3,1],fimp:[0,0.05],fHe:[0,0.2],Zimp:[1,74]
 };
 const jget=async u=>(await fetch(u)).json();
 const jpost=async(u,b)=>(await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})).json();
@@ -725,6 +722,7 @@ async function loadPreset(){
     migrateCyclotronB();
     migrateTauEScaling();migrateFauxE();
     if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();normalizeStellBoundaryIota();}
+    enforceFrcShapeRange();enforceFrcWallOutside();enforceDipoleGeometryRange();
     refreshCyclotronScanAxes();buildParams();buildThresh();buildPlotOpts();fitScanRanges();
     await recompute();setView(VIEW);
     return;
@@ -736,6 +734,7 @@ async function loadPreset(){
   migrateTauEScaling();migrateFauxE();
   // auto-reveal advanced inputs if this preset carries any (measured machines)
   if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();normalizeStellBoundaryIota();}
+  enforceFrcShapeRange();enforceFrcWallOutside();enforceDipoleGeometryRange();
   ADVANCED=(VALS.Vp_override>0)||(VALS.Sw_override>0)||Array.isArray(VALS.rc)||Array.isArray(VALS.zs)||isPlainObject(VALS.shape);
   refreshCyclotronScanAxes();buildParams();buildThresh();buildPlotOpts();applyRun(r);fitScanRanges();setView(VIEW);
 }
@@ -772,6 +771,56 @@ function fitAxis(key,minEl,maxEl){
   minEl.value=+lo.toPrecision(3);maxEl.value=+hi.toPrecision(3);
 }
 function fitScanRanges(){fitAxis(xkey.value,xmin,xmax);fitAxis(ykey.value,ymin,ymax);}
+function enforceFrcWallOutside(){
+  if(CUR!=='frc')return;
+  const rs=+VALS.r_s,rw=+VALS.r_w;
+  if(!(isFinite(rs)&&rs>0&&isFinite(rw))||rw>rs)return;
+  VALS.r_w=+(rs*1.1).toPrecision(12);
+  const el=document.querySelector('[data-p="r_w"]');
+  if(el)el.value=VALS.r_w;
+  const e=document.getElementById('err');
+  if(e)e.textContent=L(`已自动把壁半径 r_w 调到 ${VALS.r_w} m，保证壁在分离面 r_s 外侧。`,
+                       `Adjusted wall radius r_w to ${VALS.r_w} m so it stays outside r_s.`);
+}
+function enforceFrcShapeRange(){
+  if(CUR!=='frc'||typeof VALS.f_shape!=='number'||!isFinite(VALS.f_shape))return;
+  const lo=2/3,hi=1,next=Math.min(hi,Math.max(lo,VALS.f_shape));
+  if(next===VALS.f_shape)return;
+  VALS.f_shape=+next.toPrecision(12);
+  const el=document.querySelector('[data-p="f_shape"]');
+  if(el)el.value=VALS.f_shape;
+  const e=document.getElementById('err');
+  if(e)e.textContent=L(`已把 FRC 分离面形状因子 fV 限制到 ${VALS.f_shape}，有效范围是 2/3 到 1。`,
+                       `Clamped FRC shape factor fV to ${VALS.f_shape}; valid range is 2/3 to 1.`);
+}
+function enforceDipoleGeometryRange(){
+  if(CUR!=='dipole')return;
+  const rr=+VALS.r_ring,fac=isFinite(+VALS.L_in_fac)?+VALS.L_in_fac:1.5,rp=+VALS.R_p;
+  if(!(isFinite(rr)&&rr>0&&isFinite(fac)&&fac>=1&&isFinite(rp)))return;
+  const min=fac*rr*1.001;
+  const max=(+VALS.ring_model)?16*rr:(RANGES.R_p?RANGES.R_p[1]:rp);
+  let next=rp,msg='';
+  if(next<=min){
+    next=min;
+    msg=L(`已把偶极场 R_p 调到 ${next.toPrecision(6)} m，保证 R_p > L_in = L_in_fac*r_ring。`,
+          `Adjusted dipole R_p to ${next.toPrecision(6)} m so R_p stays outside L_in = L_in_fac*r_ring.`);
+  }
+  if(isFinite(max)&&next>max){
+    next=max;
+    msg=L(`有限环模型要求 R_p/r_ring ≤ 16；当前 r_ring=${rr} m，所以 R_p 已限制到 ${next.toPrecision(6)} m。若要更大 R_p，请把 ring_model 改为 0（点偶极）。`,
+          `Finite-ring mode requires R_p/r_ring <= 16; with r_ring=${rr} m, R_p was limited to ${next.toPrecision(6)} m. For larger R_p, set ring_model to 0 (point dipole).`);
+  }
+  const rpEl=document.querySelector('[data-p="R_p"]');
+  if(rpEl){
+    rpEl.min=+min.toPrecision(12);
+    if(+VALS.ring_model)rpEl.max=+max.toPrecision(12);else rpEl.removeAttribute('max');
+  }
+  if(next===rp)return;
+  VALS.R_p=+next.toPrecision(12);
+  if(rpEl)rpEl.value=VALS.R_p;
+  const e=document.getElementById('err');
+  if(e)e.textContent=msg;
+}
 function buildParams(){
   const groups={};for(const p of CONFIGS[CUR].params){
     if(CUR==='stellarator'&&!showParamForMode(p))continue;
@@ -801,7 +850,7 @@ function buildParams(){
         :p==='cyclotron_B_nonuniform'?L('关闭：使用均匀参考场','off: use uniform reference field'):L('关闭','off');
         html+=`<div class="fld full"><label title="${desc}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span></label><select data-p="${p}" data-bool="1"><option value="1" ${VALS[p]!==0?'selected':''}>${onTxt}</option><option value="0" ${VALS[p]===0?'selected':''}>${offTxt}</option></select></div>`;}
       else if(p==='m'){continue;}  // FRC paper shape index: derived from f_shape (API-only input); m_shape is shown as output
-      else if(p==='sep_model'){const SM=[['superellipse',L('超椭圆(默认)','superellipse (default)')],['mrr',L('MRR 论文分离面','MRR paper separatrix')]];const cur=VALS.sep_model||'superellipse';
+      else if(p==='sep_model'){const SM=[['superellipse',L('超椭圆(默认)','superellipse (default)')],['ma_xie',L('Ma-Xie 幂律分离面','Ma-Xie power-law separatrix')]];const cur=(VALS.sep_model==='mrr'?'ma_xie':(VALS.sep_model||'superellipse'));
         html+=`<div class="fld full"><label title="${desc}"><span class="sym">sep</span><span class="nm">${desc}</span></label><select data-p="sep_model">${SM.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${t}</option>`).join('')}</select></div>`;}
       else if(p==='tauE_scaling'){const TS=[['ipb98',L('IPB98(y,2) 常规托卡马克 (默认)','IPB98(y,2) conventional tokamak (default)')],['st',L('ST 球形托卡马克 (NSTX/MAST)','ST spherical tokamak (NSTX/MAST)')],['itpa20',L('ITPA20-IL 新数据库 (Verdoolaege 2021)','ITPA20-IL newer database (Verdoolaege 2021)')]];const cur=VALS.tauE_scaling||'ipb98';
         html+=`<div class="fld full"><label title="${desc}"><span class="sym">scl</span><span class="nm">${desc}</span></label><select data-p="tauE_scaling">${TS.map(([v,t])=>`<option value="${v}" ${cur===v?'selected':''}>${t}</option>`).join('')}</select></div>`;}
@@ -823,6 +872,7 @@ function buildParams(){
         html+=`<div class="fld"><label title="${tip}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span>${u}</label><input type="number" step="any" data-p="${p}" ${dn?'data-sc="1e20"':''} value="${fmtIn(dn?VALS[p]*1e-20:VALS[p])}"></div>`;}
     }html+='</div>';}
   const box=document.getElementById('params');box.innerHTML=html;
+  enforceDipoleGeometryRange();
   // ADVANCED (expert) inputs: custom Fourier axis + measured Vp/Sw overrides.
   // Normal mode shows only R0/a/N_fp/delta_h/etabar/g and computes volume/area
   // self-consistently from the geometry; advanced mode reveals the overrides.
@@ -885,9 +935,19 @@ function buildParams(){
     else if(el.dataset.p==='sep_model')VALS.sep_model=el.value;
     else if(el.dataset.p==='tauE_scaling')VALS.tauE_scaling=el.value;
     else VALS[el.dataset.p]=el.dataset.p==='icase'?+el.value:parseFloat(el.value)*(el.dataset.sc?+el.dataset.sc:1);
+    if(CUR==='frc'&&(el.dataset.p==='r_s'||el.dataset.p==='r_w'))enforceFrcWallOutside();
+    if(CUR==='dipole'&&['r_ring','R_p','L_in_fac','ring_model'].includes(el.dataset.p))enforceDipoleGeometryRange();
     applyModeLocks();
     if(el.dataset.p==='use_tauC')refreshCyclotronScanAxes();
+    if(CUR==='frc'&&el.dataset.p==='f_shape'&&isFinite(VALS.f_shape)&&VALS.f_shape<2/3){
+      clearTimeout(timer);
+      return;
+    }
     clearTimeout(timer);timer=setTimeout(()=>{updateA0();fitScanRanges();recompute();},280);});
+  box.querySelectorAll('[data-p="f_shape"]').forEach(el=>el.onblur=()=>{
+    enforceFrcShapeRange();
+    clearTimeout(timer);timer=setTimeout(()=>{updateA0();fitScanRanges();recompute();},0);
+  });
   if(CUR==='tokamak'&&(+VALS.geom_model||0)===2){
     const geoGrid=box.querySelector('.pgrid[data-grp="geo"]');
     if(geoGrid){
@@ -1010,10 +1070,10 @@ function cleanStellOverrides(o){
   return o;
 }
 function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='sep_model'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='tauE_scaling'){if(typeof v==='string'&&v)o[k]=v;}else if(OPAQUE_PARAMS.has(k)&&isPlainObject(v))o[k]=v;else if(Array.isArray(v)){const a=v.filter(x=>typeof x==='number'&&isFinite(x));if(a.length)o[k]=a;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return cleanStellOverrides(o);}
-async function recompute(){const r=await jpost('/api/run',{config:CUR,overrides:clean()});applyRun(r);if(VIEW!=='popcon')setView(VIEW);}
+async function recompute(){const r=await jpost('/api/run',{config:CUR,overrides:clean()});const ok=applyRun(r);if(ok&&VIEW!=='popcon')setView(VIEW);}
 function applyRun(r){
   r._geom_mode=CUR==='stellarator'?stellGeomMode():null;LASTRUN=r;const box=document.getElementById('results');
-  if(r.errors){box.innerHTML=`<div class="err">${r.errors.join('\n')}</div>`;caseBadge.textContent='';return;}
+  if(r.errors){box.innerHTML=`<div class="err">${r.errors.join('\n')}</div>`;caseBadge.textContent='';return false;}
   const o=r.outputs;caseBadge.textContent=(o.strcase||CUR)+(o.cyclotron_model?' · '+o.cyclotron_model:'');document.getElementById('stRx').textContent=o.strcase||'—';
   let html='';for(const[g,keys]of RGRP){const rows=keys.filter(k=>k in o&&typeof o[k]==='number').map(k=>{
     const cls=HOT.has(k)?'hot':COOL.has(k)?'cool':WARN.has(k)?'warn':'';
@@ -1031,6 +1091,7 @@ function applyRun(r){
   box.innerHTML=html;
   updateA0();
   if(VIEW==='popcon')document.getElementById('plotMeta').innerHTML=`<span>P_fus <b>${fmt(o.Pfus)}</b> MW</span><span>Q <b>${fmt(o.Qfus)}</b></span>`;
+  return true;
 }
 function fmt(v){if(v==null||typeof v!=='number'||!isFinite(v))return '—';const a=Math.abs(v);if(a!==0&&(a<1e-2||a>=1e5))return v.toExponential(3);return v.toFixed(a<1?4:3);}
 function setView(v){VIEW=v;document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
@@ -1057,29 +1118,6 @@ function plotTheme(){const d=THEME!=='light';return d?
 const LAYOUT=(xt,yt)=>{const c=plotTheme();return{paper_bgcolor:c.paper,plot_bgcolor:c.plot,font:{color:c.font,family:'JetBrains Mono',size:11},
   margin:{l:64,r:16,t:10,b:50},xaxis:{title:{text:xt,font:{family:'Chakra Petch',size:13,color:c.title}},gridcolor:c.grid,zeroline:false,linecolor:c.axis},
   yaxis:{title:{text:yt,font:{family:'Chakra Petch',size:13,color:c.title}},gridcolor:c.grid,zeroline:false,linecolor:c.axis},showlegend:true,legend:{orientation:'h',y:-0.18,font:{size:10,color:c.legend}}};};
-function bestMarkerCloud(s,xs,ys){
-  const x=[],y=[],seen=new Set(),rows=new Set(),cols=new Set();
-  const add=(xx,yy)=>{const key=`${xx}|${yy}`;if(!seen.has(key)){seen.add(key);x.push(xx);y.push(yy);}};
-  for(let j=0;j<s.y.length;j++)for(let i=0;i<s.x.length;i++)if(s.best[j][i]){
-    rows.add(j);cols.add(i);add(xs[i],ys[j]);
-  }
-  const base=x.length;
-  if(!base)return{x,y,size:4,opacity:0.85};
-  const thin=rows.size<=2||cols.size<=2||base<=Math.max(6,Math.ceil(Math.min(s.x.length,s.y.length)/3));
-  if(thin){
-    const fill=(a0,a1,b0,b1,n=3)=>{for(let k=1;k<n;k++){const t=k/n;add(a0+(a1-a0)*t,b0+(b1-b0)*t);}};
-    for(const j of rows){
-      const is=[];for(let i=0;i<s.x.length;i++)if(s.best[j][i])is.push(i);
-      for(let n=0;n<is.length-1;n++)if(is[n+1]-is[n]<=2)fill(xs[is[n]],xs[is[n+1]],ys[j],ys[j]);
-    }
-    for(const i of cols){
-      const js=[];for(let j=0;j<s.y.length;j++)if(s.best[j][i])js.push(j);
-      for(let n=0;n<js.length-1;n++)if(js[n+1]-js[n]<=2)fill(xs[i],xs[i],ys[js[n]],ys[js[n+1]]);
-    }
-  }
-  const density=x.length/(s.x.length*s.y.length);
-  return{x,y,size:thin?3:(density>0.25?3:4),opacity:thin?0.95:0.78};
-}
 function drawPopcon(){
   document.getElementById('plotTitle').innerHTML=`POPCON · <b>${cfgL(CUR)}</b>`;
   if(!LASTSCAN){Plotly.purge('plot');document.getElementById('plot').innerHTML=`<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#4b566c;font-size:13px">${L('▶ 运行 POPCON 扫描以生成等值线图','▶ Run POPCON scan to generate contours')}</div>`;return;}
@@ -1097,8 +1135,23 @@ function drawPopcon(){
       line:{width:q.w||1.6,color:qc,dash:q.dash||'solid'},colorscale:[[0,qc],[1,qc]]}));
     tr.push({x:[null],y:[null],mode:'lines',line:{color:qc,width:4,dash:q.dash||'solid'},name:pl(q),legendgroup:q.f,showlegend:true,hoverinfo:'skip'});
   });
-  const bm=bestMarkerCloud(s,xs,ys);
-  if(bm.x.length)tr.push({type:'scatter',mode:'markers',x:bm.x,y:bm.y,name:L('最佳区域','best region'),marker:{color:'#36e2c4',size:bm.size,symbol:'x',opacity:bm.opacity},showlegend:true,hoverinfo:'skip'});
+  // best region as a translucent shaded zone instead of a sparse x-marker
+  // cloud: a heatmap fills every qualifying grid cell (adjacent cells merge into
+  // one solid patch) so the operating window's extent reads at a glance even on
+  // a coarse grid; a contour at the 0.5 mask edge gives a crisp boundary. The
+  // heatmap is unshifted to the bottom so physics contour lines stay on top.
+  const bestZ=s.best.map(r=>r.map(v=>v?1:0));
+  if(bestZ.some(r=>r.some(Boolean))){
+    const bc=THEME!=='light'?'54,226,196':'14,148,134';
+    tr.unshift({type:'heatmap',x:xs,y:ys,z:bestZ,zmin:0,zmax:1,
+      colorscale:[[0,`rgba(${bc},0)`],[1,`rgba(${bc},0.20)`]],
+      showscale:false,showlegend:false,hoverinfo:'skip'});
+    tr.push({type:'contour',x:xs,y:ys,z:bestZ,autocontour:false,
+      contours:{coloring:'lines',start:0.5,end:0.5,size:1},
+      line:{width:1.4,color:`rgba(${bc},0.9)`},showscale:false,showlegend:false,hoverinfo:'skip'});
+    tr.push({x:[null],y:[null],mode:'markers',marker:{color:`rgba(${bc},0.7)`,size:12,symbol:'square'},
+      name:L('最佳区域','best region'),showlegend:true,hoverinfo:'skip'});
+  }
   if(VALS[s.xkey]!=null&&VALS[s.ykey]!=null)tr.push({type:'scatter',mode:'markers',x:[VALS[s.xkey]*dsc(s.xkey)],y:[VALS[s.ykey]*dsc(s.ykey)],name:L('当前点','selected'),
     marker:{color:'#facc15',size:14,symbol:'star',line:{color:'#dc2626',width:2}},showlegend:true,hoverinfo:'skip'});
   const ax=k=>{const mm=META[k];const sy=(mm&&mm[4])||k;const un=DENS.has(k)?'10²⁰ m⁻³':(mm&&mm[2]);return sy+(un?' ['+un+']':'');};
@@ -1147,7 +1200,8 @@ function drawShape(){
   // it for every other config so it can't linger after switching away (the
   // stellarator branch rebuilds its own, guarded by pc.dataset.state).
   if(CUR!=='stellarator'){const pc=document.getElementById('phControls');if(pc){pc.innerHTML='';pc.dataset.state='';}}
-  const v=VALS;let lay=LAYOUT('R [m]','Z [m]');lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;
+  const v=VALS;let lay=LAYOUT('R [m]','Z [m]');
+  lay.yaxis.scaleanchor='x';lay.yaxis.scaleratio=1;
   const GRP=SHAPE_GROUPS(),GP=GEO();const tr=[],seen=new Set();
   // add a trace to a legend group: first trace of a group gets the legend entry
   // (named by the group), the rest are hidden but toggle together with it.
@@ -1415,23 +1469,20 @@ function drawShape(){
     document.getElementById('plotMeta').innerHTML=`<span>${(v.ring_model?L('有限电流环真实真空磁通面','exact finite-loop vacuum flux surfaces'):L('点偶极解析磁通面','analytic point-dipole flux surfaces'))}${L('；功率沿磁通壳积分；圆形壁仅是 Sw=4πR_p² 的球形面积代理','; power integrates over flux shells; circular wall is only the spherical-area proxy Sw=4πR_p²')}</span>`;
   }
   lay.legend=Object.assign({},lay.legend,{groupclick:'togglegroup'});
-  // equal-aspect shape views: set EXPLICIT ranges from the data + the plot's
-  // pixel aspect instead of relying on Plotly scaleanchor+autorange, which
-  // produces a broken x-range (e.g. width 80 for 4-wide data) that jumps on
-  // every redraw. Deterministic ranges => stable view, no "突变".
+  // Equal-scale shape views: keep deterministic ranges to avoid redraw jumps,
+  // and match the range ratio to the plot box so 1 m on R equals 1 m on Z.
+  // The horizontal range may be wider on a wide panel; the scale, not the
+  // numeric span, is the invariant.
   if(lay.yaxis&&lay.yaxis.scaleanchor&&!(lay.xaxis&&lay.xaxis.range)){
     const pd=document.getElementById('plot');const w=pd.clientWidth,h=pd.clientHeight;
-    // fall back to ~square if the plot is hidden/mid-transition (clientW/H tiny),
-    // so a transient bad read can't blow the range up to +/-200
     const ar=(w>50&&h>50)?w/h:1.1;
     let xmn=1e30,xmx=-1e30,ymn=1e30,ymx=-1e30;
     if(lay.__fixbox){({xmn,xmx,ymn,ymx}=lay.__fixbox);}  // stable phi-scrub view
-    else tr.forEach(t=>{(t.x||[]).forEach(x=>{if(x!=null&&isFinite(x)){if(x<xmn)xmn=x;if(x>xmx)xmx=x;}});
+    else tr.forEach(t=>{(t.x||[]).forEach(x=>{if(x!=null&&isFinite(x)){if(x<xmn)xmn=x;if(x>xmx)xmx=x;}}); 
                    (t.y||[]).forEach(y=>{if(y!=null&&isFinite(y)){if(y<ymn)ymn=y;if(y>ymx)ymx=y;}});});
     if(xmx>xmn&&ymx>ymn){
       const cx=(xmn+xmx)/2,cy=(ymn+ymx)/2;let hx=(xmx-xmn)/2*1.12,hy=(ymx-ymn)/2*1.12;
       if(hx/hy<ar)hx=hy*ar; else hy=hx/ar;
-      delete lay.yaxis.scaleanchor;delete lay.yaxis.scaleratio;
       lay.xaxis.range=[cx-hx,cx+hx];lay.yaxis.range=[cy-hy,cy+hy];
       lay.xaxis.autorange=false;lay.yaxis.autorange=false;
     }

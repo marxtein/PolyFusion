@@ -98,6 +98,93 @@ def _geometry_metrics(R0, a, shape):
     return float(volume), float(plasma_surface)
 
 
+def _real_field_b25(ds, nfp, b0_ref=None, exponent=2.5,
+                    n_theta=64, n_phi=64):
+    """Volume average of ``(|B| / B_axis) ** exponent`` over the REAL field.
+
+    This is the field-inhomogeneity factor that enters the cyclotron-loss
+    correction.  Instead of the first-order near-axis estimate
+    ``B = B0 [1 + etabar*a*rho*cos(theta)]`` (``cyclotron.stellarator_B25_factor``),
+    it integrates the equilibrium's OWN field strength:
+
+        <(|B|/B0)^p>_V = ( int (|B|/B0)^p |sqrt(g)| ds dtheta dphi )
+                         / ( int |sqrt(g)| ds dtheta dphi )
+
+    using the VMEC mod-B harmonics ``bmnc``/``bmns`` and the Jacobian
+    ``gmnc``/``gmns`` (half-mesh, radial index 1..ns-1; index 0 is a zeroed
+    dummy).  The half mesh is uniform in the normalized toroidal flux ``s``, so
+    an unweighted radial sum with the ``|sqrt(g)|`` volume element is the exact
+    flux-volume average.  ``B0`` is the on-axis field (the same reference the
+    first-order model uses), so the factor is purely geometric and independent
+    of the absolute field scale.
+
+    Returns ``None`` when the wout lacks ``bmnc``/``gmnc`` (older/partial files),
+    so the caller falls back to the first-order near-axis factor.
+    """
+    if "bmnc" not in ds.variables or "gmnc" not in ds.variables:
+        return None
+    if "xm_nyq" in ds.variables and "xn_nyq" in ds.variables:
+        xm = np.asarray(ds.variables["xm_nyq"][:]).astype(int)
+        xn_raw = np.asarray(ds.variables["xn_nyq"][:])
+    else:
+        xm = np.asarray(ds.variables["xm"][:]).astype(int)
+        xn_raw = np.asarray(ds.variables["xn"][:])
+    xn = np.rint(xn_raw).astype(int)
+
+    bmnc = np.asarray(ds.variables["bmnc"][:], dtype=float)
+    gmnc = np.asarray(ds.variables["gmnc"][:], dtype=float)
+    if bmnc.ndim != 2 or gmnc.shape != bmnc.shape or bmnc.shape[1] != xm.size:
+        return None
+    bmns = (np.asarray(ds.variables["bmns"][:], dtype=float)
+            if "bmns" in ds.variables else None)
+    gmns = (np.asarray(ds.variables["gmns"][:], dtype=float)
+            if "gmns" in ds.variables else None)
+
+    ns = bmnc.shape[0]
+    if ns < 2:
+        return None
+
+    # on-axis reference field B0: wout scalar ``b0`` when available, else the
+    # flux-surface mean |B| (m=0,n=0 harmonic) extrapolated to the axis from the
+    # two innermost half-mesh surfaces.
+    if b0_ref is not None and math.isfinite(float(b0_ref)) and float(b0_ref) > 0:
+        B0 = float(b0_ref)
+    else:
+        m00 = np.where((xm == 0) & (xn == 0))[0]
+        if m00.size == 0:
+            return None
+        k = int(m00[0])
+        if ns >= 3:
+            B0 = float(1.5 * bmnc[1, k] - 0.5 * bmnc[2, k])  # half-mesh -> s=0
+        else:
+            B0 = float(bmnc[1, k])
+    if not math.isfinite(B0) or B0 <= 0:
+        return None
+
+    theta = np.linspace(0.0, 2 * math.pi, n_theta, endpoint=False)
+    phi = np.linspace(0.0, 2 * math.pi, n_phi, endpoint=False)
+    th, ph = np.meshgrid(theta, phi, indexing="ij")            # (n_theta, n_phi)
+    angle = (xm[:, None, None] * th[None, :, :]
+             - xn[:, None, None] * ph[None, :, :])             # (mn, nt, np)
+    cosA = np.cos(angle)
+    sinA = np.sin(angle) if (bmns is not None or gmns is not None) else None
+
+    js = slice(1, ns)                                          # valid half mesh
+    B = np.einsum("jm,mtp->jtp", bmnc[js], cosA)
+    g = np.einsum("jm,mtp->jtp", gmnc[js], cosA)
+    if bmns is not None:
+        B += np.einsum("jm,mtp->jtp", bmns[js], sinA)
+    if gmns is not None:
+        g += np.einsum("jm,mtp->jtp", gmns[js], sinA)
+
+    w = np.abs(g)
+    num = float(np.sum(w * (np.abs(B) / B0) ** exponent))
+    den = float(np.sum(w))
+    if den <= 0 or not math.isfinite(num):
+        return None
+    return num / den
+
+
 def _source(path, fmt, version):
     with open(path, "rb") as fh:
         digest = hashlib.sha256(fh.read()).hexdigest()
@@ -212,6 +299,10 @@ def _read_vmec(path):
         if aminor is None:
             aminor = math.sqrt(volume / (2 * math.pi**2 * Rmajor))
         B0 = optional_scalar("b0", "B0")
+        # field-inhomogeneity factor <(|B|/B0)^2.5>_V from the REAL field
+        # (numerical volume average of the wout mod-B harmonics), used in place
+        # of the first-order near-axis estimate for the cyclotron-loss closure.
+        b25_real = _real_field_b25(ds, nfp, b0_ref=B0)
         version = str(getattr(ds, "version_", getattr(ds, "VMEC_version", "")))
 
     return {
@@ -228,6 +319,7 @@ def _read_vmec(path):
             "Vp_m3": float(volume),
             "Vp_integral_m3": volume_geom,
             "Sp_m2": surface_geom,
+            "b25_real": float(b25_real) if b25_real is not None else None,
         },
         "B0_T": B0,
         "mode_count": int(max(len(shape["R"]), len(shape["Z"]))),

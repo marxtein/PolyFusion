@@ -59,7 +59,7 @@ _KEV_J = 1e3 * QE
 _BETA_SOFT_LIMIT = 0.05   # ~5% soft stellarator beta limit (Mercier; can be exceeded)
 _IOTA_MIN = 1e-6          # below this the configuration has no effective transform
 _R2_DISPLAY_CAP = 0.5     # shape view: cap r^2 displacement at this fraction of r^1
-_N_PHASE_FRAMES = 120     # fine toroidal cuts over one period for the phase slider (endpoints inclusive: frac 0..1, φ=0 and φ=T at ends)
+_N_PHASE_FRAMES = 24      # local UI preview frames over one period; physics metrics are unaffected
 # Unified nested-surface display (cosmetic; the rho=1 boundary — the only surface
 # the power account integrates — is identical for any fade).  Surfaces nest as
 #   S(rho) = axis + rho*round + rho^_SHAPE_FADE * shape
@@ -70,9 +70,9 @@ _N_PHASE_FRAMES = 120     # fine toroidal cuts over one period for the phase sli
 # rounding the bean smoothly toward the axis.  Sampled at uniform rho for even
 # visual spacing (sqrt/clustered sampling bunched the outer shells).
 _SHAPE_FADE = 1.5
-_NEST_RHOS = (0.18, 0.344, 0.508, 0.672, 0.836, 1.0)
+_NEST_RHOS = (0.22, 0.415, 0.61, 0.805, 1.0)
 _PROFILE_N_RHO = 21
-_BOUNDARY_N_THETA = 200
+_BOUNDARY_N_THETA = 120
 
 
 def _closed_list(arr):
@@ -1245,8 +1245,17 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
              * 1e-6 * Vp)
     neff = ne0 / 1e20 / (1 + Sn)
     Teff = Te0 * float(np.sum((1 - rho**2) ** ST)) * drho
+    # field-inhomogeneity factor <(|B|/B0)^2.5>_V for the cyclotron-loss term.
+    # When a real VMEC/DESC equilibrium was imported AND its wout carried the
+    # mod-B harmonics, use the NUMERICALLY INTEGRATED real field (b25_real);
+    # otherwise fall back to the first-order near-axis estimate B = B0[1 +
+    # etabar*a*rho*cos(theta)].
+    b25_real = None
+    if isinstance(equilibrium, dict):
+        b25_real = equilibrium.get("metrics", {}).get("b25_real")
     cyclotron_B25_factor = (
-        stellarator_B25_factor(float(etabar) * a)
+        (float(b25_real) if b25_real is not None
+         else stellarator_B25_factor(float(etabar) * a))
         if bool(cyclotron_B_nonuniform) else 1.0)
     Pcycl = (4.14e-7 * neff**0.5 * Teff**2.5 * B0**2.5 * (1 - Rw)**0.5
              * a_vol**-0.5 * (1 + 2.5 * Teff / 511) * Vp

@@ -77,7 +77,7 @@ class DipoleResult:
         return asdict(self)
 
 
-def _point_dipole_surface(L: float, n: int = 181) -> dict:
+def _point_dipole_surface(L: float, n: int = 121) -> dict:
     """Poloidal field line of a point dipole with equatorial crossing ``L``."""
     lat = np.linspace(-math.pi / 2.0, math.pi / 2.0, n)
     radius = L * np.cos(lat) ** 2
@@ -88,7 +88,7 @@ def _point_dipole_surface(L: float, n: int = 181) -> dict:
     }
 
 
-def _finite_ring_surface(lam: float, r_ring: float, n: int = 181) -> dict:
+def _finite_ring_surface(lam: float, r_ring: float, n: int = 91) -> dict:
     """Exact current-loop flux contour through ``(R=lam*r_ring, Z=0)``.
 
     Rays are cast from the singular current ring in the poloidal plane.  Along
@@ -109,7 +109,7 @@ def _finite_ring_surface(lam: float, r_ring: float, n: int = 181) -> dict:
                 hi *= 1.6
                 if hi > 4.0 * lam + 4.0:
                     break
-        for _ in range(52):
+        for _ in range(34):
             mid = 0.5 * (lo + hi)
             value = float(ringfield.psi_norm(1.0 + mid * ca, mid * sa))
             if value > target:
@@ -123,7 +123,7 @@ def _finite_ring_surface(lam: float, r_ring: float, n: int = 181) -> dict:
 
 
 def dipole_shape_outlines(r_ring, R_p, L_in_fac=1.5, ring_model=0,
-                          n_surfaces=7, n_profile=101, **_ignored) -> dict:
+                          n_surfaces=5, n_profile=81, **_ignored) -> dict:
     """JSON-able dipole flux surfaces and the profile coordinate used by the UI."""
     L_in = float(L_in_fac) * float(r_ring)
     if r_ring <= 0 or L_in >= R_p:

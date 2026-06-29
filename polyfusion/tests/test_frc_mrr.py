@@ -1,4 +1,4 @@
-"""FRC MRR (paper) separatrix geometry verification (docs/superpowers/specs/
+"""FRC Ma-Xie paper separatrix geometry verification (docs/superpowers/specs/
 2026-06-16-frc-mrr-geometry-design.md).
 
 Run: python polyfusion/tests/test_frc_mrr.py
@@ -6,8 +6,8 @@ Run: python polyfusion/tests/test_frc_mrr.py
 The paper separatrix (Ma/Xie GSEQ-FRC, arXiv:2103.00839) is the revolution of
     r(z) = r_s * (1 - |z/(l_s/2)|^m)^(1/2),   m=2 ellipse, large m racetrack.
 Volume factor is m/(m+1) == f_shape (exact bijection f_shape=m/(m+1)).  Used as
-an OPTIONAL geometry mode sep_model="mrr"; the default superellipse path must
-stay numerically unchanged.
+an OPTIONAL geometry mode sep_model="ma_xie"; the legacy value "mrr" remains
+an accepted alias.  The default superellipse path must stay numerically unchanged.
 """
 
 import math
@@ -49,13 +49,13 @@ def main():
     m1 = _m_from_f_shape(1.0)
     ok(math.isfinite(m1) and m1 >= 1e6 - 1, f"f_shape=1 -> finite m_max ({m1:g})")
 
-    # ---- 4. MRR numeric volume == closed form m/(m+1) pi r_s^2 l_s ----
+    # ---- 4. Ma-Xie numeric volume == closed form m/(m+1) pi r_s^2 l_s ----
     for m in (2.0, 4.0, 20.0):
         r_s, l_s = 0.5, 5.0
         V_num = _mrr_volume(r_s, l_s, m)
         V_cf = math.pi * r_s**2 * l_s * m / (m + 1.0)
         ok(abs(V_num - V_cf) / V_cf < 1e-6,
-           f"m={m}: MRR volume numeric {V_num:.6f} == closed form {V_cf:.6f}")
+           f"m={m}: Ma-Xie volume numeric {V_num:.6f} == closed form {V_cf:.6f}")
 
     # ---- 5. m=2 surface == prolate-spheroid analytic reference ----
     r_s, l_s = 0.5, 5.0           # a=r_s=0.5, c=l_s/2=2.5 (prolate, c>a)
@@ -64,23 +64,26 @@ def main():
     S_spheroid = 2 * math.pi * a**2 * (1.0 + (c / (a * e)) * math.asin(e))
     S_num = _mrr_surface(r_s, l_s, 2.0, 4001)
     ok(abs(S_num - S_spheroid) / S_spheroid < 1e-3,
-       f"m=2 MRR surface {S_num:.5f} == prolate spheroid {S_spheroid:.5f}")
+       f"m=2 Ma-Xie surface {S_num:.5f} == prolate spheroid {S_spheroid:.5f}")
 
-    # ---- 6. MRR profile factors bounded and ordered ----
+    # ---- 6. Ma-Xie profile factors bounded and ordered ----
     K, G1, G2, GB = _mrr_profile_factors(0.5, _m_from_f_shape(0.85))
     ok(K > 0 and 0.0 < G2 <= G1 <= 1.0 and 0.0 < GB < 1.0,
-       f"MRR profile factors bounded/ordered (K={K:.3f}, G1={G1:.3f}, G2={G2:.3f}, GB={GB:.3f})")
+       f"Ma-Xie profile factors bounded/ordered (K={K:.3f}, G1={G1:.3f}, G2={G2:.3f}, GB={GB:.3f})")
 
-    # ---- 7/8. MRR vs superellipse at equal f_shape: Vp identical, Pfus differs ----
+    # ---- 7/8. Ma-Xie vs superellipse at equal f_shape: Vp identical, Pfus differs ----
     base = dict(r_s=0.5, l_s=5.0, r_w=0.7, B_e=3.5, Ti=15.0, Te=12.0, tauE=0.013)
     se = solve_frc(f_shape=0.85, sep_model="superellipse", **base)
-    mr = solve_frc(f_shape=0.85, sep_model="mrr", **base)
-    ok(abs(se.Vp - mr.Vp) / se.Vp < 1e-6, "MRR Vp == superellipse Vp at equal f_shape")
-    ok(abs(se.Pfus - mr.Pfus) / se.Pfus > 1e-6, "MRR Pfus differs from superellipse (G factors)")
+    mr = solve_frc(f_shape=0.85, sep_model="ma_xie", **base)
+    ok(mr.sep_model == "ma_xie", "Ma-Xie is the canonical sep_model value")
+    ok(abs(se.Vp - mr.Vp) / se.Vp < 1e-6, "Ma-Xie Vp == superellipse Vp at equal f_shape")
+    ok(abs(se.Pfus - mr.Pfus) / se.Pfus > 1e-6, "Ma-Xie Pfus differs from superellipse (G factors)")
+    legacy = solve_frc(f_shape=0.85, sep_model="mrr", **base)
+    ok(legacy.sep_model == "ma_xie", "legacy sep_model='mrr' canonicalizes to ma_xie")
 
-    # ---- 9. MRR Sp finite, positive, < Sw ----
+    # ---- 9. Ma-Xie Sp finite, positive, < Sw ----
     ok(math.isfinite(mr.Sp) and mr.Sp > 0 and mr.Sp < mr.Sw,
-       f"MRR Sp finite, positive, < Sw (Sp={mr.Sp:.4f}, Sw={mr.Sw:.4f})")
+       f"Ma-Xie Sp finite, positive, < Sw (Sp={mr.Sp:.4f}, Sw={mr.Sw:.4f})")
 
     # ---- D. m honored in superellipse mode (sets f_shape=m/(m+1)) ----
     m_in = _m_from_f_shape(0.85)
@@ -103,12 +106,12 @@ def main():
             return True
     ok(raises(lambda: solve_frc(sep_model="bad", **base, f_shape=0.85)),
        "sep_model='bad' rejected")
-    ok(raises(lambda: solve_frc(sep_model="mrr", m=1.5, **base)),
+    ok(raises(lambda: solve_frc(sep_model="ma_xie", m=1.5, **base)),
        "m<2 rejected")
-    ok(raises(lambda: solve_frc(sep_model="mrr", m=2.0, f_shape=0.9, **base)),
+    ok(raises(lambda: solve_frc(sep_model="ma_xie", m=2.0, f_shape=0.9, **base)),
        "inconsistent m and f_shape rejected")
 
-    print("\nRESULT:", "FRC MRR PASS" if PASS else "SOME FAILED")
+    print("\nRESULT:", "FRC Ma-Xie PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1
 
 

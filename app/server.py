@@ -10,6 +10,7 @@ configuration in ``polyfusion.configs.REGISTRY`` (tokamak, mirror, …).
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -101,29 +102,45 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def _send(self, code, body, ctype="application/json"):
+    def _send(self, code, body, ctype="application/json", cache_control="no-store, max-age=0"):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
-        # local dev tool: never let the browser cache a stale index.html/API
-        # response (edited files must show on a plain reload)
-        self.send_header("Cache-Control", "no-store, max-age=0")
+        self.send_header("Cache-Control", cache_control)
         self.end_headers()
         self.wfile.write(data)
 
+    def _send_file(self, fpath, ctype=None, cache_control="public, max-age=31536000, immutable"):
+        with open(fpath, "rb") as fh:
+            data = fh.read()
+        return self._send(
+            200,
+            data,
+            ctype or mimetypes.guess_type(fpath)[0] or "application/octet-stream",
+            cache_control=cache_control,
+        )
+
     def do_GET(self):
         if self.path in ("/", "/index.html"):
-            with open(os.path.join(HERE, "index.html"), "rb") as fh:
-                return self._send(200, fh.read(), "text/html; charset=utf-8")
+            return self._send_file(
+                os.path.join(HERE, "index.html"),
+                "text/html; charset=utf-8",
+                cache_control="no-cache",
+            )
+        if self.path.startswith("/vendor/"):
+            name = os.path.basename(unquote(self.path))
+            fpath = os.path.join(HERE, "vendor", name)
+            if os.path.isfile(fpath):
+                return self._send_file(fpath)
+            return self._send(404, json.dumps({"error": "vendor asset not found"}))
         if self.path == "/api/meta":
             return self._send(200, json.dumps({"configs": list_configs()}))
         if self.path == "/api/equilibria":
             # manifest of bundled real equilibrium files, keyed by config+preset
             mpath = os.path.join(HERE, "equilibria", "manifest.json")
             if os.path.isfile(mpath):
-                with open(mpath, "rb") as fh:
-                    return self._send(200, fh.read())
+                return self._send_file(mpath, cache_control="no-cache")
             return self._send(200, json.dumps({}))
         if self.path.startswith("/equilibria/"):
             # serve a bundled equilibrium file (binary). Restrict to the two
@@ -135,8 +152,7 @@ class Handler(BaseHTTPRequestHandler):
                 if os.path.isfile(fpath) and os.path.commonpath(
                     [os.path.realpath(fpath), os.path.join(HERE, "equilibria")]
                 ) == os.path.realpath(os.path.join(HERE, "equilibria")):
-                    with open(fpath, "rb") as fh:
-                        return self._send(200, fh.read(), "application/octet-stream")
+                    return self._send_file(fpath, "application/octet-stream")
             return self._send(404, json.dumps({"error": "equilibrium not found"}))
         return self._send(404, json.dumps({"error": "not found"}))
 

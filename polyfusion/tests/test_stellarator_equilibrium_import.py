@@ -43,6 +43,22 @@ def _vmec_fixture(path):
         ds.createVariable("Aminor_p", "f8", ("scalar",))[:] = [0.55]
         ds.createVariable("volume_p", "f8", ("scalar",))[:] = [30.0]
         ds.createVariable("b0", "f8", ("scalar",))[:] = [2.5]
+        # uniform |B| (only the m=0,n=0 harmonic) and uniform Jacobian: the
+        # real-field inhomogeneity factor <(|B|/B0)^2.5>_V must come out 1.0.
+        bmnc = ds.createVariable("bmnc", "f8", ("radius", "mn_mode"))
+        gmnc = ds.createVariable("gmnc", "f8", ("radius", "mn_mode"))
+        bmnc[:] = [[0, 0, 0], [2.5, 0, 0], [2.5, 0, 0]]
+        gmnc[:] = [[0, 0, 0], [-1.0, 0, 0], [-1.0, 0, 0]]
+
+
+def _vmec_fixture_ripple(path, ripple):
+    """VMEC wout with a single-helicity |B| ripple b0*(1 + ripple*cos(theta))."""
+    _vmec_fixture(path)
+    with Dataset(path, "a") as ds:
+        bmnc = ds.variables["bmnc"]
+        # xm=[0,1,1], xn=[0,0,5]: put the ripple on the m=1,n=0 (poloidal) mode.
+        bmnc[1, 1] = 2.5 * ripple
+        bmnc[2, 1] = 2.5 * ripple
 
 
 def _desc_fixture(path):
@@ -94,6 +110,44 @@ def test_vmec_wout_import_maps_lcfs_and_iota_rho_two_thirds():
         np.interp(4 / 9, [0, 0.5, 1], [0.7, 0.8, 0.9]))
     assert [1, 1, pytest.approx(0.12 / 0.55)] in out["shape"]["R"]
     assert [-1, -1, pytest.approx(0.12 / 0.55)] in out["shape"]["R"]
+
+
+def test_vmec_import_computes_real_field_b25_uniform_field_is_one():
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "wout_test.nc")
+        _vmec_fixture(path)
+        out = parse_equilibrium_file(path)
+    # uniform |B| -> <(|B|/B0)^2.5> = 1 exactly (independent of grid)
+    assert out["metrics"]["b25_real"] == pytest.approx(1.0, abs=1e-9)
+
+
+def test_vmec_import_real_field_b25_matches_direct_quadrature_for_ripple():
+    ripple = 0.2
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "wout_test.nc")
+        _vmec_fixture_ripple(path, ripple)
+        out = parse_equilibrium_file(path)
+    # |B|/B0 = 1 + ripple*cos(theta), uniform Jacobian -> the volume average is
+    # the plain theta-average of (1 + ripple*cos)^2.5.
+    th = np.linspace(0.0, 2 * np.pi, 4096, endpoint=False)
+    expected = float(np.mean(np.abs(1.0 + ripple * np.cos(th)) ** 2.5))
+    assert out["metrics"]["b25_real"] == pytest.approx(expected, rel=1e-4)
+    assert out["metrics"]["b25_real"] > 1.0
+
+
+def test_imported_real_field_b25_overrides_first_order_in_power_balance():
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, "wout_test.nc")
+        _vmec_fixture_ripple(path, 0.3)
+        imported = parse_equilibrium_file(path)
+    base = dict(load_presets("stellarator")[0]["W7-X"])
+    base.update(equilibrium_to_stellarator_params(imported, current_B0=base["B0"]))
+    base.pop("geometry_variants", None)
+    base["cyclotron_B_nonuniform"] = 1.0
+    run = run_case(base, config="stellarator")
+    assert "errors" not in run, run.get("errors")
+    assert run["outputs"]["cyclotron_B25_factor"] == pytest.approx(
+        imported["metrics"]["b25_real"], rel=1e-9)
 
 
 def test_desc_import_reads_final_equilibrium_surface_axis_and_profile():

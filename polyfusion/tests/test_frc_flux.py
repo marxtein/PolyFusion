@@ -107,7 +107,7 @@ def main():
        f"innermost surface hugs the O-point ring (min r={mins[0]:.3f} > 0.55 r_o={0.55*r_o:.3f})")
 
     # ---- 4. outline dict carries surfaces + O/X points (both modes) ----
-    for mode in ("superellipse", "mrr"):
+    for mode in ("superellipse", "ma_xie"):
         d = frc_shape_outlines(r_s=0.5, l_s=5.0, r_w=0.7, f_shape=0.85,
                                sep_model=mode)
         ok(isinstance(d.get("surfaces"), list) and len(d["surfaces"]) > 0,

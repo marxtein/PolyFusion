@@ -312,8 +312,9 @@ def _frc_cross(p: dict) -> list[str]:
         errors.append(f"need r_s < r_w (got r_s={r_s}, r_w={r_w}): "
                       "separatrix must sit inside the wall (x_s < 1)")
     sep_model = p.get("sep_model")
-    if sep_model is not None and sep_model not in ("superellipse", "mrr"):
-        errors.append(f"sep_model must be 'superellipse' or 'mrr' (got {sep_model!r})")
+    if sep_model is not None and sep_model not in ("superellipse", "ma_xie", "mrr"):
+        errors.append("sep_model must be 'superellipse' or 'ma_xie' "
+                      f"(legacy alias 'mrr' is accepted; got {sep_model!r})")
     m, f_shape = _num(p, "m"), _num(p, "f_shape")
     if m is not None and f_shape is not None and abs(m / (m + 1.0) - f_shape) > 1e-6:
         errors.append(f"inconsistent m and f_shape: m={m} implies "
@@ -340,6 +341,12 @@ def _dipole_cross(p: dict) -> list[str]:
             and fac * r_ring >= R_p:
         errors.append(f"need L_in = L_in_fac*r_ring < R_p "
                       f"(got {fac * r_ring} >= {R_p}): no plasma shell")
+    if bool(p.get("ring_model", 0.0)) and r_ring is not None and R_p is not None:
+        lam_out = R_p / r_ring if r_ring else float("inf")
+        if lam_out > 16.0:
+            errors.append("finite-ring dipole tables require R_p/r_ring <= 16 "
+                          f"(got {lam_out:.3g}); reduce R_p, increase r_ring, "
+                          "or switch ring_model to 0 for the point-dipole model")
     if bool(p.get("use_tauC", 0.0)):
         tauC = _num(p, "tauC")
         if tauC is None:
