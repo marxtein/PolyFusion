@@ -34,18 +34,24 @@ def main():
     for name in list(MEASURED) + CONCEPTS:
         o = run_preset(name, "stellarator")["outputs"]
         ok(o.get("valid") == 1.0, f"{name}: valid == 1")
-        ok(math.isfinite(o["Pwall"]) and o["Pwall"] >= 0,
-           f"{name}: finite sane Pwall ({o['Pwall']:.4g} MW/m^2)")
+        ok(
+            math.isfinite(o["Pwall"]) and o["Pwall"] >= 0,
+            f"{name}: finite sane Pwall ({o['Pwall']:.4g} MW/m^2)",
+        )
 
     for name, (lo, hi) in MEASURED.items():
         o = run_preset(name, "stellarator")["outputs"]
         Sw = o["Sw"]
-        ok(lo <= Sw <= hi,
-           f"{name}: wall area anchored to measured value ({Sw:.1f} m^2 in [{lo},{hi}])")
+        ok(
+            lo <= Sw <= hi,
+            f"{name}: wall area anchored to measured value ({Sw:.1f} m^2 in [{lo},{hi}])",
+        )
         # Pwall consistent with the anchored area
         expect = (o["Pfus"] + o["Pheat"]) / Sw
-        ok(abs(o["Pwall"] - expect) < 1e-9 * max(abs(expect), 1.0),
-           f"{name}: Pwall == (Pfus+Pheat)/Sw")
+        ok(
+            abs(o["Pwall"] - expect) < 1e-9 * max(abs(expect), 1.0),
+            f"{name}: Pwall == (Pfus+Pheat)/Sw",
+        )
 
     print("\nRESULT:", "PRESET PWALL CHECKS PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1

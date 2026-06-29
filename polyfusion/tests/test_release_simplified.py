@@ -45,8 +45,9 @@ def main() -> int:
         rad = o.get("Pbrem", 0.0) + o.get("Pcycl", 0.0) + o.get("P_line", 0.0)
         trans = o.get("Ptrans", o.get("Pth", 0.0))
         all_ok &= ok(math.isfinite(rad) and rad >= 0.0, f"{cfg}: radiation finite")
-        all_ok &= ok(math.isfinite(trans) and trans >= 0.0,
-                     f"{cfg}: transport is exposed")
+        all_ok &= ok(
+            math.isfinite(trans) and trans >= 0.0, f"{cfg}: transport is exposed"
+        )
 
     self_cases = [
         ("tokamak", "ITER", {"use_tauE": 0}),
@@ -64,7 +65,9 @@ def main() -> int:
     r = run_case({"use_tauE": 0}, preset="Dipole-DD", config="dipole")
     all_ok &= ok("errors" in r, "dipole: self mode is explicitly unavailable")
 
-    print("\nRESULT:", "TAUE SWITCH SMOKE PASS" if all_ok else "TAUE SWITCH SMOKE FAILED")
+    print(
+        "\nRESULT:", "TAUE SWITCH SMOKE PASS" if all_ok else "TAUE SWITCH SMOKE FAILED"
+    )
     return 0 if all_ok else 1
 
 

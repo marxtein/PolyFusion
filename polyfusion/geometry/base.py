@@ -16,9 +16,7 @@ def get_geometry(name: str) -> type:
         return _REGISTRY[name]
     except KeyError:
         available = ", ".join(sorted(_REGISTRY)) or "(none)"
-        raise KeyError(
-            f"Unknown geometry '{name}'. Available: {available}"
-        ) from None
+        raise KeyError(f"Unknown geometry '{name}'. Available: {available}") from None
 
 
 class MirrorGeometry(ABC):

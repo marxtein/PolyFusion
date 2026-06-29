@@ -10,6 +10,7 @@ integrated over the real plasma cross-section (psi inside the boundary), rather
 than the analytic Miller 1/R proxy.  funsc must use this real factor when a real
 equilibrium (geom_model=2 with eq) is supplied and cyclotron_B_nonuniform=1.
 """
+
 import math
 import os
 import sys
@@ -43,7 +44,7 @@ def test_real_b25_is_finite_positive_and_sane():
     g = _g()
     c = eqdsk.cyclotron_b25_from_eqdsk(g)
     assert math.isfinite(c)
-    assert 0.3 < c < 5.0          # a 2.5-moment of |B|/B_axis around a tokamak
+    assert 0.3 < c < 5.0  # a 2.5-moment of |B|/B_axis around a tokamak
     # B_T ~ 1/R dominates -> inboard high-field weights the 2.5 moment up
     assert c >= 1.0
 
@@ -52,16 +53,35 @@ def test_equilibrium_geometry_exposes_real_b25():
     g = _g()
     eq = eqdsk.equilibrium_geometry(g)
     assert "cyclotron_B25" in eq
-    assert eq["cyclotron_B25"] == pytest.approx(eqdsk.cyclotron_b25_from_eqdsk(g), rel=1e-9)
+    assert eq["cyclotron_B25"] == pytest.approx(
+        eqdsk.cyclotron_b25_from_eqdsk(g), rel=1e-9
+    )
 
 
 def test_funsc_uses_real_b25_for_real_equilibrium():
     g = _g()
     eq = eqdsk.equilibrium_geometry(g)
     R0, a, kappa, delta = eq["R0"], eq["a"], eq["kappa"], eq["delta"]
-    common = dict(Sn=0.5, ST=1.0, ni0=1e20, Ti0=15.0, fT=1.0, fsig=1.0, f1=0.5,
-                  BT0=eq["bt0"], Ip=max(eq["ip"], 0.1), tauE=1.0, fHe=0.04, fimp=0.01,
-                  Zimp=10, Rw=0.7, g=0.1, icase=1, geom_model=2.0, eq=eq)
+    common = dict(
+        Sn=0.5,
+        ST=1.0,
+        ni0=1e20,
+        Ti0=15.0,
+        fT=1.0,
+        fsig=1.0,
+        f1=0.5,
+        BT0=eq["bt0"],
+        Ip=max(eq["ip"], 0.1),
+        tauE=1.0,
+        fHe=0.04,
+        fimp=0.01,
+        Zimp=10,
+        Rw=0.7,
+        g=0.1,
+        icase=1,
+        geom_model=2.0,
+        eq=eq,
+    )
     real = funsc(R0, a, kappa, delta, **common, cyclotron_B_nonuniform=1.0)
     off = funsc(R0, a, kappa, delta, **common, cyclotron_B_nonuniform=0.0)
     # toggle off -> factor 1
@@ -73,8 +93,15 @@ def test_funsc_uses_real_b25_for_real_equilibrium():
 
 
 def _load_app_eqdsk(name):
-    path = os.path.join(os.path.dirname(__file__), "..", "..",
-                        "app", "equilibria", "tokamak", f"{name}.geqdsk")
+    path = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "..",
+        "app",
+        "equilibria",
+        "tokamak",
+        f"{name}.geqdsk",
+    )
     return eqdsk.parse_geqdsk(open(path).read())
 
 
@@ -96,8 +123,9 @@ def test_iter_real_b25_is_physical():
     assert 1.0 < real < 1.4, f"ITER real B25={real} out of physical band"
     assert abs(real - miller) / miller < 0.15, (
         f"ITER real {real:.3f} vs Miller {miller:.3f} disagree by "
-        f"{(real-miller)/miller*100:.1f}% (limit 15%) — likely a regression "
-        "in the LCFS-polygon mask or psi unit scaling")
+        f"{(real - miller) / miller * 100:.1f}% (limit 15%) — likely a regression "
+        "in the LCFS-polygon mask or psi unit scaling"
+    )
 
 
 def test_psi_scale_detection_picks_correct_convention():
@@ -106,7 +134,7 @@ def test_psi_scale_detection_picks_correct_convention():
     g_d3d = _load_app_eqdsk("DIII-D")
     s_iter = eqdsk._psi_to_wbrad_scale(g_iter)
     s_d3d = eqdsk._psi_to_wbrad_scale(g_d3d)
-    assert 5.5 < s_iter < 7.0, (
-        f"ITER psi-scale {s_iter:.2f} should be near 2*pi=6.28")
+    assert 5.5 < s_iter < 7.0, f"ITER psi-scale {s_iter:.2f} should be near 2*pi=6.28"
     assert 0.8 < s_d3d < 1.2, (
-        f"DIII-D psi-scale {s_d3d:.2f} should be near 1.0 (Wb/rad)")
+        f"DIII-D psi-scale {s_d3d:.2f} should be near 1.0 (Wb/rad)"
+    )

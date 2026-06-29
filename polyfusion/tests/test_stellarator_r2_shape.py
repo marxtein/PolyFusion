@@ -18,7 +18,9 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from polyfusion.configs.stellarator import (  # noqa: E402
-    section_outlines, stellarator_geometry_metrics)
+    section_outlines,
+    stellarator_geometry_metrics,
+)
 
 PASS = True
 
@@ -43,8 +45,7 @@ def _central_asymmetry(R, Z):
 
 
 def main():
-    sh = section_outlines(R0=18.0, A=10.0, N_fp=3, delta_h=0.81, etabar=0.08,
-                          B2c=0.0)
+    sh = section_outlines(R0=18.0, A=10.0, N_fp=3, delta_h=0.81, etabar=0.08, B2c=0.0)
     # contract preserved
     for k in ("mode", "metric_mode", "a", "g", "sections", "axis"):
         ok(k in sh, f"section dict has key '{k}'")
@@ -52,35 +53,44 @@ def main():
         for k in ("label", "elong", "R", "Z", "surfaces", "wall"):
             ok(k in sec, f"section '{sec.get('label')}' has key '{k}'")
         ok(len(sec["surfaces"]) >= 2, "nested surfaces present")
-        ok(abs(sec["surfaces"][-1]["rho"] - 1.0) < 1e-12,
-           "outermost nested surface is the boundary (rho=1)")
+        ok(
+            abs(sec["surfaces"][-1]["rho"] - 1.0) < 1e-12,
+            "outermost nested surface is the boundary (rho=1)",
+        )
 
     # at least one cut must show a genuinely non-elliptic (bean) boundary
     asym = max(_central_asymmetry(s["R"], s["Z"]) for s in sh["sections"])
     ok(asym > 1e-3, f"r2 boundary is non-elliptic (central asymmetry {asym:.2e})")
-    ok(sh["metric_mode"] == "near-axis-r2",
-       f"metric_mode flags second order ({sh['metric_mode']})")
+    ok(
+        sh["metric_mode"] == "near-axis-r2",
+        f"metric_mode flags second order ({sh['metric_mode']})",
+    )
 
     # the display cap bounds the second-order distortion (no runaway / self-
     # intersecting cartoon): a_disp <= a and asymmetry stays O(cap)
-    ok(sh["a_disp"] <= sh["a"] + 1e-12,
-       f"display radius bounded (a_disp={sh['a_disp']:.3f} <= a={sh['a']:.3f})")
+    ok(
+        sh["a_disp"] <= sh["a"] + 1e-12,
+        f"display radius bounded (a_disp={sh['a_disp']:.3f} <= a={sh['a']:.3f})",
+    )
     ok(asym < 1.0, f"bean distortion bounded by display cap ({asym:.2e} < 1)")
 
     # B2c (second-order field shaping) genuinely changes the cross-section
-    sh2 = section_outlines(R0=18.0, A=10.0, N_fp=3, delta_h=0.81, etabar=0.08,
-                           B2c=0.5)
-    d = max(np.max(np.abs(np.array(s1["R"]) - np.array(s2["R"])))
-            for s1, s2 in zip(sh["sections"], sh2["sections"]))
+    sh2 = section_outlines(R0=18.0, A=10.0, N_fp=3, delta_h=0.81, etabar=0.08, B2c=0.5)
+    d = max(
+        np.max(np.abs(np.array(s1["R"]) - np.array(s2["R"])))
+        for s1, s2 in zip(sh["sections"], sh2["sections"])
+    )
     ok(d > 1e-4, f"B2c alters the boundary shape (max dR {d:.2e})")
 
     # POWER ACCOUNT UNTOUCHED: geometry metrics stay first-order area-preserving
-    g = stellarator_geometry_metrics(R0=18.0, a=1.8, N_fp=3,
-                                     rc=[18.0, 0.81], zs=[0.0, -0.81],
-                                     etabar=0.08)
+    g = stellarator_geometry_metrics(
+        R0=18.0, a=1.8, N_fp=3, rc=[18.0, 0.81], zs=[0.0, -0.81], etabar=0.08
+    )
     a = 18.0 / 10.0
-    ok(abs(g["A_flux"] - math.pi * a**2) < 1e-9,
-       "A_flux still first-order pi a^2 (0-D power account unchanged)")
+    ok(
+        abs(g["A_flux"] - math.pi * a**2) < 1e-9,
+        "A_flux still first-order pi a^2 (0-D power account unchanged)",
+    )
 
     print("\nRESULT:", "STELLARATOR R2 SHAPE PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1

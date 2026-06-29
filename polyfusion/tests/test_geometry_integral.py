@@ -29,7 +29,7 @@ def main():
     R0, a = 5.0, 0.5
     th = np.linspace(0.0, 2 * math.pi, 400, endpoint=False)
 
-    def torus(phi):                      # circular cross-section, no phi dep
+    def torus(phi):  # circular cross-section, no phi dep
         return R0 + a * np.cos(th), a * np.sin(th)
 
     Vp, Sw, Sp = boundary_metrics(torus, nfp=1, g=0.0, n_phi=200)
@@ -52,8 +52,10 @@ def main():
     for p in phs:
         R, Z = helical(p)
         Vbrute += np.sum(0.5 * R * R * (np.roll(Z, -1) - Z)) * dph
-    ok(abs(Vfull - abs(Vbrute)) / abs(Vbrute) < 1e-6,
-       f"one-period x nfp volume {Vfull:.5f} == full-torus {abs(Vbrute):.5f}")
+    ok(
+        abs(Vfull - abs(Vbrute)) / abs(Vbrute) < 1e-6,
+        f"one-period x nfp volume {Vfull:.5f} == full-torus {abs(Vbrute):.5f}",
+    )
 
     # wall gap increases the surface monotonically
     _, Sw0, _ = boundary_metrics(torus, nfp=1, g=0.0)

@@ -19,9 +19,9 @@ from polyfusion.io import run_case  # noqa: E402
 )
 def test_nonuniform_field_switch_defaults_off_and_preserves_baseline(config, preset):
     default = run_case({}, preset=preset, config=config)["outputs"]
-    explicit = run_case(
-        {"cyclotron_B_nonuniform": 0.0}, preset=preset, config=config
-    )["outputs"]
+    explicit = run_case({"cyclotron_B_nonuniform": 0.0}, preset=preset, config=config)[
+        "outputs"
+    ]
     assert explicit["Pcycl"] == pytest.approx(default["Pcycl"], rel=1e-13)
     assert explicit["cyclotron_B25_factor"] == pytest.approx(1.0)
 

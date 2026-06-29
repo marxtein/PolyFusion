@@ -60,17 +60,13 @@ class Sin2SimpleGeometry(MirrorGeometry):
         # ---------- geometry: cylinder + flux-mapped throat regions ----------
         # (mirror.py lines 229-246, exact reproduction)
         V_cyl = math.pi * a_c**2 * L_c
-        V_end = (
-            2 * math.pi * a_c**2 * L_th / math.sqrt(R_mc) if L_th > 0 else 0.0
-        )
+        V_end = 2 * math.pi * a_c**2 * L_th / math.sqrt(R_mc) if L_th > 0 else 0.0
         self._Vp = V_cyl + V_end
 
         # plasma side surface: cylinder part + throat part (numeric, a(z) flux map)
         if L_th > 0:
             zt = np.linspace(0.0, 1.0, 60)
-            a_z = a_c / np.sqrt(
-                1 + (R_mc - 1) * np.sin(math.pi * zt / 2) ** 2
-            )
+            a_z = a_c / np.sqrt(1 + (R_mc - 1) * np.sin(math.pi * zt / 2) ** 2)
             S_end = 2 * 2 * math.pi * float(np.trapezoid(a_z, zt)) * L_th
         else:
             S_end = 0.0
@@ -151,9 +147,7 @@ class Sin2SimpleGeometry(MirrorGeometry):
             if z_th <= self._L_th:
                 # Throat: sin² rise
                 theta = math.pi * z_th / (2 * self._L_th)
-                B_val = self._B_c * (
-                    1 + (self._R_mc - 1) * math.sin(theta) ** 2
-                )
+                B_val = self._B_c * (1 + (self._R_mc - 1) * math.sin(theta) ** 2)
                 # dB/dz = B_c * (R_mc-1) * sin(2θ) * π/(2 L_th)
                 dB_dz_abs = (
                     self._B_c

@@ -42,8 +42,15 @@ def main():
     for name, d in ref.items():
         if name.startswith("_"):
             continue
-        na = solve_near_axis(d["rc"], d["zs"], d["nfp"], d["etabar"],
-                             nphi=d["nphi"], order="r2", B2c=d["B2c"])
+        na = solve_near_axis(
+            d["rc"],
+            d["zs"],
+            d["nfp"],
+            d["etabar"],
+            nphi=d["nphi"],
+            order="r2",
+            B2c=d["B2c"],
+        )
         ok(na.second_order is not None, f"{name}: second_order payload present")
         so = na.second_order
         ok(abs(so.B2c - d["B2c"]) < 1e-15, f"{name}: B2c echoed ({so.B2c})")
@@ -59,23 +66,31 @@ def main():
 
     # ---- first-order behaviour is the DEFAULT and unchanged ----
     na1 = solve_near_axis([1, 0.045], [0, -0.045], 3, -0.9, nphi=63)
-    ok(na1.second_order is None,
-       "order defaults to r1: no second_order payload")
+    ok(na1.second_order is None, "order defaults to r1: no second_order payload")
 
     # ---- second-order area-preserving sanity: at small r the r2 surface
     #      reduces to the r1 ellipse to O(r) ----
-    na = solve_near_axis([1, 0.155, 0.0102], [0, 0.154, 0.0111], 2, 0.64,
-                         nphi=61, order="r2", B2c=-0.00322)
+    na = solve_near_axis(
+        [1, 0.155, 0.0102],
+        [0, 0.154, 0.0111],
+        2,
+        0.64,
+        nphi=61,
+        order="r2",
+        B2c=-0.00322,
+    )
     th = np.linspace(0, 2 * math.pi, 64, endpoint=False)
     j = 0
     r_small = 1e-4
     so = na.second_order
-    X_r2 = (r_small * na.X1c[j] * np.cos(th)
-            + r_small**2 * (so.X20[j] + so.X2c[j] * np.cos(2 * th)
-                            + so.X2s[j] * np.sin(2 * th)))
+    X_r2 = r_small * na.X1c[j] * np.cos(th) + r_small**2 * (
+        so.X20[j] + so.X2c[j] * np.cos(2 * th) + so.X2s[j] * np.sin(2 * th)
+    )
     X_r1 = r_small * na.X1c[j] * np.cos(th)
-    ok(np.max(np.abs(X_r2 - X_r1)) < 1e-6,
-       "r2 X-shape -> r1 ellipse as r->0 (second order is a correction)")
+    ok(
+        np.max(np.abs(X_r2 - X_r1)) < 1e-6,
+        "r2 X-shape -> r1 ellipse as r->0 (second order is a correction)",
+    )
 
     print("\nRESULT:", "NEAR-AXIS R2 BENCHMARK PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1

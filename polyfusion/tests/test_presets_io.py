@@ -21,9 +21,13 @@ from polyfusion.io import run_preset  # noqa: E402
 # every config also ships a "自定义 Custom" group holding the editable
 # "用户设计 User Design" template preset (user-design starting point).
 EXPECTED_GROUPS = {
-    "tokamak": {"实验装置 Experiments", "燃烧·反应堆 Burning·Reactor",
-                "ENN 概念 Concepts", "解析·重构平衡 Analytic·Reconstructed",
-                "自定义 Custom"},
+    "tokamak": {
+        "实验装置 Experiments",
+        "燃烧·反应堆 Burning·Reactor",
+        "ENN 概念 Concepts",
+        "解析·重构平衡 Analytic·Reconstructed",
+        "自定义 Custom",
+    },
     "mirror": {"实验装置 Experiments", "概念·反应堆 Concepts", "自定义 Custom"},
     "frc": {"实验装置 Experiments", "概念·反应堆 Concepts", "自定义 Custom"},
     "dipole": {"实验装置 Experiments", "概念·反应堆 Concepts", "自定义 Custom"},
@@ -31,8 +35,11 @@ EXPECTED_GROUPS = {
 }
 # one representative preset per config that must run valid
 REP_PRESET = {
-    "tokamak": "ITER", "mirror": "GDT", "frc": "C-2W",
-    "dipole": "LDX", "stellarator": "HELIAS",
+    "tokamak": "ITER",
+    "mirror": "GDT",
+    "frc": "C-2W",
+    "dipole": "LDX",
+    "stellarator": "HELIAS",
 }
 
 
@@ -47,17 +54,22 @@ def main():
     # 1. every config loads a non-empty presets dict + the expected groups
     for cfg, exp_groups in EXPECTED_GROUPS.items():
         presets, groups = load_presets(cfg)
-        allok &= _ok(isinstance(presets, dict) and len(presets) > 0,
-                     f"{cfg}: non-empty presets ({len(presets)})")
-        allok &= _ok(set(groups) == exp_groups,
-                     f"{cfg}: groups == expected ({sorted(groups)})")
+        allok &= _ok(
+            isinstance(presets, dict) and len(presets) > 0,
+            f"{cfg}: non-empty presets ({len(presets)})",
+        )
+        allok &= _ok(
+            set(groups) == exp_groups, f"{cfg}: groups == expected ({sorted(groups)})"
+        )
 
     # 2. golden ITER tokamak point still solves to reference Pfus/Q
     o = run_preset("ITER", "tokamak")["outputs"]
-    allok &= _ok(abs(o["Pfus"] - 381.39) < 0.05,
-                 f"ITER Pfus ~ 381.39 (got {o['Pfus']:.5f})")
-    allok &= _ok(abs(o["Qfus"] - 5.03) < 0.02,
-                 f"ITER Qfus ~ 5.03 (got {o['Qfus']:.5f})")
+    allok &= _ok(
+        abs(o["Pfus"] - 381.39) < 0.05, f"ITER Pfus ~ 381.39 (got {o['Pfus']:.5f})"
+    )
+    allok &= _ok(
+        abs(o["Qfus"] - 5.03) < 0.02, f"ITER Qfus ~ 5.03 (got {o['Qfus']:.5f})"
+    )
 
     # 3. a representative preset of each config runs valid (no errors)
     for cfg, name in REP_PRESET.items():
@@ -70,17 +82,40 @@ def main():
     #    already there (do not clobber the user's data).
     user_path = os.path.join(_USER_DIR, "tokamak.json")
     if os.path.exists(user_path):
-        print("SKIP user-dir merge: ~/.polyfusion/presets/tokamak.json exists "
-              "(not clobbering real user data)")
+        print(
+            "SKIP user-dir merge: ~/.polyfusion/presets/tokamak.json exists "
+            "(not clobbering real user data)"
+        )
     else:
         created_dir = not os.path.isdir(_USER_DIR)
         # minimal valid tokamak preset (all required params present)
-        fake = {"presets": {"_TESTONLY_": {
-            "R0": 6.0, "A": 3.0, "kappa": 1.8, "delta": 0.5, "Sn": 0.5,
-            "ST": 1.0, "ni0": 1e20, "Ti0": 20.0, "fT": 1.0, "fsig": 1.0,
-            "f1": 0.5, "BT0": 5.0, "Ip": 8.0, "tauE": 1.0, "fHe": 0.04,
-            "fimp": 0.01, "Zimp": 10, "Rw": 0.7, "g": 0.05, "icase": 1}},
-            "groups": {}}
+        fake = {
+            "presets": {
+                "_TESTONLY_": {
+                    "R0": 6.0,
+                    "A": 3.0,
+                    "kappa": 1.8,
+                    "delta": 0.5,
+                    "Sn": 0.5,
+                    "ST": 1.0,
+                    "ni0": 1e20,
+                    "Ti0": 20.0,
+                    "fT": 1.0,
+                    "fsig": 1.0,
+                    "f1": 0.5,
+                    "BT0": 5.0,
+                    "Ip": 8.0,
+                    "tauE": 1.0,
+                    "fHe": 0.04,
+                    "fimp": 0.01,
+                    "Zimp": 10,
+                    "Rw": 0.7,
+                    "g": 0.05,
+                    "icase": 1,
+                }
+            },
+            "groups": {},
+        }
         try:
             os.makedirs(_USER_DIR, exist_ok=True)
             with open(user_path, "w", encoding="utf-8") as fh:
@@ -90,10 +125,10 @@ def main():
             # only sees user presets present before import — we therefore assert
             # the merge at the loader level (the documented entry point).
             presets, _ = load_presets("tokamak")
-            allok &= _ok("_TESTONLY_" in presets,
-                         "user-dir merge: _TESTONLY_ present")
-            allok &= _ok("ITER" in presets,
-                         "user-dir merge: packaged ITER still present")
+            allok &= _ok("_TESTONLY_" in presets, "user-dir merge: _TESTONLY_ present")
+            allok &= _ok(
+                "ITER" in presets, "user-dir merge: packaged ITER still present"
+            )
         finally:
             if os.path.isfile(user_path):
                 os.remove(user_path)
@@ -106,11 +141,12 @@ def main():
                     pass
         # confirm cleanup left the loader back to packaged-only state
         presets_after, _ = load_presets("tokamak")
-        allok &= _ok("_TESTONLY_" not in presets_after,
-                     "user-dir merge: cleaned up (_TESTONLY_ gone)")
+        allok &= _ok(
+            "_TESTONLY_" not in presets_after,
+            "user-dir merge: cleaned up (_TESTONLY_ gone)",
+        )
 
-    print("\nRESULT:", "ALL PRESETS-IO CHECKS PASS" if allok
-          else "SOME CHECKS FAILED")
+    print("\nRESULT:", "ALL PRESETS-IO CHECKS PASS" if allok else "SOME CHECKS FAILED")
     return 0 if allok else 1
 
 

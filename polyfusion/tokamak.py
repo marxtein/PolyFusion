@@ -17,8 +17,13 @@ from .constants import QE, MU0, MEC2
 from .reactivity import reactivity
 from dataclasses import replace as _dc_replace
 
-from .twotemp import (critical_energy, ion_deposition_fraction, equilibration_time,
-                      p_ei_exchange, solve_channel_balance)
+from .twotemp import (
+    critical_energy,
+    ion_deposition_fraction,
+    equilibration_time,
+    p_ei_exchange,
+    solve_channel_balance,
+)
 from .impurity import lz_line_net, SPECIES as _IMP_SPECIES
 from .tokageom import tokamak_geometry
 from .cyclotron import tokamak_B25_factor
@@ -28,19 +33,84 @@ from .cyclotron import tokamak_B25_factor
 # Efast/Afast: representative fast charged product (energy [keV], mass number)
 # for the Stix slowing-down diagnostics (docs/30 P1-1).
 _REACTIONS = {
-    1: dict(Z1=1, Z2=1, A1=2, A2=3, fion=0.2, Y=17.59e6 * QE, d12=0, like=False,
-            name="D-T", Efast=3520.0, Afast=4.0),
-    2: dict(Z1=1, Z2=1, A1=2, A2=2, fion=(3.27 / 4 + 4.04) / (3.27 + 4.04),
-            Y=0.5 * (3.27 + 4.04) * 1e6 * QE, d12=1, like=True,
-            name="D-D", Efast=2430.0, Afast=2.0),
-    3: dict(Z1=1, Z2=2, A1=2, A2=3, fion=1.0, Y=18.35e6 * QE, d12=0, like=False,
-            name="D-He3", Efast=14680.0, Afast=1.0),
-    4: dict(Z1=1, Z2=5, A1=1, A2=11, fion=1.0, Y=8.68e6 * QE, d12=0, like=False,
-            name="pB-Nevins", Efast=2900.0, Afast=4.0),
-    5: dict(Z1=1, Z2=5, A1=1, A2=11, fion=1.0, Y=8.68e6 * QE, d12=0, like=False,
-            name="pB-Sikora", Efast=2900.0, Afast=4.0),
-    6: dict(Z1=1, Z2=1, A1=2, A2=2, fion=26.73 / 43.25, Y=0.5 * 43.25e6 * QE,
-            d12=1, like=True, name="D-D(cat)", Efast=3520.0, Afast=4.0),
+    1: dict(
+        Z1=1,
+        Z2=1,
+        A1=2,
+        A2=3,
+        fion=0.2,
+        Y=17.59e6 * QE,
+        d12=0,
+        like=False,
+        name="D-T",
+        Efast=3520.0,
+        Afast=4.0,
+    ),
+    2: dict(
+        Z1=1,
+        Z2=1,
+        A1=2,
+        A2=2,
+        fion=(3.27 / 4 + 4.04) / (3.27 + 4.04),
+        Y=0.5 * (3.27 + 4.04) * 1e6 * QE,
+        d12=1,
+        like=True,
+        name="D-D",
+        Efast=2430.0,
+        Afast=2.0,
+    ),
+    3: dict(
+        Z1=1,
+        Z2=2,
+        A1=2,
+        A2=3,
+        fion=1.0,
+        Y=18.35e6 * QE,
+        d12=0,
+        like=False,
+        name="D-He3",
+        Efast=14680.0,
+        Afast=1.0,
+    ),
+    4: dict(
+        Z1=1,
+        Z2=5,
+        A1=1,
+        A2=11,
+        fion=1.0,
+        Y=8.68e6 * QE,
+        d12=0,
+        like=False,
+        name="pB-Nevins",
+        Efast=2900.0,
+        Afast=4.0,
+    ),
+    5: dict(
+        Z1=1,
+        Z2=5,
+        A1=1,
+        A2=11,
+        fion=1.0,
+        Y=8.68e6 * QE,
+        d12=0,
+        like=False,
+        name="pB-Sikora",
+        Efast=2900.0,
+        Afast=4.0,
+    ),
+    6: dict(
+        Z1=1,
+        Z2=1,
+        A1=2,
+        A2=2,
+        fion=26.73 / 43.25,
+        Y=0.5 * 43.25e6 * QE,
+        d12=1,
+        like=True,
+        name="D-D(cat)",
+        Efast=3520.0,
+        Afast=4.0,
+    ),
 }
 
 
@@ -53,8 +123,12 @@ def twotemp_diagnostics(rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M):
     collisional equilibration channel at peak parameters.  Diagnostics only
     in this batch — they do not enter the power balance.
     """
-    species = [(n10, rx["Z1"], rx["A1"]), (n20, rx["Z2"], rx["A2"]),
-               (nHe0, 2, 4), (nimp0, Zimp, max(2 * Zimp, 1))]
+    species = [
+        (n10, rx["Z1"], rx["A1"]),
+        (n20, rx["Z2"], rx["A2"]),
+        (nHe0, 2, 4),
+        (nimp0, Zimp, max(2 * Zimp, 1)),
+    ]
     species = [(n, Z, A) for (n, Z, A) in species if n > 0]
     Ecrit = critical_energy(Te0, rx["Afast"], species)
     f_fast = ion_deposition_fraction(rx["Efast"], Ecrit)
@@ -104,71 +178,72 @@ def line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx):
         return 0.0
     if imp_name not in _IMP_SPECIES:
         raise ValueError(f"unknown impurity species {imp_name!r}; have {_IMP_SPECIES}")
-    Tex = Te0 * (1 - x ** 2) ** ST
+    Tex = Te0 * (1 - x**2) ** ST
     lz = lz_line_net(imp_name, Tex)
-    integ = 2.0 * float(np.sum((1 - x ** 2) ** (2 * Sn) * lz * x * dx))
+    integ = 2.0 * float(np.sum((1 - x**2) ** (2 * Sn) * lz * x * dx))
     return ne0 * nimp0 * integ * Vp * 1e-6
 
 
 @dataclass
 class Result:
     """Outputs of a single 0-D power-balance evaluation."""
-    Eth: float      # stored thermal energy [MJ]
-    H98: float      # IPB98y2 confinement quality factor
-    HST: float      # spherical-tokamak confinement quality factor
-    Pheat: float    # net external heating power [MW]
-    Pn: float       # neutron power [MW]
-    Pfus: float     # fusion power [MW]
-    Pwall: float    # first-wall load [MW/m^2]
-    Qfus: float     # fusion gain Pfus/Pheat (capped at 1000)
-    Qfus_raw: float # uncapped Pfus/Pheat (negative => ignited/over-driven)
+
+    Eth: float  # stored thermal energy [MJ]
+    H98: float  # IPB98y2 confinement quality factor
+    HST: float  # spherical-tokamak confinement quality factor
+    Pheat: float  # net external heating power [MW]
+    Pn: float  # neutron power [MW]
+    Pfus: float  # fusion power [MW]
+    Pwall: float  # first-wall load [MW/m^2]
+    Qfus: float  # fusion gain Pfus/Pheat (capped at 1000)
+    Qfus_raw: float  # uncapped Pfus/Pheat (negative => ignited/over-driven)
     ignited: float  # 1 if Pheat <= 0 (alpha heating alone exceeds losses)
-    betaN: float    # normalized beta
-    betaT: float    # toroidal beta
+    betaN: float  # normalized beta
+    betaT: float  # toroidal beta
     nbar_o_nGw: float  # line-avg density / Greenwald limit
-    q: float        # cylindrical safety factor (JS-parity)
-    q95: float      # ITER-IPB shaped edge safety factor at psi_n=0.95
-    Pbrem: float    # bremsstrahlung power [MW]
-    Pcycl: float    # cyclotron radiation power [MW]
+    q: float  # cylindrical safety factor (JS-parity)
+    q95: float  # ITER-IPB shaped edge safety factor at psi_n=0.95
+    Pbrem: float  # bremsstrahlung power [MW]
+    Pcycl: float  # cyclotron radiation power [MW]
     cyclotron_B25_factor: float  # optional nonuniform toroidal-field correction
-    Vp: float       # plasma volume [m^3]
-    betap: float    # poloidal beta
-    Sp: float       # plasma surface area [m^2]
-    ne0: float      # central electron density [m^-3]
-    M: float        # mean fuel mass number
-    fTavg: float    # temperature volume-average factor
-    fnavg: float    # density volume-average factor
-    Sw: float       # first-wall area [m^2]
-    Pth: float      # transport loss power [MW]
-    Ptrans: float   # alias of Pth for release UI consistency [MW]
-    Zeff: float     # effective charge
-    P_line: float   # impurity line radiation [MW] (0 unless imp_name given)
-    Ecrit: float    # Stix critical energy of the fast product [keV]
+    Vp: float  # plasma volume [m^3]
+    betap: float  # poloidal beta
+    Sp: float  # plasma surface area [m^2]
+    ne0: float  # central electron density [m^-3]
+    M: float  # mean fuel mass number
+    fTavg: float  # temperature volume-average factor
+    fnavg: float  # density volume-average factor
+    Sw: float  # first-wall area [m^2]
+    Pth: float  # transport loss power [MW]
+    Ptrans: float  # alias of Pth for release UI consistency [MW]
+    Zeff: float  # effective charge
+    P_line: float  # impurity line radiation [MW] (0 unless imp_name given)
+    Ecrit: float  # Stix critical energy of the fast product [keV]
     f_fast_ion: float  # fraction of fast-product energy deposited on ions
-    tau_eq_ie: float   # ion-electron equilibration time [s] (peak params)
-    P_ei: float     # ion->electron collisional exchange power [MW] (diagnostic)
-    Te0: float      # central electron temperature actually used [keV]
+    tau_eq_ie: float  # ion-electron equilibration time [s] (peak params)
+    P_ei: float  # ion->electron collisional exchange power [MW] (diagnostic)
+    Te0: float  # central electron temperature actually used [keV]
     fT_used: float  # Te0/Ti0 actually used (input, or solved when fT=0)
     te_mode: float  # 0 = fT input (legacy), 1 = Te solved self-consistently
-    te_resid: float # electron-channel residual at the solution [MW]
+    te_resid: float  # electron-channel residual at the solution [MW]
     tauE_used: float  # confinement time actually used [s]
     taue_mode: float  # 0 = tauE input (legacy), 1 = solved from scaling (tauE=0)
-    P_LH: float       # Martin 2008 L->H threshold power [MW] (mass-corrected)
-    LH_ratio: float   # P_sep/P_LH = Pth/P_LH; >~1 required for H-mode access
-    tau_ITPA20: float # ITPA20-IL H-mode scaling prediction [s] (Verdoolaege 2021)
-    H_ITPA20: float   # tauE / tau_ITPA20 (second opinion next to H98)
+    P_LH: float  # Martin 2008 L->H threshold power [MW] (mass-corrected)
+    LH_ratio: float  # P_sep/P_LH = Pth/P_LH; >~1 required for H-mode access
+    tau_ITPA20: float  # ITPA20-IL H-mode scaling prediction [s] (Verdoolaege 2021)
+    H_ITPA20: float  # tauE / tau_ITPA20 (second opinion next to H98)
     nu_eff_ang: float  # Angioni effective collisionality 0.1 Zeff n19 R/<Te>^2
     Sn_sugg: float  # density-peaking exponent suggested by Angioni scaling
     nbar_geom: float  # area-equivalent line-average density diagnostic [m^-3]
     Te_line_geom: float  # area-equivalent line-average electron temperature [keV]
     Ti_line_geom: float  # area-equivalent line-average ion temperature [keV]
-    Vp_geom: float        # raw integrated/fit plasma volume before override [m^3]
-    Sw_geom: float        # raw integrated/fit wall area before override [m^2]
+    Vp_geom: float  # raw integrated/fit plasma volume before override [m^3]
+    Sw_geom: float  # raw integrated/fit wall area before override [m^2]
     geom_volume_ratio: float  # Vp_geom / Vp (1.0 unless Vp_override set)
-    geom_wall_ratio: float    # Sw_geom / Sw (1.0 unless Sw_override set)
-    shaf_shift: float     # Shafranov shift [m] (CF model only; 0 otherwise)
-    geom_model: float     # geometry model actually used (0/1/2)
-    strcase: str    # reaction label
+    geom_wall_ratio: float  # Sw_geom / Sw (1.0 unless Sw_override set)
+    shaf_shift: float  # Shafranov shift [m] (CF model only; 0 otherwise)
+    geom_model: float  # geometry model actually used (0/1/2)
+    strcase: str  # reaction label
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -177,12 +252,38 @@ class Result:
 _TAUE_SCALINGS = ("ipb98", "st", "itpa20")
 
 
-def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
-          BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
-          imp_name=None, f_aux_e=0.5, H_fac=1.0, use_tauE=1.0,
-          geom_model=0.0, eq=None, Vp_override=0.0, Sw_override=0.0,
-          cyclotron_B_nonuniform=0.0,
-          tauE_scaling="ipb98") -> Result:
+def funsc(
+    R0,
+    A,
+    kappa,
+    delta,
+    Sn,
+    ST,
+    ni0,
+    Ti0,
+    fT,
+    fsig,
+    f1,
+    BT0,
+    Ip,
+    tauE,
+    fHe,
+    fimp,
+    Zimp,
+    Rw,
+    g,
+    icase,
+    imp_name=None,
+    f_aux_e=0.5,
+    H_fac=1.0,
+    use_tauE=1.0,
+    geom_model=0.0,
+    eq=None,
+    Vp_override=0.0,
+    Sw_override=0.0,
+    cyclotron_B_nonuniform=0.0,
+    tauE_scaling="ipb98",
+) -> Result:
     """Evaluate the 0-D power balance for one operating point.
 
     See parameter table in ``docs/01_托卡马克代码说明文档.md`` (§3) for units.
@@ -215,29 +316,57 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         tauE = 0.0
     if tauE_scaling not in _TAUE_SCALINGS:
         raise ValueError(
-            f"tauE_scaling must be one of {_TAUE_SCALINGS} (got {tauE_scaling!r})")
+            f"tauE_scaling must be one of {_TAUE_SCALINGS} (got {tauE_scaling!r})"
+        )
 
     if tauE == 0:
+
         def _eval_t(t):
-            return funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
-                         BT0, Ip, t, fHe, fimp, Zimp, Rw, g, icase,
-                         imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac,
-                         use_tauE=1.0,
-                         geom_model=geom_model, eq=eq,
-                         Vp_override=Vp_override, Sw_override=Sw_override,
-                         cyclotron_B_nonuniform=cyclotron_B_nonuniform,
-                         tauE_scaling=tauE_scaling)
+            return funsc(
+                R0,
+                A,
+                kappa,
+                delta,
+                Sn,
+                ST,
+                ni0,
+                Ti0,
+                fT,
+                fsig,
+                f1,
+                BT0,
+                Ip,
+                t,
+                fHe,
+                fimp,
+                Zimp,
+                Rw,
+                g,
+                icase,
+                imp_name=imp_name,
+                f_aux_e=f_aux_e,
+                H_fac=H_fac,
+                use_tauE=1.0,
+                geom_model=geom_model,
+                eq=eq,
+                Vp_override=Vp_override,
+                Sw_override=Sw_override,
+                cyclotron_B_nonuniform=cyclotron_B_nonuniform,
+                tauE_scaling=tauE_scaling,
+            )
 
         # Predictive target: H_<chosen scaling> = H_fac. All three H factors
         # are monotone increasing in tauE (numerator linear in tauE, denominator
         # ~P_L^{-alpha} with alpha<1 so weakly opposing), so bisection on
         # H_fac - H(t) is unconditionally stable.
-        if tauE_scaling == "ipb98":
-            _h_of = lambda res: res.H98
-        elif tauE_scaling == "st":
-            _h_of = lambda res: res.HST
-        else:  # "itpa20"
-            _h_of = lambda res: res.H_ITPA20
+
+        def _h_of(res):
+            if tauE_scaling == "ipb98":
+                return res.H98
+            if tauE_scaling == "st":
+                return res.HST
+            # "itpa20"
+            return res.H_ITPA20
 
         def _resid_t(t, res):
             return H_fac - _h_of(res)
@@ -254,30 +383,59 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         #   Keep the scan + bisect path for that case.
         _mono = fT != 0
         t, res, r, conv = solve_channel_balance(
-            _eval_t, _resid_t, 1e-3, 50.0, monotone=_mono)
-        return _dc_replace(res, taue_mode=1.0 if conv else 0.5,
-                           tauE_used=t)
+            _eval_t, _resid_t, 1e-3, 50.0, monotone=_mono
+        )
+        return _dc_replace(res, taue_mode=1.0 if conv else 0.5, tauE_used=t)
     if fT == 0:
+
         def _eval(ft):
-            return funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, ft, fsig, f1,
-                         BT0, Ip, tauE, fHe, fimp, Zimp, Rw, g, icase,
-                         imp_name=imp_name, f_aux_e=f_aux_e, H_fac=H_fac,
-                         use_tauE=1.0,
-                         geom_model=geom_model, eq=eq,
-                         Vp_override=Vp_override, Sw_override=Sw_override,
-                         cyclotron_B_nonuniform=cyclotron_B_nonuniform,
-                         tauE_scaling=tauE_scaling)
+            return funsc(
+                R0,
+                A,
+                kappa,
+                delta,
+                Sn,
+                ST,
+                ni0,
+                Ti0,
+                ft,
+                fsig,
+                f1,
+                BT0,
+                Ip,
+                tauE,
+                fHe,
+                fimp,
+                Zimp,
+                Rw,
+                g,
+                icase,
+                imp_name=imp_name,
+                f_aux_e=f_aux_e,
+                H_fac=H_fac,
+                use_tauE=1.0,
+                geom_model=geom_model,
+                eq=eq,
+                Vp_override=Vp_override,
+                Sw_override=Sw_override,
+                cyclotron_B_nonuniform=cyclotron_B_nonuniform,
+                tauE_scaling=tauE_scaling,
+            )
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
-            heat = ((1 - res.f_fast_ion) * (res.Pfus - res.Pn) + res.P_ei
-                    + f_aux_e * max(res.Pheat, 0.0))
+            heat = (
+                (1 - res.f_fast_ion) * (res.Pfus - res.Pn)
+                + res.P_ei
+                + f_aux_e * max(res.Pheat, 0.0)
+            )
             return heat - (res.Pbrem + res.Pcycl + res.P_line + Eth_e / tauE)
 
         ft, res, r, conv = solve_channel_balance(_eval, _resid, 0.03, 2.5)
         # te_mode: 1 = solved & converged, 0.5 = pinned at a bracket endpoint
-        return _dc_replace(res, te_mode=1.0 if conv else 0.5, te_resid=r,
-                           fT_used=ft, Te0=ft * Ti0)
+        return _dc_replace(
+            res, te_mode=1.0 if conv else 0.5, te_resid=r, fT_used=ft, Te0=ft * Ti0
+        )
 
     # --- input-domain guards (audit P0: no complex/inf results may escape) ---
     if R0 <= 0 or A <= 0 or kappa <= 0:
@@ -302,8 +460,9 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
         raise ValueError(f"BT0, Ip, tauE must be > 0 (got {BT0}, {Ip}, {tauE})")
 
     # --- geometry (three selectable models; docs/04) ---
-    geom = tokamak_geometry(int(geom_model), R0, A, kappa, delta, g,
-                            eq, Vp_override, Sw_override)
+    geom = tokamak_geometry(
+        int(geom_model), R0, A, kappa, delta, g, eq, Vp_override, Sw_override
+    )
     a = geom["a"]
     Vp = geom["Vp"]
     Sp = geom["Sp"]
@@ -322,8 +481,9 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     nHe0 = fHe * ni0
     nimp0 = fimp * ni0
     ne0 = (n10 * Z1 + n20 * Z2) / (1 + d12) + nHe0 * ZHe + nimp0 * Zimp_
-    Zeff = ((n10 * Z1**2 + n20 * Z2**2) / (1 + d12)
-            + nHe0 * ZHe**2 + nimp0 * Zimp_**2) / ne0
+    Zeff = (
+        (n10 * Z1**2 + n20 * Z2**2) / (1 + d12) + nHe0 * ZHe**2 + nimp0 * Zimp_**2
+    ) / ne0
     M = (x1 * rx["A1"] + x2 * rx["A2"]) / (1 + d12)
 
     # --- profiles and volume averages ---
@@ -331,7 +491,6 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     dx = x[1] - x[0]
     fTavg = np.sum(x * (1 - x**2) ** ST) / np.sum(x)
     fnavg = np.sum(x * (1 - x**2) ** Sn) / np.sum(x)
-    vfrac = x**2
 
     # --- reactivity profile integral Phi ---
     phi = 0.0
@@ -351,7 +510,9 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     term2 = 0.7936 / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
     term3 = 1.874 / (1 + 2 * Sn + 2.5 * ST) * (Te0 / MEC2) ** 2
     term4 = 3 / math.sqrt(2) / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
-    Pbrem = 5.34e-37 * ne0**2 * math.sqrt(Te0) * (term1 + term2 + term3 + term4) * 1e-6 * Vp
+    Pbrem = (
+        5.34e-37 * ne0**2 * math.sqrt(Te0) * (term1 + term2 + term3 + term4) * 1e-6 * Vp
+    )
 
     # --- cyclotron radiation (empirical) ---
     neff = ne0 / 1e20 / (1 + Sn)
@@ -362,16 +523,28 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     # G-EQDSK psi(R,Z)/F(psi); otherwise the analytic Miller 1/R proxy.
     if bool(cyclotron_B_nonuniform):
         eq_b25 = eq.get("cyclotron_B25") if isinstance(eq, dict) else None
-        if (int(geom_model) == 2 and isinstance(eq_b25, (int, float))
-                and math.isfinite(eq_b25) and eq_b25 > 0):
+        if (
+            int(geom_model) == 2
+            and isinstance(eq_b25, (int, float))
+            and math.isfinite(eq_b25)
+            and eq_b25 > 0
+        ):
             cyclotron_B25_factor = float(eq_b25)
         else:
             cyclotron_B25_factor = tokamak_B25_factor(R0, a, kappa, delta)
     else:
         cyclotron_B25_factor = 1.0
-    Pcycl = (4.14e-7 * neff**0.5 * Teff**2.5 * BT0**2.5 * (1 - Rw)**0.5
-             * aeff**-0.5 * (1 + 2.5 * Teff / 511) * Vp
-             * cyclotron_B25_factor)
+    Pcycl = (
+        4.14e-7
+        * neff**0.5
+        * Teff**2.5
+        * BT0**2.5
+        * (1 - Rw) ** 0.5
+        * aeff**-0.5
+        * (1 + 2.5 * Teff / 511)
+        * Vp
+        * cyclotron_B25_factor
+    )
 
     # --- impurity line radiation (Mavrin; opt-in, docs/30 P1-2) ---
     P_line = line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, x, dx)
@@ -405,19 +578,41 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     nbar_o_nGw = nbar / nGw
     PL = rx["fion"] * Pfus + Pheat
     if PL > 0:
-        tauE98 = (0.145 * Ip**0.93 * R0**1.39 * a**0.58 * kappa**0.78
-                  * (nbar / 1e20)**0.41 * BT0**0.15 * M**0.19) / PL**0.69
-        tauEST = (0.066 * Ip**0.53 * BT0**1.05 * (nbar / 1e19)**0.65
-                  * R0**2.66 * kappa**0.78) / PL**0.58
+        tauE98 = (
+            0.145
+            * Ip**0.93
+            * R0**1.39
+            * a**0.58
+            * kappa**0.78
+            * (nbar / 1e20) ** 0.41
+            * BT0**0.15
+            * M**0.19
+        ) / PL**0.69
+        tauEST = (
+            0.066
+            * Ip**0.53
+            * BT0**1.05
+            * (nbar / 1e19) ** 0.65
+            * R0**2.66
+            * kappa**0.78
+        ) / PL**0.58
         H98 = tauE / tauE98
         HST = tauE / tauEST
         # ITPA20-IL (Verdoolaege NF 61 (2021) 076006; coefficients cross-read
         # from cfspopcon energy_confinement_scalings.yaml): a second, newer
         # database regression next to IPB98 — their spread is a free
         # uncertainty estimate on the confinement assumption.
-        tau_ITPA20 = (0.067 * M**0.3 * BT0**-0.13 * Ip**1.29 * R0**1.19
-                      * (1 + delta)**0.56 * kappa**0.67
-                      * (nbar / 1e19)**0.15 / PL**0.644)
+        tau_ITPA20 = (
+            0.067
+            * M**0.3
+            * BT0**-0.13
+            * Ip**1.29
+            * R0**1.19
+            * (1 + delta) ** 0.56
+            * kappa**0.67
+            * (nbar / 1e19) ** 0.15
+            / PL**0.644
+        )
         H_ITPA20 = tauE / tau_ITPA20
     else:
         H98 = HST = 0.0
@@ -426,7 +621,7 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
 
     # L->H transition threshold (Martin NF 2008, with 2/M mass correction —
     # the IPB98/ITPA20 H-mode scalings only apply when Pth exceeds this):
-    P_LH = 0.0488 * (nbar / 1e20)**0.717 * BT0**0.803 * Sp**0.941 * (2.0 / M)
+    P_LH = 0.0488 * (nbar / 1e20) ** 0.717 * BT0**0.803 * Sp**0.941 * (2.0 / M)
     LH_ratio = Pth / P_LH if P_LH > 0 else 0.0
 
     q = 5 * BT0 * a**2 * kappa / (R0 * Ip)
@@ -435,15 +630,23 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     # cylindrical value kept for JS-reference parity; q95 adds the full
     # elongation+triangularity+aspect-ratio shaping the kink/operational limit uses.
     eps = a / R0
-    q95 = (5 * a**2 * BT0 / (R0 * Ip)
-           * (1.0 + kappa**2 * (1.0 + 2.0 * delta**2 - 1.2 * delta**3)) / 2.0
-           * (1.17 - 0.65 * eps) / (1.0 - eps**2) ** 2)
+    q95 = (
+        5
+        * a**2
+        * BT0
+        / (R0 * Ip)
+        * (1.0 + kappa**2 * (1.0 + 2.0 * delta**2 - 1.2 * delta**3))
+        / 2.0
+        * (1.17 - 0.65 * eps)
+        / (1.0 - eps**2) ** 2
+    )
     Pwall = (Pfus + Pheat) / Sw
 
     # --- two-temperature channel diagnostics (docs/30 P1-1) ---
     Ecrit, f_fast, tau_eq, pei = twotemp_diagnostics(
-        rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M)
-    P_ei = pei * Vp / (1 + 2 * Sn + ST) * 1e-6   # peak-weighted estimate [MW]
+        rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M
+    )
+    P_ei = pei * Vp / (1 + 2 * Sn + ST) * 1e-6  # peak-weighted estimate [MW]
 
     # --- Angioni density-peaking suggestion (docs/30 batch 2, diagnostic) ---
     # nu_n = 1.347 - 0.117 ln(nu_eff) - 4.03 betaT,  nu_eff = 0.1 Zeff n19 R/<Te>^2
@@ -454,22 +657,60 @@ def funsc(R0, A, kappa, delta, Sn, ST, ni0, Ti0, fT, fsig, f1,
     Sn_sugg = nu_n - 1.0
 
     return Result(
-        Eth=Eth, H98=H98, HST=HST, Pheat=Pheat, Pn=Pn, Pfus=Pfus, Pwall=Pwall,
-        Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
-        betaN=betaN, betaT=betaT, nbar_o_nGw=nbar_o_nGw, q=q, q95=q95,
-        Pbrem=Pbrem, Pcycl=Pcycl,
+        Eth=Eth,
+        H98=H98,
+        HST=HST,
+        Pheat=Pheat,
+        Pn=Pn,
+        Pfus=Pfus,
+        Pwall=Pwall,
+        Qfus=Qfus,
+        Qfus_raw=Qfus_raw,
+        ignited=ignited,
+        betaN=betaN,
+        betaT=betaT,
+        nbar_o_nGw=nbar_o_nGw,
+        q=q,
+        q95=q95,
+        Pbrem=Pbrem,
+        Pcycl=Pcycl,
         cyclotron_B25_factor=cyclotron_B25_factor,
-        Vp=Vp, betap=betap, Sp=Sp, ne0=ne0, M=M,
-        fTavg=fTavg, fnavg=fnavg, Sw=Sw, Pth=Pth, Ptrans=Pth, Zeff=Zeff,
-        P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
-        P_ei=P_ei, Te0=Te0, fT_used=fT, te_mode=0.0, te_resid=0.0,
-        tauE_used=tauE, taue_mode=0.0,
-        P_LH=P_LH, LH_ratio=LH_ratio, tau_ITPA20=tau_ITPA20, H_ITPA20=H_ITPA20,
-        nu_eff_ang=nu_eff, Sn_sugg=Sn_sugg, nbar_geom=nbar_geom,
-        Te_line_geom=Te_line_geom, Ti_line_geom=Ti_line_geom,
-        Vp_geom=geom["Vp_geom"], Sw_geom=geom["Sw_geom"],
+        Vp=Vp,
+        betap=betap,
+        Sp=Sp,
+        ne0=ne0,
+        M=M,
+        fTavg=fTavg,
+        fnavg=fnavg,
+        Sw=Sw,
+        Pth=Pth,
+        Ptrans=Pth,
+        Zeff=Zeff,
+        P_line=P_line,
+        Ecrit=Ecrit,
+        f_fast_ion=f_fast,
+        tau_eq_ie=tau_eq,
+        P_ei=P_ei,
+        Te0=Te0,
+        fT_used=fT,
+        te_mode=0.0,
+        te_resid=0.0,
+        tauE_used=tauE,
+        taue_mode=0.0,
+        P_LH=P_LH,
+        LH_ratio=LH_ratio,
+        tau_ITPA20=tau_ITPA20,
+        H_ITPA20=H_ITPA20,
+        nu_eff_ang=nu_eff,
+        Sn_sugg=Sn_sugg,
+        nbar_geom=nbar_geom,
+        Te_line_geom=Te_line_geom,
+        Ti_line_geom=Ti_line_geom,
+        Vp_geom=geom["Vp_geom"],
+        Sw_geom=geom["Sw_geom"],
         geom_volume_ratio=geom["geom_volume_ratio"],
-        geom_wall_ratio=geom["geom_wall_ratio"], shaf_shift=geom["shaf_shift"],
+        geom_wall_ratio=geom["geom_wall_ratio"],
+        shaf_shift=geom["shaf_shift"],
         geom_model=float(int(geom_model)),
         strcase=rx["name"],
     )

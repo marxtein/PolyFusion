@@ -31,8 +31,11 @@ def parse_geqdsk(text: str) -> dict:
     rest = lines[1:]
 
     def floats_of(line: str):
-        return [float(line[i:i + 16]) for i in range(0, len(line.rstrip()), 16)
-                if line[i:i + 16].strip()]
+        return [
+            float(line[i : i + 16])
+            for i in range(0, len(line.rstrip()), 16)
+            if line[i : i + 16].strip()
+        ]
 
     need = 20 + 4 * nw + nw * nh + nw
     flat = []
@@ -44,17 +47,20 @@ def parse_geqdsk(text: str) -> dict:
         raise ValueError(f"EQDSK truncated: need {need} floats, got {len(flat)}")
 
     it = iter(flat)
-    take = lambda n: [next(it) for _ in range(n)]
+
+    def take(n):
+        return [next(it) for _ in range(n)]
+
     rdim, zdim, rcentr, rleft, zmid = take(5)
     rmaxis, zmaxis, simag, sibry, bcentr = take(5)
-    current = take(5)[0]   # current, simag(dup), xdum, rmaxis(dup), xdum
-    take(5)            # zmaxis(dup), xdum, sibry(dup), xdum, xdum
-    fpol = np.array(take(nw))   # F(psi) = R*B_T on the uniform psi grid (kept for |B|)
-    take(nw)           # pres
-    take(nw)           # ffprim
-    take(nw)           # pprime
+    current = take(5)[0]  # current, simag(dup), xdum, rmaxis(dup), xdum
+    take(5)  # zmaxis(dup), xdum, sibry(dup), xdum, xdum
+    fpol = np.array(take(nw))  # F(psi) = R*B_T on the uniform psi grid (kept for |B|)
+    take(nw)  # pres
+    take(nw)  # ffprim
+    take(nw)  # pprime
     psirz = np.array(take(nw * nh)).reshape(nh, nw)
-    take(nw)           # qpsi
+    take(nw)  # qpsi
 
     while li < len(rest) and not re.search(r"\d", rest[li]):
         li += 1
@@ -71,13 +77,25 @@ def parse_geqdsk(text: str) -> dict:
         li += 1
     if len(bvals) < 2 * nbbbs:
         raise ValueError("EQDSK truncated boundary coordinates")
-    bnd = bvals[:2 * nbbbs]
+    bnd = bvals[: 2 * nbbbs]
     return {
-        "nw": nw, "nh": nh, "rdim": rdim, "zdim": zdim, "rcentr": rcentr,
-        "rleft": rleft, "zmid": zmid, "rmaxis": rmaxis, "zmaxis": zmaxis,
-        "simag": simag, "sibry": sibry, "bcentr": bcentr, "current": current,
-        "psirz": psirz, "fpol": fpol,
-        "rbbbs": np.array(bnd[0::2]), "zbbbs": np.array(bnd[1::2]),
+        "nw": nw,
+        "nh": nh,
+        "rdim": rdim,
+        "zdim": zdim,
+        "rcentr": rcentr,
+        "rleft": rleft,
+        "zmid": zmid,
+        "rmaxis": rmaxis,
+        "zmaxis": zmaxis,
+        "simag": simag,
+        "sibry": sibry,
+        "bcentr": bcentr,
+        "current": current,
+        "psirz": psirz,
+        "fpol": fpol,
+        "rbbbs": np.array(bnd[0::2]),
+        "zbbbs": np.array(bnd[1::2]),
     }
 
 
@@ -121,8 +139,12 @@ def _psi_to_wbrad_scale(g) -> float:
         j = int(np.clip(np.searchsorted(Zg, Z) - 1, 0, nh - 2))
         tr = (R - Rg[i]) / (Rg[i + 1] - Rg[i])
         tz = (Z - Zg[j]) / (Zg[j + 1] - Zg[j])
-        return (arr[j, i] * (1 - tr) * (1 - tz) + arr[j, i + 1] * tr * (1 - tz)
-                + arr[j + 1, i] * (1 - tr) * tz + arr[j + 1, i + 1] * tr * tz)
+        return (
+            arr[j, i] * (1 - tr) * (1 - tz)
+            + arr[j, i + 1] * tr * (1 - tz)
+            + arr[j + 1, i] * (1 - tr) * tz
+            + arr[j + 1, i + 1] * tr * tz
+        )
 
     gR = np.array([samp(dpsi_dR, r, z) for r, z in zip(Rb, Zb)])
     gZ = np.array([samp(dpsi_dZ, r, z) for r, z in zip(Rb, Zb)])
@@ -189,8 +211,8 @@ def cyclotron_b25_from_eqdsk(g: dict) -> float:
     Volume element ``dV = 2*pi*R dR dZ``; the constant ``2*pi dR dZ`` cancels
     in the ratio so only the ``R`` weight is kept.
     """
-    psirz = np.asarray(g["psirz"], float)            # (nh, nw), indexed [Z, R]
-    fpol = np.asarray(g["fpol"], float)              # F(psi) on uniform psi simag->sibry
+    psirz = np.asarray(g["psirz"], float)  # (nh, nw), indexed [Z, R]
+    fpol = np.asarray(g["fpol"], float)  # F(psi) on uniform psi simag->sibry
     nh, nw = psirz.shape
     Rg = np.linspace(g["rleft"], g["rleft"] + g["rdim"], nw)
     Zg = np.linspace(g["zmid"] - g["zdim"] / 2.0, g["zmid"] + g["zdim"] / 2.0, nh)
@@ -205,7 +227,7 @@ def cyclotron_b25_from_eqdsk(g: dict) -> float:
     dpsi = sibry - simag
     if dpsi == 0.0:
         raise ValueError("degenerate equilibrium: simag == sibry")
-    psin = (psirz - simag) / dpsi                    # 0 at axis, 1 at boundary
+    psin = (psirz - simag) / dpsi  # 0 at axis, 1 at boundary
     F = np.interp(np.clip(psin, 0.0, 1.0), np.linspace(0.0, 1.0, nw), fpol)
     Bt = F / RR
     Bmod = np.hypot(Bt, Bp)
@@ -220,7 +242,7 @@ def cyclotron_b25_from_eqdsk(g: dict) -> float:
     inside = in_poly & (psin >= 0.0) & (psin <= 1.0) & np.isfinite(Bmod)
     if not np.any(inside):
         raise ValueError("no grid cells inside the LCFS polygon")
-    w = RR[inside]                                   # dV proportional to R dR dZ
+    w = RR[inside]  # dV proportional to R dR dZ
     ratio = (Bmod[inside] / B0_axis) ** 2.5
     return float(np.sum(w * ratio) / np.sum(w))
 
@@ -257,8 +279,12 @@ def _psi_interpolator(g):
         j = min(max(np.searchsorted(Zg, Z) - 1, 0), g["nh"] - 2)
         tr = (R - Rg[i]) / (Rg[i + 1] - Rg[i])
         tz = (Z - Zg[j]) / (Zg[j + 1] - Zg[j])
-        return (psirz[j, i] * (1 - tr) * (1 - tz) + psirz[j, i + 1] * tr * (1 - tz)
-                + psirz[j + 1, i] * (1 - tr) * tz + psirz[j + 1, i + 1] * tr * tz)
+        return (
+            psirz[j, i] * (1 - tr) * (1 - tz)
+            + psirz[j, i + 1] * tr * (1 - tz)
+            + psirz[j + 1, i] * (1 - tr) * tz
+            + psirz[j + 1, i + 1] * tr * tz
+        )
 
     return psi, Rg, Zg
 
@@ -306,14 +332,22 @@ def equilibrium_geometry(g: dict) -> dict:
     Vp, Sp = _revolution_metrics(Rb, Zb)
 
     try:
-        b25 = cyclotron_b25_from_eqdsk(g)            # real <(|B|/B0)^2.5>
+        b25 = cyclotron_b25_from_eqdsk(g)  # real <(|B|/B0)^2.5>
     except Exception:
-        b25 = None                                   # fall back to Miller proxy downstream
+        b25 = None  # fall back to Miller proxy downstream
 
     psi, Rg, Zg = _psi_interpolator(g)
     sign = math.copysign(1.0, g["sibry"] - g["simag"])
-    s_cap = 0.95 * min(g["rmaxis"] - Rg[0], Rg[-1] - g["rmaxis"],
-                       g["zmaxis"] - Zg[0], Zg[-1] - g["zmaxis"]) + a
+    s_cap = (
+        0.95
+        * min(
+            g["rmaxis"] - Rg[0],
+            Rg[-1] - g["rmaxis"],
+            g["zmaxis"] - Zg[0],
+            Zg[-1] - g["zmaxis"],
+        )
+        + a
+    )
     flux = []
     for pn in _PSI_N_LEVELS:
         target = g["simag"] + (g["sibry"] - g["simag"]) * pn
@@ -325,9 +359,14 @@ def equilibrium_geometry(g: dict) -> dict:
         "boundary": {"R": Rb.tolist(), "Z": Zb.tolist()},
         "axis": {"R": [float(g["rmaxis"])], "Z": [float(g["zmaxis"])]},
         "flux_surfaces": flux,
-        "R0": R0, "a": a, "kappa": kappa, "delta": delta,
-        "shaf_shift": shaf_shift, "Vp": Vp, "Sp": Sp,
-        "bt0": abs(float(g["bcentr"])),          # file's vacuum toroidal field BCENTR [T]
-        "ip": abs(float(g["current"])) / 1e6,    # plasma current [MA]
-        "cyclotron_B25": b25,                    # real <(|B|/B0)^2.5> (None if uncomputable)
+        "R0": R0,
+        "a": a,
+        "kappa": kappa,
+        "delta": delta,
+        "shaf_shift": shaf_shift,
+        "Vp": Vp,
+        "Sp": Sp,
+        "bt0": abs(float(g["bcentr"])),  # file's vacuum toroidal field BCENTR [T]
+        "ip": abs(float(g["current"])) / 1e6,  # plasma current [MA]
+        "cyclotron_B25": b25,  # real <(|B|/B0)^2.5> (None if uncomputable)
     }

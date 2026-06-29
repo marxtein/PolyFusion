@@ -43,47 +43,61 @@ _KEV_J = 1e3 * QE
 @dataclass
 class FRCResult:
     # power balance
-    Pfus: float; Pheat: float; Qfus: float
-    Qfus_raw: float   # uncapped Pfus/Pheat (negative => ignited/over-driven)
-    ignited: float    # 1 if Pheat <= 0
-    Pbrem: float; Pcycl: float; Ptrans: float; Pn: float; Pwall: float
+    Pfus: float
+    Pheat: float
+    Qfus: float
+    Qfus_raw: float  # uncapped Pfus/Pheat (negative => ignited/over-driven)
+    ignited: float  # 1 if Pheat <= 0
+    Pbrem: float
+    Pcycl: float
+    Ptrans: float
+    Pn: float
+    Pwall: float
     Eth: float
     # confinement
-    tau_E: float      # energy ~ particle confinement (LSX scaling) [s]
-    ntau: float       # <n_i> * tau_E
+    tau_E: float  # energy ~ particle confinement (LSX scaling) [s]
+    ntau: float  # <n_i> * tau_E
     # profile / stability
-    K_rr: float       # rigid-rotor profile parameter (from average-beta theorem)
-    G1: float         # <n>/n_m volume-average factor used by the power account
-    G2: float         # <n^2>/n_m^2 volume-average factor used by fusion/radiation
-    GB: float         # <|B|>/B_e volume-average factor used by synchrotron estimate
-    GB25: float       # <|B/B_e|^2.5> volume moment used by synchrotron estimate
-    p_shape: float    # superellipse exponent matching f_shape
+    K_rr: float  # rigid-rotor profile parameter (from average-beta theorem)
+    G1: float  # <n>/n_m volume-average factor used by the power account
+    G2: float  # <n^2>/n_m^2 volume-average factor used by fusion/radiation
+    GB: float  # <|B|>/B_e volume-average factor used by synchrotron estimate
+    GB25: float  # <|B/B_e|^2.5> volume moment used by synchrotron estimate
+    p_shape: float  # superellipse exponent matching f_shape
     f_shape_calc: float  # volume factor recovered from p_shape
-    geom_weighted: float # 1 = use finite-length superellipse weighting
-    beta: float       # volume-averaged beta = 1 - x_s^2/2
+    geom_weighted: float  # 1 = use finite-length superellipse weighting
+    beta: float  # volume-averaged beta = 1 - x_s^2/2
     beta_null: float  # beta at the field null (=1 by pressure balance)
-    x_s: float; elongation: float; s_param: float
-    s_over_E: float   # tilt-stability ratio s/E (kinetic stabilisation needs
-                      # s/E <~ 3-4; Belova/Steinhauer FRC kinetic-MHD stability)
-    flux_p: float     # trapped poloidal flux [Wb] (THE FRC retention metric)
+    x_s: float
+    elongation: float
+    s_param: float
+    s_over_E: float  # tilt-stability ratio s/E (kinetic stabilisation needs
+    # s/E <~ 3-4; Belova/Steinhauer FRC kinetic-MHD stability)
+    flux_p: float  # trapped poloidal flux [Wb] (THE FRC retention metric)
     # fields / densities
-    B_int: float      # <|B|> inside separatrix [T]
-    ni0: float        # peak (null) ion density from pressure balance [m^-3]
-    ne0: float        # peak electron density [m^-3]
-    nbar: float       # line-averaged electron density [m^-3]
+    B_int: float  # <|B|> inside separatrix [T]
+    ni0: float  # peak (null) ion density from pressure balance [m^-3]
+    ne0: float  # peak electron density [m^-3]
+    nbar: float  # line-averaged electron density [m^-3]
     # geometry
-    Vp: float; Sp: float; Sw: float
-    sep_model: str    # separatrix geometry family used ("superellipse" | "ma_xie")
-    m_shape: float    # paper shape index (m=2 ellipse, large m racetrack)
-    Zeff: float; M: float
+    Vp: float
+    Sp: float
+    Sw: float
+    sep_model: str  # separatrix geometry family used ("superellipse" | "ma_xie")
+    m_shape: float  # paper shape index (m=2 ellipse, large m racetrack)
+    Zeff: float
+    M: float
     # flux & channel physics (docs/30 P1)
-    tau_eta: float    # classical (Spitzer) flux-diffusion time mu0 r_s^2/eta [s]
+    tau_eta: float  # classical (Spitzer) flux-diffusion time mu0 r_s^2/eta [s]
     tauN_o_taueta: float  # energy account vs flux account: which dies first
     tau_classical: float  # resistive classical cross-field bound [s] (optimistic)
-    tau_Bohm: float       # Bohm-diffusion bound [s] (pessimistic)
-    P_line: float     # impurity line radiation [MW] (0 unless imp_name given)
-    tauC_eff: float   # effective cyclotron-radiation loss time [s]
-    Ecrit: float; f_fast_ion: float; tau_eq_ie: float; P_ei: float
+    tau_Bohm: float  # Bohm-diffusion bound [s] (pessimistic)
+    P_line: float  # impurity line radiation [MW] (0 unless imp_name given)
+    tauC_eff: float  # effective cyclotron-radiation loss time [s]
+    Ecrit: float
+    f_fast_ion: float
+    tau_eq_ie: float
+    P_ei: float
     strcase: str
 
     def as_dict(self) -> dict:
@@ -93,20 +107,28 @@ class FRCResult:
 def _solve_K(beta_avg: float) -> float:
     """Solve tanh(K)/K = beta_avg for the rigid-rotor parameter K (>0)."""
     lo, hi = 1e-4, 25.0
-    f = lambda k: math.tanh(k) / k - beta_avg
-    if f(lo) < 0:        # beta_avg ~ 1 -> K -> 0
+
+    def _f(k: float) -> float:
+        return math.tanh(k) / k - beta_avg
+
+    if _f(lo) < 0:  # beta_avg ~ 1 -> K -> 0
         return lo
     for _ in range(80):
         mid = 0.5 * (lo + hi)
-        if f(mid) > 0:
+        if _f(mid) > 0:
             lo = mid
         else:
             hi = mid
     return 0.5 * (lo + hi)
 
 
-def _rr_B25_moment(K: float, *, f_shape: float | None = None,
-                    m_shape: float | None = None, n: int = 401) -> float:
+def _rr_B25_moment(
+    K: float,
+    *,
+    f_shape: float | None = None,
+    m_shape: float | None = None,
+    n: int = 401,
+) -> float:
     """Volume average of ``|B/B_e|**2.5`` for the selected FRC shell weight."""
     x = np.linspace(0.0, 1.0, n)
     if m_shape is not None:
@@ -160,7 +182,9 @@ def _frc_p_from_f_shape(f_shape: float, p_max: float = 1.0e6) -> float:
     return 0.5 * (lo + hi)
 
 
-def _frc_profile_factors(x_s: float, f_shape: float, n: int = 801) -> tuple[float, float, float, float, float]:
+def _frc_profile_factors(
+    x_s: float, f_shape: float, n: int = 801
+) -> tuple[float, float, float, float, float]:
     """Finite-length FRC profile factors weighted by superellipse volume.
 
     The radial rigid-rotor profile is retained.  Only the volume element is
@@ -213,8 +237,12 @@ def _frc_profile_factors(x_s: float, f_shape: float, n: int = 801) -> tuple[floa
 # superellipse path above is the default and stays numerically unchanged.
 # ---------------------------------------------------------------------------
 
-_M_MAX = 1.0e6   # racetrack limit; matches the superellipse p_max convention
-_SEP_MODEL_ALIASES = {"superellipse": "superellipse", "ma_xie": "ma_xie", "mrr": "ma_xie"}
+_M_MAX = 1.0e6  # racetrack limit; matches the superellipse p_max convention
+_SEP_MODEL_ALIASES = {
+    "superellipse": "superellipse",
+    "ma_xie": "ma_xie",
+    "mrr": "ma_xie",
+}
 
 
 def _canonical_sep_model(sep_model: str | None) -> str:
@@ -225,7 +253,8 @@ def _canonical_sep_model(sep_model: str | None) -> str:
     except KeyError as exc:
         raise ValueError(
             f"sep_model must be 'superellipse' or 'ma_xie' "
-            f"(legacy alias 'mrr' is accepted; got {sep_model!r})") from exc
+            f"(legacy alias 'mrr' is accepted; got {sep_model!r})"
+        ) from exc
 
 
 def _f_shape_from_m(m: float) -> float:
@@ -255,7 +284,8 @@ def _resolve_shape(f_shape, m, m_max: float = _M_MAX) -> tuple[float, float]:
         if f_shape is not None and abs(float(f_shape) - fm) > 1e-6:
             raise ValueError(
                 f"inconsistent m and f_shape: m={m} implies f_shape={fm:.6f}, "
-                f"but f_shape={f_shape} was given")
+                f"but f_shape={f_shape} was given"
+            )
         return fm, float(m)
     fs = 0.85 if f_shape is None else float(f_shape)
     if not 2.0 / 3.0 - 1e-9 <= fs <= 1.0:
@@ -289,8 +319,8 @@ def _mrr_surface(r_s: float, l_s: float, m: float, n: int = 4001) -> float:
     b = l_s / 2.0
     z = np.linspace(-b, b, n)
     zb = np.abs(z / b)
-    r = r_s * np.sqrt(np.clip(1.0 - zb ** m, 0.0, 1.0))
-    rrp = -(r_s ** 2 * m / (2.0 * b)) * np.sign(z) * zb ** (m - 1.0)
+    r = r_s * np.sqrt(np.clip(1.0 - zb**m, 0.0, 1.0))
+    rrp = -(r_s**2 * m / (2.0 * b)) * np.sign(z) * zb ** (m - 1.0)
     integrand = 2.0 * math.pi * np.sqrt(r * r + rrp * rrp)
     return float(np.trapezoid(integrand, z))
 
@@ -305,15 +335,15 @@ def _mrr_profile_factors(x_s: float, m: float, n: int = 801):
     which is what changes the Ma-Xie-mode power account.
     """
     x = np.linspace(0.0, 1.0, n)
-    shell = np.clip(1.0 - x ** 2, 0.0, 1.0)
+    shell = np.clip(1.0 - x**2, 0.0, 1.0)
     weight = 2.0 * x * shell ** (1.0 / m)
     norm = float(np.trapezoid(weight, x))
     if norm <= 0.0:
         raise ValueError("invalid Ma-Xie volume weight")
     weight /= norm
 
-    beta_avg = 1.0 - x_s ** 2 / 2.0
-    u = 2.0 * x ** 2 - 1.0
+    beta_avg = 1.0 - x_s**2 / 2.0
+    u = 2.0 * x**2 - 1.0
 
     def avg_sech2(k: float) -> float:
         return float(np.trapezoid(weight / np.cosh(k * u) ** 2, x))
@@ -369,15 +399,16 @@ def _rr_flux_radii(psi_star: float, K: float) -> tuple[float, float]:
     so  2x^2 - 1 = +- arccosh(cosh K e^{psi_star}) / K.  Valid for
     psi_star in [psi_o, 0] (psi_o = -ln cosh K); clamped at the endpoints."""
     C = math.cosh(K) * math.exp(psi_star)
-    A = math.acosh(max(C, 1.0)) / K           # in [0, 1]; 0 at O point, 1 at sep
+    A = math.acosh(max(C, 1.0)) / K  # in [0, 1]; 0 at O point, 1 at sep
     A = min(A, 1.0)
     x_out = math.sqrt(0.5 * (1.0 + A))
     x_in = math.sqrt(max(0.5 * (1.0 - A), 0.0))
     return x_in, x_out
 
 
-def _frc_nested_surfaces(z_arch, r_arch, r_s: float, K: float,
-                         n_levels: int = 8, n_theta: int = 161) -> list:
+def _frc_nested_surfaces(
+    z_arch, r_arch, r_s: float, K: float, n_levels: int = 8, n_theta: int = 161
+) -> list:
     """Closed interior flux-surface loops: rounded ovals around the O point ring.
 
     Real psi=const<0 surfaces are smooth ovals encircling the O point
@@ -396,7 +427,6 @@ def _frc_nested_surfaces(z_arch, r_arch, r_s: float, K: float,
     the oval's midplane top radius equals the true flux radius x_out(psi)."""
     z_arch = np.asarray(z_arch, dtype=float)
     r_arch = np.asarray(r_arch, dtype=float)
-    r_o = r_s / math.sqrt(2.0)
     b = float(np.max(np.abs(z_arch)))
     psi_o = -math.log(math.cosh(K))
     phi = np.linspace(0.0, 2.0 * math.pi, n_theta)
@@ -426,22 +456,22 @@ def _frc_nested_surfaces(z_arch, r_arch, r_s: float, K: float,
             lo = mid
         else:
             hi = mid
-    a_z_out = 0.97 * lo                   # small margin so it reads as interior
+    a_z_out = 0.97 * lo  # small margin so it reads as interior
 
     out = []
     for t, (xi, xo), a_r in zip(levels, radii, a_rs):
         r1, r2 = xi * r_s, xo * r_s
         r_c = 0.5 * (r1 + r2)
-        a_z = a_z_out * (a_r / a_r_out)   # same aspect -> nested, monotone in a_r
+        a_z = a_z_out * (a_r / a_r_out)  # same aspect -> nested, monotone in a_r
         z = a_z * cphi
         r = r_c + a_r * sphi
-        out.append({"psi": float(psi_o * (1.0 - t)),
-                    "z": z.tolist(), "r": r.tolist()})
+        out.append({"psi": float(psi_o * (1.0 - t)), "z": z.tolist(), "r": r.tolist()})
     return out
 
 
-def _frc_open_field_lines(z_arch, r_arch, r_s: float, r_w: float,
-                          n_lines: int = 4, n_z: int = 161) -> list:
+def _frc_open_field_lines(
+    z_arch, r_arch, r_s: float, r_w: float, n_lines: int = 4, n_z: int = 161
+) -> list:
     """Open SOL field lines OUTSIDE the separatrix (audit docs/42 P2).
 
     Each line is the separatrix arch pushed outward by a constant gap d and
@@ -452,7 +482,7 @@ def _frc_open_field_lines(z_arch, r_arch, r_s: float, r_w: float,
     picture in the paper's Fig. 4(a).  Upper-half curves; the caller mirrors."""
     z_arch = np.asarray(z_arch, dtype=float)
     r_arch = np.asarray(r_arch, dtype=float)
-    r_top = float(np.max(r_arch))                       # ~ r_s
+    r_top = float(np.max(r_arch))  # ~ r_s
     r_cap = 0.99 * r_w
     # Each line is the separatrix arch SCALED about the origin by lambda > 1.
     # Scaling a star-shaped-about-origin arch by lambda>1 encloses it, so the
@@ -470,8 +500,16 @@ def _frc_open_field_lines(z_arch, r_arch, r_s: float, r_w: float,
     return out
 
 
-def frc_shape_outlines(r_s, l_s, r_w, f_shape=None, n_theta=181,
-                       sep_model="superellipse", m=None, **_ignored) -> dict:
+def frc_shape_outlines(
+    r_s,
+    l_s,
+    r_w,
+    f_shape=None,
+    n_theta=181,
+    sep_model="superellipse",
+    m=None,
+    **_ignored,
+) -> dict:
     """JSON-able FRC separatrix geometry for front-end shape views.
 
     ``sep_model="superellipse"`` (default) draws the symmetric superellipse;
@@ -507,41 +545,75 @@ def frc_shape_outlines(r_s, l_s, r_w, f_shape=None, n_theta=181,
     half = _frc_nested_surfaces(za, ra, r_s, K)
     surfaces = []
     for srf in half:
-        zr = srf["z"]; rr = np.asarray(srf["r"])
-        surfaces.append({"psi": srf["psi"], "z": zr, "r": rr.tolist()})          # upper +r_o
-        surfaces.append({"psi": srf["psi"], "z": zr, "r": (-rr).tolist()})       # lower -r_o
+        zr = srf["z"]
+        rr = np.asarray(srf["r"])
+        surfaces.append({"psi": srf["psi"], "z": zr, "r": rr.tolist()})  # upper +r_o
+        surfaces.append({"psi": srf["psi"], "z": zr, "r": (-rr).tolist()})  # lower -r_o
     # open SOL field lines outside the separatrix (audit docs/42 P2), mirrored
     open_lines = []
     for ln in _frc_open_field_lines(za, ra, r_s, r_w):
-        zr = ln["z"]; rr = np.asarray(ln["r"])
-        open_lines.append({"z": zr, "r": rr.tolist()})                            # upper
-        open_lines.append({"z": zr, "r": (-rr).tolist()})                         # lower
+        zr = ln["z"]
+        rr = np.asarray(ln["r"])
+        open_lines.append({"z": zr, "r": rr.tolist()})  # upper
+        open_lines.append({"z": zr, "r": (-rr).tolist()})  # lower
     common = {
-        "type": "frc", "m_shape": float(m_shape), "f_shape_calc": f_shape,
-        "wall": wall, "null_points": nulls, "o_points": o_points,
-        "x_points": x_points, "surfaces": surfaces, "open_lines": open_lines,
+        "type": "frc",
+        "m_shape": float(m_shape),
+        "f_shape_calc": f_shape,
+        "wall": wall,
+        "null_points": nulls,
+        "o_points": o_points,
+        "x_points": x_points,
+        "surfaces": surfaces,
+        "open_lines": open_lines,
     }
     if sep_model == "ma_xie":
         zt, rt = _mrr_separatrix(r_s, l_s, m_shape, n_theta)
         z = np.concatenate([zt, zt[::-1]])
         r = np.concatenate([rt, -rt[::-1]])
-        return {**common, "mode": "ma_xie",
-                "separatrix": {"z": z.tolist(), "r": r.tolist()}}
+        return {
+            **common,
+            "mode": "ma_xie",
+            "separatrix": {"z": z.tolist(), "r": r.tolist()},
+        }
     p = _frc_p_from_f_shape(float(f_shape))
     th = np.linspace(0.0, 2.0 * math.pi, n_theta)
     c, s = np.cos(th), np.sin(th)
     z = b * np.sign(c) * np.abs(c) ** (2.0 / p)
     r = r_s * np.sign(s) * np.abs(s) ** (2.0 / p)
-    return {**common, "mode": "superellipse", "p_shape": p,
-            "f_shape_calc": _frc_shape_factor_from_p(p),
-            "separatrix": {"z": z.tolist(), "r": r.tolist()}}
+    return {
+        **common,
+        "mode": "superellipse",
+        "p_shape": p,
+        "f_shape_calc": _frc_shape_factor_from_p(p),
+        "separatrix": {"z": z.tolist(), "r": r.tolist()},
+    }
 
 
-def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
-              f_shape=None, fsig=1.0, geom_weighted=0.0,
-              Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
-              imp_name=None, sep_model="superellipse", m=None,
-              use_tauC=0.0, tauC=None) -> FRCResult:
+def solve_frc(
+    r_s,
+    l_s,
+    r_w,
+    B_e,
+    Ti,
+    Te,
+    tauE=0.01,
+    use_tauE=1.0,
+    f_shape=None,
+    fsig=1.0,
+    geom_weighted=0.0,
+    Rw=0.8,
+    icase=1,
+    f1=0.5,
+    fHe=0.0,
+    fimp=0.0,
+    Zimp=10,
+    imp_name=None,
+    sep_model="superellipse",
+    m=None,
+    use_tauC=0.0,
+    tauC=None,
+) -> FRCResult:
     """Evaluate the 0-D FRC power balance at one operating point.
 
     Parameters (SI / keV); see docs/25 §3.  ``f_shape`` interpolates the
@@ -560,8 +632,9 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
     if r_s <= 0 or l_s <= 0 or r_w <= 0:
         raise ValueError(f"r_s, l_s, r_w must be > 0 (got {r_s}, {l_s}, {r_w})")
     if r_s >= r_w:
-        raise ValueError(f"need r_s < r_w: separatrix inside the wall "
-                         f"(got r_s={r_s}, r_w={r_w})")
+        raise ValueError(
+            f"need r_s < r_w: separatrix inside the wall (got r_s={r_s}, r_w={r_w})"
+        )
     manual_tauE = bool(use_tauE)
     if B_e <= 0 or Ti <= 0 or Te <= 0:
         raise ValueError(f"B_e, Ti, Te must be > 0 (got {B_e}, {Ti}, {Te})")
@@ -570,7 +643,9 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
     if bool(use_tauC) and (tauC is None or tauC <= 0):
         raise ValueError(f"tauC must be > 0 when use_tauC is enabled (got {tauC})")
     if not 2.0 / 3.0 - 1e-9 <= f_shape <= 1.0:
-        raise ValueError(f"f_shape must be in [2/3, 1] (ellipse..racetrack), got {f_shape}")
+        raise ValueError(
+            f"f_shape must be in [2/3, 1] (ellipse..racetrack), got {f_shape}"
+        )
     if not 0.0 <= f1 <= 1.0:
         raise ValueError(f"f1 must be in [0, 1] (got {f1})")
     if fHe < 0 or fimp < 0 or fHe + fimp >= 1.0:
@@ -606,7 +681,9 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
         p_shape = _frc_p_from_f_shape(f_shape)
         f_shape_calc = _frc_shape_factor_from_p(p_shape)
         Vp = f_shape * math.pi * r_s**2 * l_s
-        Sp = 2 * math.pi * r_s * l_s * (0.5 + 0.5 * f_shape)   # ellipse<->racetrack side area
+        Sp = (
+            2 * math.pi * r_s * l_s * (0.5 + 0.5 * f_shape)
+        )  # ellipse<->racetrack side area
         # ---------- rigid-rotor profile from the average-beta theorem ----------
         if use_geom_weight:
             p_shape, K, G1, G2, GB = _frc_profile_factors(x_s, f_shape)
@@ -614,10 +691,10 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
         else:
             K = _solve_K(beta_avg)
             tK = math.tanh(K)
-            G1 = tK / K                          # <n>/n_m   (== beta_avg by construction)
-            G2 = (tK - tK**3 / 3.0) / K          # <n^2>/n_m^2
-            GB = math.log(math.cosh(K)) / K      # <|B|>/B_e
-    GB_flux = math.log(math.cosh(K)) / K     # cross-section factor for trapped flux
+            G1 = tK / K  # <n>/n_m   (== beta_avg by construction)
+            G2 = (tK - tK**3 / 3.0) / K  # <n^2>/n_m^2
+            GB = math.log(math.cosh(K)) / K  # <|B|>/B_e
+    GB_flux = math.log(math.cosh(K)) / K  # cross-section factor for trapped flux
     if sep_model == "ma_xie":
         GB25 = _rr_B25_moment(K, m_shape=m_shape)
     elif use_geom_weight:
@@ -640,14 +717,15 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
     n120 = f12 * ni_m
     n10, n20 = x1 * n120, x2 * n120
     nHe0, nimp0 = fHe * ni_m, fimp * ni_m
-    Zeff = ((n10 * Z1**2 + n20 * Z2**2) / (1 + d12)
-            + nHe0 * ZHe**2 + nimp0 * Zimp**2) / ne_m
+    Zeff = (
+        (n10 * Z1**2 + n20 * Z2**2) / (1 + d12) + nHe0 * ZHe**2 + nimp0 * Zimp**2
+    ) / ne_m
     M = (x1 * rx["A1"] + x2 * rx["A2"]) / (1 + d12)
     mi = M * MP
 
     # line-averaged density along a diameter (numeric, sech^2 chord integral)
     xx = np.linspace(0.0, 1.0, 201)
-    nbar = ne_m * float(np.trapezoid(1.0 / np.cosh(K * (2 * xx**2 - 1))**2, xx))
+    nbar = ne_m * float(np.trapezoid(1.0 / np.cosh(K * (2 * xx**2 - 1)) ** 2, xx))
 
     # ---------- fusion power: analytic <n^2> average, uniform T ----------
     sgv = reactivity(Ti, icase)
@@ -656,16 +734,29 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
 
     # ---------- radiation ----------
     t = Te / MEC2
-    Pbrem = (5.34e-37 * ne_m**2 * G2 * math.sqrt(Te)
-             * (Zeff + 0.7936 * t + 1.874 * t**2 + 3 / math.sqrt(2) * t)
-             * 1e-6 * Vp)
+    Pbrem = (
+        5.34e-37
+        * ne_m**2
+        * G2
+        * math.sqrt(Te)
+        * (Zeff + 0.7936 * t + 1.874 * t**2 + 3 / math.sqrt(2) * t)
+        * 1e-6
+        * Vp
+    )
     B_int = B_e * GB
-    formula_Pcycl = (4.14e-7 * (ne_m * G1 / 1e20)**0.5 * Te**2.5
-                     * B_e**2.5 * GB25 * (1 - Rw)**0.5 * r_s**-0.5
-                     * (1 + 2.5 * Te / 511) * Vp)
+    formula_Pcycl = (
+        4.14e-7
+        * (ne_m * G1 / 1e20) ** 0.5
+        * Te**2.5
+        * B_e**2.5
+        * GB25
+        * (1 - Rw) ** 0.5
+        * r_s**-0.5
+        * (1 + 2.5 * Te / 511)
+        * Vp
+    )
     Eth_e = 1.5 * ne_m * Te * _KEV_J * G1 * Vp * 1e-6
-    Pcycl, tauC_eff = resolve_cyclotron_power(
-        formula_Pcycl, Eth_e, use_tauC, tauC)
+    Pcycl, tauC_eff = resolve_cyclotron_power(formula_Pcycl, Eth_e, use_tauC, tauC)
 
     # ---------- confinement ----------
     if manual_tauE:
@@ -675,12 +766,14 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
         tau_E = 3.2e-15 * elongation**0.5 * x_s**2 * r_s**2.1 * ne_m**0.6
 
     # ---------- stored energy & balance ----------
-    Eth = 1.5 * (ni_m * Ti + ne_m * Te) * _KEV_J * G1 * Vp * 1e-6   # MJ
+    Eth = 1.5 * (ni_m * Ti + ne_m * Te) * _KEV_J * G1 * Vp * 1e-6  # MJ
     Ptrans = Eth / tau_E
     # impurity line radiation (Mavrin; uniform T, <n^2> weighting like Pbrem)
     if imp_name is not None and nimp0 > 0:
         if imp_name not in _IMP_SPECIES:
-            raise ValueError(f"unknown impurity species {imp_name!r}; have {_IMP_SPECIES}")
+            raise ValueError(
+                f"unknown impurity species {imp_name!r}; have {_IMP_SPECIES}"
+            )
         P_line = float(ne_m * nimp0 * lz_line_net(imp_name, Te) * G2 * Vp * 1e-6)
     else:
         P_line = 0.0
@@ -719,25 +812,59 @@ def solve_frc(r_s, l_s, r_w, B_e, Ti, Te, tauE=0.01, use_tauE=1.0,
 
     # two-temperature channel diagnostics (docs/30 P1-1; uniform T)
     Ecrit, f_fast, tau_eq, pei = twotemp_diagnostics(
-        rx, ni_m, Te, Ti, n10, n20, nHe0, nimp0, Zimp, M)
-    P_ei = pei * G2 * Vp * 1e-6          # <n^2>-weighted estimate [MW]
+        rx, ni_m, Te, Ti, n10, n20, nHe0, nimp0, Zimp, M
+    )
+    P_ei = pei * G2 * Vp * 1e-6  # <n^2>-weighted estimate [MW]
 
     return FRCResult(
-        Pfus=Pfus, Pheat=Pheat, Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
-        Pbrem=Pbrem, Pcycl=Pcycl,
-        Ptrans=Ptrans, Pn=Pn, Pwall=Pwall, Eth=Eth,
-        tau_E=tau_E, ntau=ni_m * G1 * tau_E,
-        K_rr=K, G1=G1, G2=G2, GB=GB, GB25=GB25,
-        p_shape=p_shape, f_shape_calc=f_shape_calc,
+        Pfus=Pfus,
+        Pheat=Pheat,
+        Qfus=Qfus,
+        Qfus_raw=Qfus_raw,
+        ignited=ignited,
+        Pbrem=Pbrem,
+        Pcycl=Pcycl,
+        Ptrans=Ptrans,
+        Pn=Pn,
+        Pwall=Pwall,
+        Eth=Eth,
+        tau_E=tau_E,
+        ntau=ni_m * G1 * tau_E,
+        K_rr=K,
+        G1=G1,
+        G2=G2,
+        GB=GB,
+        GB25=GB25,
+        p_shape=p_shape,
+        f_shape_calc=f_shape_calc,
         geom_weighted=1.0 if use_geom_weight else 0.0,
-        beta=beta_avg, beta_null=1.0, x_s=x_s, elongation=elongation,
-        s_param=s_param, s_over_E=(s_param / elongation if elongation else 0.0),
+        beta=beta_avg,
+        beta_null=1.0,
+        x_s=x_s,
+        elongation=elongation,
+        s_param=s_param,
+        s_over_E=(s_param / elongation if elongation else 0.0),
         flux_p=flux_p,
-        B_int=B_int, ni0=ni_m, ne0=ne_m, nbar=nbar,
-        Vp=Vp, Sp=Sp, Sw=Sw, sep_model=sep_model, m_shape=m_shape, Zeff=Zeff, M=M,
-        tau_eta=tau_eta, tauN_o_taueta=tau_E / tau_eta,
-        tau_classical=tau_classical, tau_Bohm=tau_Bohm, P_line=P_line,
+        B_int=B_int,
+        ni0=ni_m,
+        ne0=ne_m,
+        nbar=nbar,
+        Vp=Vp,
+        Sp=Sp,
+        Sw=Sw,
+        sep_model=sep_model,
+        m_shape=m_shape,
+        Zeff=Zeff,
+        M=M,
+        tau_eta=tau_eta,
+        tauN_o_taueta=tau_E / tau_eta,
+        tau_classical=tau_classical,
+        tau_Bohm=tau_Bohm,
+        P_line=P_line,
         tauC_eff=tauC_eff,
-        Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq, P_ei=P_ei,
+        Ecrit=Ecrit,
+        f_fast_ion=f_fast,
+        tau_eq_ie=tau_eq,
+        P_ei=P_ei,
         strcase=rx["name"],
     )

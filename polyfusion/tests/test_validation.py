@@ -40,14 +40,21 @@ def ok(cond, msg):
     PASS = PASS and cond
 
 
-PRESETS = {"tokamak": "ITER", "mirror": "GDT", "frc": "C-2W",
-           "dipole": "LDX", "stellarator": "W7-X"}
+PRESETS = {
+    "tokamak": "ITER",
+    "mirror": "GDT",
+    "frc": "C-2W",
+    "dipole": "LDX",
+    "stellarator": "W7-X",
+}
 
 
 def expect_error(config, overrides, label):
     r = run_case(overrides, preset=PRESETS[config], config=config)
-    ok("errors" in r and r["errors"], f"{config}: {label} rejected "
-       f"({(r.get('errors') or ['NO ERROR'])[0][:70]})")
+    ok(
+        "errors" in r and r["errors"],
+        f"{config}: {label} rejected ({(r.get('errors') or ['NO ERROR'])[0][:70]})",
+    )
 
 
 def expect_clean(config, overrides, label):
@@ -89,11 +96,16 @@ def main():
     # planar axis (delta_h=0) gives no transform; WITHOUT a measured iota
     # override the configuration must error, not return H_ISS04 = inf. The W7-X
     # preset carries iota=0.88, so drop it explicitly to hit the no-transform path.
-    r = run_case({"etabar": 0.04, "delta_h": 0.0, "iota": 0.0}, preset="W7-X",
-                 config="stellarator")
-    ok("errors" in r and r["errors"],
-       f"stellarator: planar no-transform (delta_h=0, no iota) rejected "
-       f"({(r.get('errors') or ['?'])[0][:60]})")
+    r = run_case(
+        {"etabar": 0.04, "delta_h": 0.0, "iota": 0.0},
+        preset="W7-X",
+        config="stellarator",
+    )
+    ok(
+        "errors" in r and r["errors"],
+        f"stellarator: planar no-transform (delta_h=0, no iota) rejected "
+        f"({(r.get('errors') or ['?'])[0][:60]})",
+    )
     # near-axis healthy case stays clean
     expect_clean("stellarator", {"etabar": 0.16, "delta_h": 0.25}, "near-axis mode")
 
@@ -114,11 +126,20 @@ def main():
 
     # ---- 8. solver-level guards also fire on direct calls ----
     from polyfusion.configs import solve_frc, solve_dipole
+
     for fn, kw, label in [
-        (solve_frc, dict(r_s=0.9, l_s=3.0, r_w=0.6, B_e=1.0, Ti=2.0, Te=1.0),
-         "solve_frc x_s>1"),
-        (solve_dipole, dict(r_ring=1.0, R_p=1.2, B_ring=10.0, n0=3e20,
-                            Ti0=30.0, Te0=20.0, tauE=5.0), "solve_dipole L_in>=R_p"),
+        (
+            solve_frc,
+            dict(r_s=0.9, l_s=3.0, r_w=0.6, B_e=1.0, Ti=2.0, Te=1.0),
+            "solve_frc x_s>1",
+        ),
+        (
+            solve_dipole,
+            dict(
+                r_ring=1.0, R_p=1.2, B_ring=10.0, n0=3e20, Ti0=30.0, Te0=20.0, tauE=5.0
+            ),
+            "solve_dipole L_in>=R_p",
+        ),
     ]:
         try:
             fn(**kw)
@@ -131,8 +152,9 @@ def main():
     # ---- 9. scan robustness: FRC scan straddling x_s = 1 ----
     spec = get("frc")
     base = dict(spec.presets["C-2W"])
-    g = scan2d(spec, base, "r_s", "Ti", np.linspace(0.3, 0.9, 7),
-               np.linspace(1.0, 5.0, 5))
+    g = scan2d(
+        spec, base, "r_s", "Ti", np.linspace(0.3, 0.9, 7), np.linspace(1.0, 5.0, 5)
+    )
     valid = g["valid"]
     # r_s >= 0.6 = r_w -> invalid columns (r_s grid: 0.3..0.9 step 0.1 -> 3 bad)
     ok(np.all(valid[:3, :] == 1), "scan: x_s<1 points valid")
@@ -144,16 +166,21 @@ def main():
     ok(not mask[3:, :].any(), "best region excludes invalid points")
 
     # ---- 10. ignited/raw-Q transparency ----
-    r = run_case({"Ti0": 40.0, "ni0": 4e20, "tauE": 10.0}, preset="HELIAS",
-                 config="stellarator")
+    r = run_case(
+        {"Ti0": 40.0, "ni0": 4e20, "tauE": 10.0}, preset="HELIAS", config="stellarator"
+    )
     o = r.get("outputs", {})
     if o.get("ignited") == 1.0:
-        ok(o.get("Qfus") == 1000.0 and o.get("Qfus_raw", 0) <= 0,
-           "ignited point: Qfus capped, Qfus_raw exposes sign")
+        ok(
+            o.get("Qfus") == 1000.0 and o.get("Qfus_raw", 0) <= 0,
+            "ignited point: Qfus capped, Qfus_raw exposes sign",
+        )
         # ISS04 uses PL = total loss power (> 0 even when ignited), so the
         # point stays numerically valid — ignition is flagged, not hidden.
-        ok(o.get("valid") == 1.0 and math.isfinite(o.get("H_ISS04", math.nan)),
-           "ignited point: flagged via ignited=1, outputs stay finite")
+        ok(
+            o.get("valid") == 1.0 and math.isfinite(o.get("H_ISS04", math.nan)),
+            "ignited point: flagged via ignited=1, outputs stay finite",
+        )
     else:
         ok("outputs" in r, "hot HELIAS point runs (not ignited at these inputs)")
 

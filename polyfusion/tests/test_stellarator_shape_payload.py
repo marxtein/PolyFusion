@@ -53,11 +53,13 @@ def _run_clean(vals: dict) -> dict:
         support.append(_extract_function(src, "isPlainObject"))
     except ValueError:
         pass
-    support.extend([
-        _extract_function(src, "inferStellGeomMode"),
-        _extract_function(src, "stellGeomMode"),
-        _extract_function(src, "cleanStellOverrides"),
-    ])
+    support.extend(
+        [
+            _extract_function(src, "inferStellGeomMode"),
+            _extract_function(src, "stellGeomMode"),
+            _extract_function(src, "cleanStellOverrides"),
+        ]
+    )
     clean_fn = _extract_function(src, "clean")
     js = f"""
 let CUR = 'stellarator';
@@ -113,62 +115,101 @@ def main() -> int:
     src = open(INDEX, encoding="utf-8").read()
     w7x = get("stellarator").presets["W7-X"]
 
-    allok &= ok("\n  shape:[" not in src,
-                "shape is not exposed as a standalone advanced UI field")
-    allok &= ok("ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override'])" in src,
-                "only rc/zs and measured overrides are visible advanced inputs")
-    allok &= ok("isPlainObject(VALS.shape)" in src,
-                "machine presets with shape auto-expand the advanced inputs")
-    allok &= ok('data-p="${p}"' in src and "VALS.shape[mk]" in src,
-                "machine boundary R/Z coefficients render through rc/zs inputs")
-    allok &= ok("boundary R Fourier" in src and "boundary Z Fourier" in src,
-                "machine-boundary rc/zs labels distinguish boundary Fourier from axis Fourier")
-    allok &= ok("item('simple'" in src and "item('axis'" in src
-                and "item('boundary'" in src and 'data-gmode="${k}"' in src,
-                "stellarator geometry mode switch exposes all three input modes")
-    allok &= ok("function showParamForMode" in src and "p==='delta_h'" in src
-                and "p==='Vp_override'||p==='Sw_override'" in src,
-                "mode switch hides parameters that do not apply to the selected geometry input")
-    allok &= ok("textarea class=\"shape-json\"" not in src,
-                "there is no large standalone shape textarea")
+    allok &= ok(
+        "\n  shape:[" not in src,
+        "shape is not exposed as a standalone advanced UI field",
+    )
+    allok &= ok(
+        "ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override'])" in src,
+        "only rc/zs and measured overrides are visible advanced inputs",
+    )
+    allok &= ok(
+        "isPlainObject(VALS.shape)" in src,
+        "machine presets with shape auto-expand the advanced inputs",
+    )
+    allok &= ok(
+        'data-p="${p}"' in src and "VALS.shape[mk]" in src,
+        "machine boundary R/Z coefficients render through rc/zs inputs",
+    )
+    allok &= ok(
+        "boundary R Fourier" in src and "boundary Z Fourier" in src,
+        "machine-boundary rc/zs labels distinguish boundary Fourier from axis Fourier",
+    )
+    allok &= ok(
+        "item('simple'" in src
+        and "item('axis'" in src
+        and "item('boundary'" in src
+        and 'data-gmode="${k}"' in src,
+        "stellarator geometry mode switch exposes all three input modes",
+    )
+    allok &= ok(
+        "function showParamForMode" in src
+        and "p==='delta_h'" in src
+        and "p==='Vp_override'||p==='Sw_override'" in src,
+        "mode switch hides parameters that do not apply to the selected geometry input",
+    )
+    allok &= ok(
+        'textarea class="shape-json"' not in src,
+        "there is no large standalone shape textarea",
+    )
 
     seq = _run_mode_sequence(dict(w7x))
-    allok &= ok(seq["initial"] == "boundary",
-                "W7-X preset starts in boundary Fourier mode")
-    allok &= ok(seq["simple"]["mode"] == "simple" and not seq["simple"]["hasShape"]
-                and not seq["simple"]["hasRc"] and not seq["simple"]["hasIota"],
-                "simple near-axis mode removes machine boundary and measured overrides")
-    allok &= ok(seq["axis"]["mode"] == "axis" and seq["axis"]["hasRc"]
-                and seq["axis"]["hasZs"] and not seq["axis"]["hasShape"],
-                "axis Fourier mode uses rc/zs and no machine shape")
-    allok &= ok(seq["boundary"]["mode"] == "boundary" and seq["boundary"]["hasShape"]
-                and seq["boundary"]["iota"] == w7x["iota"]
-                and seq["boundary"]["Vp_override"] == w7x["Vp_override"]
-                and seq["boundary"]["Sw_override"] == w7x["Sw_override"],
-                "boundary Fourier mode restores shape and measured machine overrides")
+    allok &= ok(
+        seq["initial"] == "boundary", "W7-X preset starts in boundary Fourier mode"
+    )
+    allok &= ok(
+        seq["simple"]["mode"] == "simple"
+        and not seq["simple"]["hasShape"]
+        and not seq["simple"]["hasRc"]
+        and not seq["simple"]["hasIota"],
+        "simple near-axis mode removes machine boundary and measured overrides",
+    )
+    allok &= ok(
+        seq["axis"]["mode"] == "axis"
+        and seq["axis"]["hasRc"]
+        and seq["axis"]["hasZs"]
+        and not seq["axis"]["hasShape"],
+        "axis Fourier mode uses rc/zs and no machine shape",
+    )
+    allok &= ok(
+        seq["boundary"]["mode"] == "boundary"
+        and seq["boundary"]["hasShape"]
+        and seq["boundary"]["iota"] == w7x["iota"]
+        and seq["boundary"]["Vp_override"] == w7x["Vp_override"]
+        and seq["boundary"]["Sw_override"] == w7x["Sw_override"],
+        "boundary Fourier mode restores shape and measured machine overrides",
+    )
 
     vals = dict(w7x)
     vals["delta_h"] = 0.250000
     payload = _run_clean(vals)
     allok &= ok("shape" in payload, "clean() preserves the Fourier shape object")
     if "shape" in payload:
-        allok &= ok(payload["shape"] == w7x["shape"],
-                    "clean() sends shape unchanged")
-    allok &= ok("delta_h" not in payload,
-                "boundary Fourier clean() omits unused delta_h")
-    allok &= ok(payload.get("etabar") == w7x["etabar"],
-                "boundary Fourier clean() keeps etabar for backend validation")
+        allok &= ok(payload["shape"] == w7x["shape"], "clean() sends shape unchanged")
+    allok &= ok(
+        "delta_h" not in payload, "boundary Fourier clean() omits unused delta_h"
+    )
+    allok &= ok(
+        payload.get("etabar") == w7x["etabar"],
+        "boundary Fourier clean() keeps etabar for backend validation",
+    )
 
     edited = run_case(payload, config="stellarator")
-    allok &= ok(edited.get("shape", {}).get("mode") == "machine-boundary",
-                "same-value W7-X edit still renders the machine Fourier boundary")
+    allok &= ok(
+        edited.get("shape", {}).get("mode") == "machine-boundary",
+        "same-value W7-X edit still renders the machine Fourier boundary",
+    )
 
     initial = run_case({}, preset="W7-X", config="stellarator")
     if "outputs" in edited and "outputs" in initial:
-        allok &= ok(abs(edited["outputs"]["Vp_geom"] - initial["outputs"]["Vp_geom"]) < 1e-9,
-                    "same-value edit preserves W7-X Vp_geom")
-        allok &= ok(abs(edited["outputs"]["Sw_geom"] - initial["outputs"]["Sw_geom"]) < 1e-9,
-                    "same-value edit preserves W7-X Sw_geom")
+        allok &= ok(
+            abs(edited["outputs"]["Vp_geom"] - initial["outputs"]["Vp_geom"]) < 1e-9,
+            "same-value edit preserves W7-X Vp_geom",
+        )
+        allok &= ok(
+            abs(edited["outputs"]["Sw_geom"] - initial["outputs"]["Sw_geom"]) < 1e-9,
+            "same-value edit preserves W7-X Sw_geom",
+        )
 
     print("\nRESULT:", "SHAPE PAYLOAD PASS" if allok else "SOME FAILED")
     return 0 if allok else 1

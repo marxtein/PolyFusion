@@ -49,17 +49,24 @@ from dataclasses import replace as _dc_replace
 
 from ..constants import QE, MU0, MEC2
 from ..reactivity import reactivity
-from ..tokamak import (_REACTIONS, twotemp_diagnostics, line_radiation_profile,
-                       _line_average_factor, _line_average_value)
+from ..tokamak import (
+    _REACTIONS,
+    twotemp_diagnostics,
+    line_radiation_profile,
+    _line_average_factor,
+    _line_average_value,
+)
 from ..twotemp import solve_channel_balance
 from ..nearaxis import solve_near_axis
 from ..cyclotron import stellarator_B25_factor
 
 _KEV_J = 1e3 * QE
-_BETA_SOFT_LIMIT = 0.05   # ~5% soft stellarator beta limit (Mercier; can be exceeded)
-_IOTA_MIN = 1e-6          # below this the configuration has no effective transform
-_R2_DISPLAY_CAP = 0.5     # shape view: cap r^2 displacement at this fraction of r^1
-_N_PHASE_FRAMES = 24      # local UI preview frames over one period; physics metrics are unaffected
+_BETA_SOFT_LIMIT = 0.05  # ~5% soft stellarator beta limit (Mercier; can be exceeded)
+_IOTA_MIN = 1e-6  # below this the configuration has no effective transform
+_R2_DISPLAY_CAP = 0.5  # shape view: cap r^2 displacement at this fraction of r^1
+_N_PHASE_FRAMES = (
+    24  # local UI preview frames over one period; physics metrics are unaffected
+)
 # Unified nested-surface display (cosmetic; the rho=1 boundary — the only surface
 # the power account integrates — is identical for any fade).  Surfaces nest as
 #   S(rho) = axis + rho*round + rho^_SHAPE_FADE * shape
@@ -72,7 +79,7 @@ _N_PHASE_FRAMES = 24      # local UI preview frames over one period; physics met
 _SHAPE_FADE = 1.5
 _NEST_RHOS = (0.22, 0.415, 0.61, 0.805, 1.0)
 _PROFILE_N_RHO = 21
-_BOUNDARY_N_THETA = 120
+_BOUNDARY_N_THETA = 200
 
 
 def _closed_list(arr):
@@ -105,7 +112,9 @@ def _offset_closed_curve_normal(boundary_R, boundary_Z, gap):
     # test (n.(P-c) < 0) wrongly flipped normals to point INWARD at the concave
     # notch of non-star-shaped (bean / crescent) cross-sections — e.g. W7-X — so
     # the wall dipped inside the plasma there (docs: stellarator wall containment).
-    area2 = float(np.sum(R * np.roll(Z, -1) - np.roll(R, -1) * Z))  # 2*signed area, CCW>0
+    area2 = float(
+        np.sum(R * np.roll(Z, -1) - np.roll(R, -1) * Z)
+    )  # 2*signed area, CCW>0
     if area2 < 0.0:
         nR, nZ = -nR, -nZ
     wR = R + gap * nR
@@ -120,13 +129,18 @@ def _points_in_polygon(px, pz, polyR, polyZ):
     """Vectorised even-odd point-in-polygon (broadcast over edges, no Python
     edge loop, so it stays fast across the ~120 phase frames). ``polyR/polyZ``
     is a closed loop."""
-    px = np.asarray(px, float)[:, None]; pz = np.asarray(pz, float)[:, None]  # (P,1)
-    R = np.asarray(polyR, float); Z = np.asarray(polyZ, float)
-    x1 = R[:-1][None, :]; z1 = Z[:-1][None, :]                               # (1,E)
-    x2 = R[1:][None, :]; z2 = Z[1:][None, :]
+    px = np.asarray(px, float)[:, None]
+    pz = np.asarray(pz, float)[:, None]  # (P,1)
+    R = np.asarray(polyR, float)
+    Z = np.asarray(polyZ, float)
+    x1 = R[:-1][None, :]
+    z1 = Z[:-1][None, :]  # (1,E)
+    x2 = R[1:][None, :]
+    z2 = Z[1:][None, :]
     cross = ((z1 > pz) != (z2 > pz)) & (
-        px < (x2 - x1) * (pz - z1) / (z2 - z1 + 1e-30) + x1)
-    return (np.count_nonzero(cross, axis=1) % 2 == 1)
+        px < (x2 - x1) * (pz - z1) / (z2 - z1 + 1e-30) + x1
+    )
+    return np.count_nonzero(cross, axis=1) % 2 == 1
 
 
 def _clamp_points_inside(Rs, Zs, cR, cZ, polyR, polyZ, iters=14):
@@ -135,9 +149,12 @@ def _clamp_points_inside(Rs, Zs, cR, cZ, polyR, polyZ, iters=14):
     already inside are left untouched (so the natural rounded fade shape is
     preserved); only the few that poke through a concave boundary are clamped.
     Bisection per vertex between 0 (axis, inside) and 1 (the given vertex)."""
-    Rs = np.asarray(Rs, float); Zs = np.asarray(Zs, float)
-    dR = Rs - cR; dZ = Zs - cZ
-    lo = np.zeros_like(Rs); hi = np.ones_like(Rs)
+    Rs = np.asarray(Rs, float)
+    Zs = np.asarray(Zs, float)
+    dR = Rs - cR
+    dZ = Zs - cZ
+    lo = np.zeros_like(Rs)
+    hi = np.ones_like(Rs)
     for _ in range(iters):
         mid = 0.5 * (lo + hi)
         ins = _points_in_polygon(cR + mid * dR, cZ + mid * dZ, polyR, polyZ)
@@ -176,10 +193,12 @@ def boundary_metrics(boundary_fn, nfp, g=0.0, n_phi=120):
     dph = (2 * math.pi / nfp) / n_phi
     R0arr, _ = boundary_fn(phs[0])
     n_theta = len(R0arr)
-    Rg = np.empty((n_phi, n_theta)); Zg = np.empty((n_phi, n_theta))
+    Rg = np.empty((n_phi, n_theta))
+    Zg = np.empty((n_phi, n_theta))
     for i, p in enumerate(phs):
         R, Z = boundary_fn(p)
-        Rg[i] = R; Zg[i] = Z
+        Rg[i] = R
+        Zg[i] = Z
 
     # volume from the plasma boundary (no wall gap)
     V = 0.0
@@ -192,33 +211,48 @@ def boundary_metrics(boundary_fn, nfp, g=0.0, n_phi=120):
     # plasma boundary (Rg/Zg).  Computed here so Sp_int < Sw_int always.
     Sp_int = 0.0
     for i in range(n_phi):
-        ip = (i + 1) % n_phi; im = (i - 1) % n_phi
-        R = Rg[i]; Z = Zg[i]; c = math.cos(phs[i]); s = math.sin(phs[i])
+        ip = (i + 1) % n_phi
+        im = (i - 1) % n_phi
+        R = Rg[i]
+        Z = Zg[i]
+        c = math.cos(phs[i])
+        s = math.sin(phs[i])
         Pth_R = (np.roll(R, -1) - np.roll(R, 1)) * 0.5
         Pth_Z = (np.roll(Z, -1) - np.roll(Z, 1)) * 0.5
-        dRdp = (Rg[ip] - Rg[im]) * 0.5; dZdp = (Zg[ip] - Zg[im]) * 0.5
+        dRdp = (Rg[ip] - Rg[im]) * 0.5
+        dZdp = (Zg[ip] - Zg[im]) * 0.5
         ax, ay, az = Pth_R * c, Pth_R * s, Pth_Z
         bx, by, bz = dRdp * c - R * s * dph, dRdp * s + R * c * dph, dZdp
-        cx = ay * bz - az * by; cy = az * bx - ax * bz; cz = ax * by - ay * bx
+        cx = ay * bz - az * by
+        cy = az * bx - ax * bz
+        cz = ax * by - ay * bx
         Sp_int += np.sum(np.sqrt(cx * cx + cy * cy + cz * cz))
     Sp_int = Sp_int * nfp
 
     # wall boundary = plasma boundary offset by a uniform outward-normal gap g.
-    Wr = np.empty_like(Rg); Wz = np.empty_like(Zg)
+    Wr = np.empty_like(Rg)
+    Wz = np.empty_like(Zg)
     for i in range(n_phi):
         Wr[i], Wz[i] = _offset_closed_curve_normal(Rg[i], Zg[i], g)
 
     # wall surface area: |dP/dtheta x dP/dphi| (differences encode dtheta, dphi)
     S = 0.0
     for i in range(n_phi):
-        ip = (i + 1) % n_phi; im = (i - 1) % n_phi
-        R = Wr[i]; Z = Wz[i]; c = math.cos(phs[i]); s = math.sin(phs[i])
+        ip = (i + 1) % n_phi
+        im = (i - 1) % n_phi
+        R = Wr[i]
+        Z = Wz[i]
+        c = math.cos(phs[i])
+        s = math.sin(phs[i])
         Pth_R = (np.roll(R, -1) - np.roll(R, 1)) * 0.5
         Pth_Z = (np.roll(Z, -1) - np.roll(Z, 1)) * 0.5
-        dRdp = (Wr[ip] - Wr[im]) * 0.5; dZdp = (Wz[ip] - Wz[im]) * 0.5
+        dRdp = (Wr[ip] - Wr[im]) * 0.5
+        dZdp = (Wz[ip] - Wz[im]) * 0.5
         ax, ay, az = Pth_R * c, Pth_R * s, Pth_Z
         bx, by, bz = dRdp * c - R * s * dph, dRdp * s + R * c * dph, dZdp
-        cx = ay * bz - az * by; cy = az * bx - ax * bz; cz = ax * by - ay * bx
+        cx = ay * bz - az * by
+        cy = az * bx - ax * bz
+        cz = ax * by - ay * bx
         S += np.sum(np.sqrt(cx * cx + cy * cy + cz * cz))
     S = S * nfp
     return float(V), float(S), float(Sp_int)
@@ -244,10 +278,11 @@ def _shape_boundary_fn_with_rho(R0, a, shape, n_theta=_BOUNDARY_N_THETA):
             return 1.0
         if am == 1:
             return rho
-        return rho ** _SHAPE_FADE
+        return rho**_SHAPE_FADE
 
     def boundary_fn(phi, rho=1.0):
-        Rh = np.zeros(n_theta); Zh = np.zeros(n_theta)
+        Rh = np.zeros(n_theta)
+        Zh = np.zeros(n_theta)
         for m, n, c in R_modes:
             Bn = math.cos(n * nfp * phi) if n >= 0 else math.sin(-n * nfp * phi)
             Rh += c * _fade(m, rho) * cos_m[m] * Bn
@@ -318,7 +353,9 @@ def _validated_shape_modes(shape):
         except (TypeError, ValueError):
             raise ValueError(f"boundary Fourier {label} must be an integer") from None
         if not math.isfinite(number) or not number.is_integer():
-            raise ValueError(f"boundary Fourier {label} must be an integer (got {value})")
+            raise ValueError(
+                f"boundary Fourier {label} must be an integer (got {value})"
+            )
         return int(number)
 
     nfp = integer_mode(shape.get("nfp"), "nfp")
@@ -338,7 +375,9 @@ def _validated_shape_modes(shape):
             try:
                 c = float(row[2])
             except (TypeError, ValueError):
-                raise ValueError(f"boundary Fourier {key}[{i}].c must be finite") from None
+                raise ValueError(
+                    f"boundary Fourier {key}[{i}].c must be finite"
+                ) from None
             if not math.isfinite(c):
                 raise ValueError(f"boundary Fourier {key}[{i}].c must be finite")
             out.append((m, n, c))
@@ -347,8 +386,9 @@ def _validated_shape_modes(shape):
     return nfp, rows("R"), rows("Z")
 
 
-def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
-                               rho_labels=None) -> dict:
+def _machine_boundary_outlines(
+    R0, a, N_fp, delta_h, g, shape, n_theta, rho_labels=None
+) -> dict:
     """Explicit Fourier boundary for a real machine (SHAPE VIEW), from a public
     equilibrium.
 
@@ -371,7 +411,7 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
     """
     nfp, R_modes, Z_modes = _validated_shape_modes(shape)
     th = np.linspace(0.0, 2 * math.pi, n_theta, endpoint=False)
-    cos_m = {}; sin_m = {}
+    cos_m = {}
     for m, _, _ in R_modes + Z_modes:
         if m not in cos_m:
             cos_m[m] = np.cos(m * th) if m >= 0 else np.sin(-m * th)
@@ -386,7 +426,8 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
     INTERIOR = shape.get("interior_surfaces")
 
     def _eval_native(surf, phi):
-        R = np.zeros_like(th); Z = np.zeros_like(th)
+        R = np.zeros_like(th)
+        Z = np.zeros_like(th)
         for m, n, c in surf.get("R_c", ()):
             R += c * np.cos(m * th - n * nfp * phi)
         for m, n, c in surf.get("R_s", ()):
@@ -407,10 +448,11 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
             return 1.0
         if am == 1:
             return rho
-        return rho ** _SHAPE_FADE
+        return rho**_SHAPE_FADE
 
     def _shape_RZ(phi, rho=1.0):
-        Rh = np.zeros_like(th); Zh = np.zeros_like(th)
+        Rh = np.zeros_like(th)
+        Zh = np.zeros_like(th)
         for m, n, c in R_modes:
             Bn = math.cos(n * nfp * phi) if n >= 0 else math.sin(-n * nfp * phi)
             Rh += c * _fade(m, rho) * cos_m[m] * Bn
@@ -425,11 +467,14 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
         # native values in equilibrium mode), which is guaranteed interior even
         # when the boundary's m=0 mean falls in a bean's concave notch. For the
         # cartoon presets (no axis Fourier) fall back to the boundary m=0 mean.
-        arc = shape.get("axis_rc"); azs = shape.get("axis_zs") or []
+        arc = shape.get("axis_rc")
+        azs = shape.get("axis_zs") or []
         if shape.get("kind") == "equilibrium_fourier" and arc:
             aR = sum(arc[n] * math.cos(n * nfp * phi) for n in range(len(arc)))
-            aZ = sum((azs[n] if n < len(azs) else 0.0) * math.sin(n * nfp * phi)
-                     for n in range(len(arc)))
+            aZ = sum(
+                (azs[n] if n < len(azs) else 0.0) * math.sin(n * nfp * phi)
+                for n in range(len(arc))
+            )
             return float(aR), float(aZ)
         R0arr, Z0arr = _shape_RZ(phi, 0.0)
         return float(R0arr[0]), float(Z0arr[0])
@@ -448,16 +493,26 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
                     Rr, Zr = Rb, Zb
                 else:
                     Rr, Zr = _eval_native(surf, phi)
-                surfaces.append({"rho": float(surf["rho"]),
-                                 "surface_scale": float(surf["rho"]),
-                                 "R": _closed_list(Rr),
-                                 "Z": _closed_list(Zr)})
+                surfaces.append(
+                    {
+                        "rho": float(surf["rho"]),
+                        "surface_scale": float(surf["rho"]),
+                        "R": _closed_list(Rr),
+                        "Z": _closed_list(Zr),
+                    }
+                )
             elong = float((Zb.max() - Zb.min()) / (Rb.max() - Rb.min()))
             wR, wZ = _offset_closed_curve_normal(Rclosed, Zclosed, g)
-            return {"label": label, "elong": elong, "frac": float(frac),
-                    "R": Rclosed, "Z": Zclosed, "surfaces": surfaces,
-                    "wall": {"R": wR.tolist(), "Z": wZ.tolist()}}
-        Rb, Zb = _shape_RZ(phi, 1.0)              # boundary at this cut
+            return {
+                "label": label,
+                "elong": elong,
+                "frac": float(frac),
+                "R": Rclosed,
+                "Z": Zclosed,
+                "surfaces": surfaces,
+                "wall": {"R": wR.tolist(), "Z": wZ.tolist()},
+            }
+        Rb, Zb = _shape_RZ(phi, 1.0)  # boundary at this cut
         # Nested flux surfaces use the per-harmonic fade (m=0 axis fixed, m=1
         # scales with rho, m>=2 shaping fades as rho^1.5): surfaces round smoothly
         # toward the magnetic axis — the natural look, and the axis sits centred
@@ -467,44 +522,72 @@ def _machine_boundary_outlines(R0, a, N_fp, delta_h, g, shape, n_theta,
         # the magnetic axis, preserving the rounded shape while guaranteeing
         # containment.  rho=1 reproduces the boundary exactly, so the 0-D power
         # account (boundary-only) is unchanged.
-        aR, aZ = _axis_point(phi)                 # true magnetic axis (inside)
+        aR, aZ = _axis_point(phi)  # true magnetic axis (inside)
         Rclosed, Zclosed = _closed_list(Rb), _closed_list(Zb)
         surfaces = []
         for surface_scale, rho in zip(rhos, rho_labels or rhos):
             if surface_scale >= 1.0:
-                Rr, Zr = Rb, Zb                   # rho=1 IS the boundary, exactly
+                Rr, Zr = Rb, Zb  # rho=1 IS the boundary, exactly
             else:
-                Rr, Zr = _shape_RZ(phi, surface_scale)        # rounded fade nesting
-                if clamp:                                     # static cuts only
+                Rr, Zr = _shape_RZ(phi, surface_scale)  # rounded fade nesting
+                if clamp:  # static cuts only
                     Rr, Zr = _clamp_points_inside(Rr, Zr, aR, aZ, Rclosed, Zclosed)
-            surfaces.append({"rho": float(rho),
-                             "surface_scale": float(surface_scale),
-                             "R": _closed_list(Rr),
-                             "Z": _closed_list(Zr)})
+            surfaces.append(
+                {
+                    "rho": float(rho),
+                    "surface_scale": float(surface_scale),
+                    "R": _closed_list(Rr),
+                    "Z": _closed_list(Zr),
+                }
+            )
         elong = float((Zb.max() - Zb.min()) / (Rb.max() - Rb.min()))
         wR, wZ = _offset_closed_curve_normal(Rclosed, Zclosed, g)
-        return {"label": label, "elong": elong, "frac": float(frac),
-                "R": Rclosed, "Z": Zclosed, "surfaces": surfaces,
-                "wall": {"R": wR.tolist(), "Z": wZ.tolist()}}
+        return {
+            "label": label,
+            "elong": elong,
+            "frac": float(frac),
+            "R": Rclosed,
+            "Z": Zclosed,
+            "surfaces": surfaces,
+            "wall": {"R": wR.tolist(), "Z": wZ.tolist()},
+        }
 
     sections = [_build_cut(frac, label) for frac, label in cuts]
     # fine phi frames over one field period for the phase slider (UI scrub)
-    frames = [_build_cut(k / (_N_PHASE_FRAMES - 1),
-                         "φ=%.3fT" % (k / (_N_PHASE_FRAMES - 1)), clamp=False)
-              for k in range(_N_PHASE_FRAMES)]
+    frames = [
+        _build_cut(
+            k / (_N_PHASE_FRAMES - 1),
+            "φ=%.3fT" % (k / (_N_PHASE_FRAMES - 1)),
+            clamp=False,
+        )
+        for k in range(_N_PHASE_FRAMES)
+    ]
 
     # display axis ring (mean major radius; harmonic excursion is small)
     phi_axis = np.linspace(0.0, 2 * math.pi, 60)
     R00n = next((c for m, n, c in R_modes if m == 0 and n == 0), 0.0)
-    axis = {"R": (R0 + a * R00n + 0.0 * phi_axis).tolist(),
-            "Z": (0.0 * phi_axis).tolist()}
-    mode = "equilibrium" if shape.get("kind") == "equilibrium_fourier" else "machine-boundary"
-    return {"mode": mode, "metric_mode": mode,
-            "a": a, "a_disp": a, "g": g, "sections": sections, "frames": frames,
-            "axis": axis, "shape_source": shape.get("source", ""),
-            "rho_definition": "sqrt(V_enclosed/V_plasma)",
-            "frame_range": {"frac_min": 0.0, "frac_max": 1.0,
-                            "n_frames": _N_PHASE_FRAMES}}
+    axis = {
+        "R": (R0 + a * R00n + 0.0 * phi_axis).tolist(),
+        "Z": (0.0 * phi_axis).tolist(),
+    }
+    mode = (
+        "equilibrium"
+        if shape.get("kind") == "equilibrium_fourier"
+        else "machine-boundary"
+    )
+    return {
+        "mode": mode,
+        "metric_mode": mode,
+        "a": a,
+        "a_disp": a,
+        "g": g,
+        "sections": sections,
+        "frames": frames,
+        "axis": axis,
+        "shape_source": shape.get("source", ""),
+        "rho_definition": "sqrt(V_enclosed/V_plasma)",
+        "frame_range": {"frac_min": 0.0, "frac_max": 1.0, "n_frames": _N_PHASE_FRAMES},
+    }
 
 
 def _nearaxis_reconstruct(na, nfp, a, th):
@@ -561,8 +644,10 @@ def _nearaxis_reconstruct(na, nfp, a, th):
         body_R = X1c * cos_th * nh0 + (Y1s * sin_th + Y1c * cos_th) * bh0
         body_Z = X1c * cos_th * nh2 + (Y1s * sin_th + Y1c * cos_th) * bh2
         if so is None:
+
             def surf(rho):
                 return (R0p + rho * a * body_R, Z0p + rho * a * body_Z)
+
             surf.cap = a
             return surf
         th0, th2 = iv(tR), iv(tZ)
@@ -579,10 +664,11 @@ def _nearaxis_reconstruct(na, nfp, a, th):
             # body (r1 ellipse) scales with size (rho); bean wobble (r2) is
             # bounded by cap and fades as rho^_SHAPE_FADE for strictly-nested,
             # evenly rounding surfaces (rho=1 -> cap^2, the unchanged boundary).
-            wob = (rho ** _SHAPE_FADE) * cap * cap
+            wob = (rho**_SHAPE_FADE) * cap * cap
             R = R0p + rho * a * body_R + wob * wob_R
             Z = Z0p + rho * a * body_Z + wob * wob_Z
             return R, Z
+
         surf.cap = cap
         return surf
 
@@ -594,18 +680,27 @@ def _nearaxis_reconstruct(na, nfp, a, th):
     return rz
 
 
-def _nearaxis_boundary_fn_with_rho(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.05,
-                                   rc=None, zs=None, B2c=0.0,
-                                   n_theta=_BOUNDARY_N_THETA,
-                                   A=None):
+def _nearaxis_boundary_fn_with_rho(
+    R0,
+    a=None,
+    N_fp=1,
+    delta_h=0.0,
+    etabar=0.05,
+    rc=None,
+    zs=None,
+    B2c=0.0,
+    n_theta=_BOUNDARY_N_THETA,
+    A=None,
+):
     """``(boundary_fn(phi, rho), nfp)`` for a near-axis concept."""
     a = _minor_radius(R0, a, A)
     nfp_i = int(round(N_fp))
     axis_rc = list(rc) if rc is not None else [R0, delta_h]
     axis_zs = list(zs) if zs is not None else [0.0, -delta_h]
     try:
-        na = solve_near_axis(axis_rc, axis_zs, nfp_i, etabar, nphi=121,
-                             order="r2", B2c=B2c)
+        na = solve_near_axis(
+            axis_rc, axis_zs, nfp_i, etabar, nphi=121, order="r2", B2c=B2c
+        )
     except (RuntimeError, ValueError):
         na = solve_near_axis(axis_rc, axis_zs, nfp_i, etabar, nphi=121)
     th = np.linspace(0.0, 2 * math.pi, n_theta, endpoint=False)
@@ -613,9 +708,18 @@ def _nearaxis_boundary_fn_with_rho(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.05,
     return rz, nfp_i
 
 
-def _nearaxis_boundary_fn(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.05,
-                          rc=None, zs=None, B2c=0.0,
-                          n_theta=_BOUNDARY_N_THETA, A=None):
+def _nearaxis_boundary_fn(
+    R0,
+    a=None,
+    N_fp=1,
+    delta_h=0.0,
+    etabar=0.05,
+    rc=None,
+    zs=None,
+    B2c=0.0,
+    n_theta=_BOUNDARY_N_THETA,
+    A=None,
+):
     """``(boundary_fn, nfp)`` for a CONCEPT (near-axis, no explicit shape).
 
     ``boundary_fn(phi) -> (R[n_theta], Z[n_theta])`` is the rho=1 outline of the
@@ -625,15 +729,26 @@ def _nearaxis_boundary_fn(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.05,
     boundary — frontend shape == backend power geometry for concepts too.
     """
     boundary_rho_fn, nfp_i = _nearaxis_boundary_fn_with_rho(
-        R0, a, N_fp, delta_h, etabar, rc=rc, zs=zs, B2c=B2c,
-        n_theta=n_theta, A=A)
+        R0, a, N_fp, delta_h, etabar, rc=rc, zs=zs, B2c=B2c, n_theta=n_theta, A=A
+    )
     return (lambda phi: boundary_rho_fn(phi, 1.0)), nfp_i
 
 
-def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
-                     rc=None, zs=None, n_theta=_BOUNDARY_N_THETA, B2c=0.0, shape=None,
-                     A=None,
-                     **_ignored) -> dict:
+def section_outlines(
+    R0,
+    a=None,
+    N_fp=1,
+    delta_h=0.0,
+    etabar=0.0,
+    g=0.1,
+    rc=None,
+    zs=None,
+    n_theta=_BOUNDARY_N_THETA,
+    B2c=0.0,
+    shape=None,
+    A=None,
+    **_ignored,
+) -> dict:
     """Flux-surface cross-section outlines for the UI shape view (Scheme D + r2).
 
     Single near-axis (Garren-Boozer) geometry — the same analytic model the
@@ -675,20 +790,22 @@ def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
     """
     a = _minor_radius(R0, a, A)
     geom = _stellarator_geometry(
-        R0, a, N_fp, delta_h, etabar, g, rc, zs, shape, B2c=B2c)
+        R0, a, N_fp, delta_h, etabar, g, rc, zs, shape, B2c=B2c
+    )
     scale_grid = np.asarray(geom["profile_surface_scale"], dtype=float)
     rho_grid = np.asarray(geom["profile_rho"], dtype=float)
-    rho_labels = np.interp(
-        np.asarray(_NEST_RHOS), scale_grid, rho_grid).tolist()
+    rho_labels = np.interp(np.asarray(_NEST_RHOS), scale_grid, rho_grid).tolist()
     # real-machine presets carry an explicit literature-calibrated boundary that
     # single-harmonic near-axis cannot represent (W7-X bean, LHD rotating
     # ellipse, ...).  Cosmetic only — the power account uses measured overrides.
     if shape is not None:
         return _machine_boundary_outlines(
-            R0, a, N_fp, delta_h, g, shape, n_theta, rho_labels)
+            R0, a, N_fp, delta_h, g, shape, n_theta, rho_labels
+        )
     if etabar == 0.0:
-        raise ValueError("etabar must be != 0 for section outlines "
-                         "(legacy mode removed)")
+        raise ValueError(
+            "etabar must be != 0 for section outlines (legacy mode removed)"
+        )
     th = np.linspace(0.0, 2 * math.pi, n_theta, endpoint=False)
     rhos = _NEST_RHOS
     cuts = [(0.0, "φ=0"), (0.25, "φ=T/4"), (0.5, "φ=T/2")]
@@ -713,8 +830,9 @@ def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
     # try the second-order (bean/crescent) shape; fall back to first-order
     na = None
     try:
-        na = solve_near_axis(axis_rc, axis_zs, nfp_i, etabar, nphi=121,
-                             order="r2", B2c=B2c)
+        na = solve_near_axis(
+            axis_rc, axis_zs, nfp_i, etabar, nphi=121, order="r2", B2c=B2c
+        )
     except (RuntimeError, ValueError):
         na = None
     metric_mode = "near-axis-r2" if na is not None and na.second_order else "near-axis"
@@ -738,18 +856,27 @@ def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
         out = []
         for surface_scale, rho in zip(rhos, rho_labels):
             Rr, Zr = surf(surface_scale)
-            out.append({"rho": float(rho),
-                        "surface_scale": float(surface_scale),
-                        "R": _closed_list(Rr),
-                        "Z": _closed_list(Zr)})
+            out.append(
+                {
+                    "rho": float(rho),
+                    "surface_scale": float(surface_scale),
+                    "R": _closed_list(Rr),
+                    "Z": _closed_list(Zr),
+                }
+            )
         return out
 
     for (frac, label), j in zip(cuts, cut_j):
-        surf = rz.cut(float(na.phi[j]))      # ONE precompute, reused per rho
+        surf = rz.cut(float(na.phi[j]))  # ONE precompute, reused per rho
         surfaces = _cut_surfaces(surf)
         Rsec, Zsec = surfaces[-1]["R"], surfaces[-1]["Z"]
-        sec = {"label": label, "elong": float(na.elongation[j]),
-               "R": Rsec, "Z": Zsec, "surfaces": surfaces}
+        sec = {
+            "label": label,
+            "elong": float(na.elongation[j]),
+            "R": Rsec,
+            "Z": Zsec,
+            "surfaces": surfaces,
+        }
         sec["wall"] = _wall_offset(Rsec, Zsec, g)
         sections.append(sec)
 
@@ -757,31 +884,50 @@ def section_outlines(R0, a=None, N_fp=1, delta_h=0.0, etabar=0.0, g=0.1,
     # scrub) — same reconstructor, evaluated at EXACT phi for a smooth sweep, so
     # concepts get the slider too (previously only the machine path had frames).
     xp_ax = np.append(na.phi, na.phi[0] + period)
-    R0_ax, Z0_ax = np.append(na.R0_arr, na.R0_arr[0]), np.append(na.Z0_arr, na.Z0_arr[0])
+    R0_ax, Z0_ax = (
+        np.append(na.R0_arr, na.R0_arr[0]),
+        np.append(na.Z0_arr, na.Z0_arr[0]),
+    )
 
     def _axis_at(phi):
-        return (float(np.interp(phi % period, xp_ax, R0_ax)),
-                float(np.interp(phi % period, xp_ax, Z0_ax)))
+        return (
+            float(np.interp(phi % period, xp_ax, R0_ax)),
+            float(np.interp(phi % period, xp_ax, Z0_ax)),
+        )
 
     frames = []
     for k in range(_N_PHASE_FRAMES):
-        frac = k / (_N_PHASE_FRAMES - 1)   # inclusive: k=0→0, k=N-1→1(φ=T)
+        frac = k / (_N_PHASE_FRAMES - 1)  # inclusive: k=0→0, k=N-1→1(φ=T)
         phi = frac * period
-        surfs = _cut_surfaces(rz.cut(phi))   # ONE precompute, reused per rho
+        surfs = _cut_surfaces(rz.cut(phi))  # ONE precompute, reused per rho
         Rb, Zb = surfs[-1]["R"], surfs[-1]["Z"]
         aR, aZ = _axis_at(phi)
         elong = float((np.max(Zb) - np.min(Zb)) / (np.max(Rb) - np.min(Rb)))
-        frames.append({"label": "φ=%.3fT" % frac, "frac": float(frac),
-                       "elong": elong, "R": Rb, "Z": Zb, "surfaces": surfs,
-                       "wall": _wall_offset(Rb, Zb, g)})
+        frames.append(
+            {
+                "label": "φ=%.3fT" % frac,
+                "frac": float(frac),
+                "elong": elong,
+                "R": Rb,
+                "Z": Zb,
+                "surfaces": surfs,
+                "wall": _wall_offset(Rb, Zb, g),
+            }
+        )
 
     axis = {"R": na.R0_arr[::6].tolist(), "Z": na.Z0_arr[::6].tolist()}
-    return {"mode": "near-axis", "metric_mode": metric_mode,
-            "a": a, "a_disp": float(a_disp), "g": g,
-            "sections": sections, "frames": frames, "axis": axis,
-            "rho_definition": "sqrt(V_enclosed/V_plasma)",
-            "frame_range": {"frac_min": 0.0, "frac_max": 1.0,
-                            "n_frames": _N_PHASE_FRAMES}}
+    return {
+        "mode": "near-axis",
+        "metric_mode": metric_mode,
+        "a": a,
+        "a_disp": float(a_disp),
+        "g": g,
+        "sections": sections,
+        "frames": frames,
+        "axis": axis,
+        "rho_definition": "sqrt(V_enclosed/V_plasma)",
+        "frame_range": {"frac_min": 0.0, "frac_max": 1.0, "n_frames": _N_PHASE_FRAMES},
+    }
 
 
 def _ellipse_perimeter(amaj, amin):
@@ -790,8 +936,9 @@ def _ellipse_perimeter(amaj, amin):
     return math.pi * (amaj + amin) * (1 + 3 * h / (10 + np.sqrt(4 - 3 * h)))
 
 
-def stellarator_geometry_metrics(R0, a=None, N_fp=1, rc=None, zs=None,
-                                 etabar=0.05, g=0.1, n_rho=101, A=None) -> dict:
+def stellarator_geometry_metrics(
+    R0, a=None, N_fp=1, rc=None, zs=None, etabar=0.05, g=0.1, n_rho=101, A=None
+) -> dict:
     """Analytic stellarator geometry metrics shared by solver and UI.
 
     Single near-axis (Garren-Boozer) path (Scheme D): the axis is the custom
@@ -812,10 +959,14 @@ def stellarator_geometry_metrics(R0, a=None, N_fp=1, rc=None, zs=None,
     elong_max = na.max_elongation
     e = na.elongation
     w_axis = na.d_l_d_phi
-    per_p = float(np.sum(_ellipse_perimeter(a * np.sqrt(e), a / np.sqrt(e)) * w_axis)
-                  / np.sum(w_axis))
-    per_w = float(np.sum(_ellipse_perimeter(a * np.sqrt(e) + g, a / np.sqrt(e) + g) * w_axis)
-                  / np.sum(w_axis))
+    per_p = float(
+        np.sum(_ellipse_perimeter(a * np.sqrt(e), a / np.sqrt(e)) * w_axis)
+        / np.sum(w_axis)
+    )
+    per_w = float(
+        np.sum(_ellipse_perimeter(a * np.sqrt(e) + g, a / np.sqrt(e) + g) * w_axis)
+        / np.sum(w_axis)
+    )
     mode = "near-axis"
 
     rho = np.linspace(0.0, 1.0, n_rho)
@@ -840,71 +991,71 @@ def stellarator_geometry_metrics(R0, a=None, N_fp=1, rc=None, zs=None,
 
 @dataclass
 class StellaratorResult:
-    Eth: float        # stored thermal energy [MJ]
-    H_ISS04: float    # ISS04 confinement quality factor
-    Pheat: float      # net external heating power [MW]
-    Pn: float         # neutron power [MW]
-    Pfus: float       # fusion power [MW]
-    Pwall: float      # first-wall load [MW/m^2]
-    Qfus: float       # fusion gain (capped at 1000; see Qfus_raw/ignited)
-    Qfus_raw: float   # uncapped Pfus/Pheat (negative => ignited/over-driven)
-    ignited: float    # 1 if Pheat <= 0 (alpha heating alone exceeds losses)
-    betaT: float      # toroidal beta
-    beta_o_limit: float   # betaT / 0.05 (soft-limit margin)
-    nbar_o_Sudo: float    # line-avg density / Sudo limit
-    n_Sudo: float     # Sudo density limit denominator [m^-3]
-    beta_soft_limit: float # fixed soft beta limit used by beta_o_limit
+    Eth: float  # stored thermal energy [MJ]
+    H_ISS04: float  # ISS04 confinement quality factor
+    Pheat: float  # net external heating power [MW]
+    Pn: float  # neutron power [MW]
+    Pfus: float  # fusion power [MW]
+    Pwall: float  # first-wall load [MW/m^2]
+    Qfus: float  # fusion gain (capped at 1000; see Qfus_raw/ignited)
+    Qfus_raw: float  # uncapped Pfus/Pheat (negative => ignited/over-driven)
+    ignited: float  # 1 if Pheat <= 0 (alpha heating alone exceeds losses)
+    betaT: float  # toroidal beta
+    beta_o_limit: float  # betaT / 0.05 (soft-limit margin)
+    nbar_o_Sudo: float  # line-avg density / Sudo limit
+    n_Sudo: float  # Sudo density limit denominator [m^-3]
+    beta_soft_limit: float  # fixed soft beta limit used by beta_o_limit
     Pbrem: float
     Pcycl: float
-    cyclotron_B25_factor: float # optional first-order nonuniform-B correction
+    cyclotron_B25_factor: float  # optional first-order nonuniform-B correction
     Ptrans: float
-    PL_ISS04: float   # loss power entering ISS04/Sudo closure [MW]
+    PL_ISS04: float  # loss power entering ISS04/Sudo closure [MW]
     Vp: float
-    iota: float       # rotational transform actually used in the closure
+    iota: float  # rotational transform actually used in the closure
     iota_geom: float  # current-mode transform: axis solve or boundary's own iota
-    iota_geom_authoritative: float # deprecated compatibility field; always 0
-    helicity: float   # near-axis helicity (0 in rotating-ellipse mode)
-    L_ax: float       # magnetic-axis length [m]
+    iota_geom_authoritative: float  # deprecated compatibility field; always 0
+    helicity: float  # near-axis helicity (0 in rotating-ellipse mode)
+    L_ax: float  # magnetic-axis length [m]
     kappa_eff: float  # effective section elongation used for areas
     elong_max: float  # maximum section elongation along the axis
     tau_ISS04: float  # ISS04 predicted confinement time [s]
     Sp: float
     Sw: float
-    A_flux: float     # effective flux-section area Vp/L_ax [m^2]
-    a_vol: float      # volume-equivalent minor radius for empirical closures [m]
-    aspect_geom: float # major/minor aspect ratio R0/a
+    A_flux: float  # effective flux-section area Vp/L_ax [m^2]
+    a_vol: float  # volume-equivalent minor radius for empirical closures [m]
+    aspect_geom: float  # major/minor aspect ratio R0/a
     aspect_vol: float  # volume-equivalent aspect ratio R0/a_vol
-    fnavg: float      # density volume-average factor for (1-rho^2)^Sn
-    fTavg: float      # temperature volume-average factor for (1-rho^2)^ST
-    fpavg: float      # pressure volume-average factor for density*temperature
-    C_sec_mean: float # arclength-weighted plasma section perimeter [m]
-    C_wall_mean: float # arclength-weighted wall section perimeter [m]
-    Vp_geom: float    # plasma volume used [m^3] (= override for measured machines)
-    Sp_geom: float    # geometry-helper plasma surface area [m^2]
-    Sw_geom: float    # wall surface area used [m^2] (= override for measured machines)
-    geom_volume_ratio: float # Vp / Vp_geom, flags measured-volume override
-    geom_wall_ratio: float   # Sw / Sw_geom, flags measured-wall override
+    fnavg: float  # density volume-average factor for (1-rho^2)^Sn
+    fTavg: float  # temperature volume-average factor for (1-rho^2)^ST
+    fpavg: float  # pressure volume-average factor for density*temperature
+    C_sec_mean: float  # arclength-weighted plasma section perimeter [m]
+    C_wall_mean: float  # arclength-weighted wall section perimeter [m]
+    Vp_geom: float  # plasma volume used [m^3] (= override for measured machines)
+    Sp_geom: float  # geometry-helper plasma surface area [m^2]
+    Sw_geom: float  # wall surface area used [m^2] (= override for measured machines)
+    geom_volume_ratio: float  # Vp / Vp_geom, flags measured-volume override
+    geom_wall_ratio: float  # Sw / Sw_geom, flags measured-wall override
     geom_is_measured: float  # 1 if Vp & Sw are measured overrides (near-axis
-                             # iota_geom/kappa_eff/elong_max are then estimates only)
+    # iota_geom/kappa_eff/elong_max are then estimates only)
     ne0: float
     nbar: float
-    nbar_geom: float   # area-equivalent line-average density diagnostic [m^-3]
-    Te_line_geom: float # area-equivalent line-average electron temperature [keV]
-    Ti_line_geom: float # area-equivalent line-average ion temperature [keV]
-    nbar_geom_o_nbar: float # geometry line-average / empirical line-average
+    nbar_geom: float  # area-equivalent line-average density diagnostic [m^-3]
+    Te_line_geom: float  # area-equivalent line-average electron temperature [keV]
+    Ti_line_geom: float  # area-equivalent line-average ion temperature [keV]
+    nbar_geom_o_nbar: float  # geometry line-average / empirical line-average
     M: float
     Zeff: float
-    N_fp: float       # field periods (echo)
-    etabar: float     # near-axis shaping parameter (echo; required != 0)
-    P_line: float     # impurity line radiation [MW] (0 unless imp_name given)
-    Ecrit: float      # Stix critical energy of the fast product [keV]
-    f_fast_ion: float # fraction of fast-product energy deposited on ions
+    N_fp: float  # field periods (echo)
+    etabar: float  # near-axis shaping parameter (echo; required != 0)
+    P_line: float  # impurity line radiation [MW] (0 unless imp_name given)
+    Ecrit: float  # Stix critical energy of the fast product [keV]
+    f_fast_ion: float  # fraction of fast-product energy deposited on ions
     tau_eq_ie: float  # ion-electron equilibration time [s]
-    P_ei: float       # ion->electron exchange power [MW] (diagnostic)
-    Te0: float        # central electron temperature actually used [keV]
-    fT_used: float    # Te0/Ti0 actually used (input, or solved when fT=0)
-    te_mode: float    # 0 = fT input, 1 = solved, 0.5 = pinned (not converged)
-    te_resid: float   # electron-channel residual at solution [MW]
+    P_ei: float  # ion->electron exchange power [MW] (diagnostic)
+    Te0: float  # central electron temperature actually used [keV]
+    fT_used: float  # Te0/Ti0 actually used (input, or solved when fT=0)
+    te_mode: float  # 0 = fT input, 1 = solved, 0.5 = pinned (not converged)
+    te_resid: float  # electron-channel residual at solution [MW]
     tauE_used: float  # confinement time actually used [s]
     taue_mode: float  # 0 = tauE input, 1 = solved from ISS04 (tauE=0)
     strcase: str
@@ -930,8 +1081,11 @@ def _profile_volume_fraction(boundary_rho_fn, nfp, n_rho=_PROFILE_N_RHO):
     surface_scale = np.linspace(0.0, 1.0, int(n_rho))
     volumes = np.zeros_like(surface_scale)
     for i, r in enumerate(surface_scale[1:], start=1):
-        bfn = lambda phi, r=r: boundary_rho_fn(phi, float(r))
-        volumes[i], _, _ = boundary_metrics(bfn, nfp, g=0.0, n_phi=80)
+
+        def _bfn(phi, r=r):
+            return boundary_rho_fn(phi, float(r))
+
+        volumes[i], _, _ = boundary_metrics(_bfn, nfp, g=0.0, n_phi=80)
     total = float(volumes[-1])
     if total <= 0.0 or not math.isfinite(total):
         raise ValueError("nested stellarator volume must be positive")
@@ -946,8 +1100,7 @@ def _profile_volume_fraction(boundary_rho_fn, nfp, n_rho=_PROFILE_N_RHO):
     return surface_scale, rho, vfrac
 
 
-def _stellarator_geometry(R0, a, N_fp, delta_h, etabar, g, rc, zs, shape,
-                          B2c=0.0):
+def _stellarator_geometry(R0, a, N_fp, delta_h, etabar, g, rc, zs, shape, B2c=0.0):
     """Scan-invariant stellarator geometry (near-axis solves + exact boundary
     integral), MEMOIZED.
 
@@ -965,14 +1118,18 @@ def _stellarator_geometry(R0, a, N_fp, delta_h, etabar, g, rc, zs, shape,
     """
     rc_key = tuple(rc) if rc is not None else None
     zs_key = tuple(zs) if zs is not None else None
-    shape_key = None if shape is None else (
-        int(shape.get("nfp", round(N_fp))),
-        tuple(tuple(t) for t in shape["R"]),
-        tuple(tuple(t) for t in shape["Z"]),
-        tuple(shape.get("axis_rc", ())),
-        tuple(shape.get("axis_zs", ())))
-    key = (R0, a, int(round(N_fp)), delta_h, etabar, g,
-           rc_key, zs_key, shape_key, B2c)
+    shape_key = (
+        None
+        if shape is None
+        else (
+            int(shape.get("nfp", round(N_fp))),
+            tuple(tuple(t) for t in shape["R"]),
+            tuple(tuple(t) for t in shape["Z"]),
+            tuple(shape.get("axis_rc", ())),
+            tuple(shape.get("axis_zs", ())),
+        )
+    )
+    key = (R0, a, int(round(N_fp)), delta_h, etabar, g, rc_key, zs_key, shape_key, B2c)
     cached = _GEOM_CACHE.get(key)
     if cached is not None:
         return cached
@@ -980,18 +1137,31 @@ def _stellarator_geometry(R0, a, N_fp, delta_h, etabar, g, rc, zs, shape,
     shape_rc, shape_zs = (None, None)
     if shape is not None and rc is None and zs is None:
         shape_rc, shape_zs = _axis_from_shape(R0, a, shape)
-    axis_rc = list(rc) if rc is not None else (shape_rc if shape_rc is not None else [R0, delta_h])
-    axis_zs = list(zs) if zs is not None else (shape_zs if shape_zs is not None else [0.0, -delta_h])
+    axis_rc = (
+        list(rc)
+        if rc is not None
+        else (shape_rc if shape_rc is not None else [R0, delta_h])
+    )
+    axis_zs = (
+        list(zs)
+        if zs is not None
+        else (shape_zs if shape_zs is not None else [0.0, -delta_h])
+    )
     geom = stellarator_geometry_metrics(R0, a, N_fp, axis_rc, axis_zs, etabar, g)
     if shape is not None:
         boundary_rho_fn, nfp = _shape_boundary_fn_with_rho(R0, a, shape)
     else:
         boundary_rho_fn, nfp = _nearaxis_boundary_fn_with_rho(
-            R0, a, N_fp, delta_h, etabar, rc=rc, zs=zs, B2c=B2c)
-    bfn = lambda phi: boundary_rho_fn(phi, 1.0)
-    Vp_geom, Sw_geom, Sp_geom = boundary_metrics(bfn, nfp, g)
+            R0, a, N_fp, delta_h, etabar, rc=rc, zs=zs, B2c=B2c
+        )
+
+    def _bfn(phi):
+        return boundary_rho_fn(phi, 1.0)
+
+    Vp_geom, Sw_geom, Sp_geom = boundary_metrics(_bfn, nfp, g)
     profile_surface_scale, profile_rho, profile_vfrac = _profile_volume_fraction(
-        boundary_rho_fn, nfp)
+        boundary_rho_fn, nfp
+    )
     res = dict(geom)
     res["C_sec_mean"] = Sp_geom / geom["L_ax"] if geom["L_ax"] > 0 else float("nan")
     res["C_wall_mean"] = Sw_geom / geom["L_ax"] if geom["L_ax"] > 0 else float("nan")
@@ -1002,21 +1172,24 @@ def _stellarator_geometry(R0, a, N_fp, delta_h, etabar, g, rc, zs, shape,
     res["profile_surface_scale"] = profile_surface_scale.tolist()
     res["profile_rho"] = profile_rho.tolist()
     res["profile_vfrac"] = profile_vfrac.tolist()
-    if len(_GEOM_CACHE) >= 256:        # bound memory; geometry sets are tiny
+    if len(_GEOM_CACHE) >= 256:  # bound memory; geometry sets are tiny
         _GEOM_CACHE.clear()
     _GEOM_CACHE[key] = res
     return res
 
 
-def _check_inputs(R0, a, N_fp, delta_h, Sn, ST, fT, B0, tauE,
-                  f1, fHe, fimp, Zimp, Rw, g, fsig, etabar):
+def _check_inputs(
+    R0, a, N_fp, delta_h, Sn, ST, fT, B0, tauE, f1, fHe, fimp, Zimp, Rw, g, fsig, etabar
+):
     """Domain guards (audit P0).  Raise ValueError on unphysical inputs so
     that no complex/inf/NaN value can masquerade as a result."""
     if R0 <= 0 or a <= 0:
         raise ValueError(f"R0 and a must be > 0 (got R0={R0}, a={a})")
     if etabar == 0.0:
-        raise ValueError("etabar must be != 0: near-axis shaping is required "
-                         "(legacy rotating-ellipse mode was removed in Scheme D)")
+        raise ValueError(
+            "etabar must be != 0: near-axis shaping is required "
+            "(legacy rotating-ellipse mode was removed in Scheme D)"
+        )
     if N_fp < 1:
         raise ValueError(f"N_fp must be >= 1 (got {N_fp})")
     if delta_h < 0 or delta_h >= R0:
@@ -1026,8 +1199,10 @@ def _check_inputs(R0, a, N_fp, delta_h, Sn, ST, fT, B0, tauE,
     if fT < 0:
         raise ValueError(f"fT must be >= 0 (got {fT}; 0 = solve Te self-consistently)")
     if B0 <= 0 or tauE < 0:
-        raise ValueError(f"B0 must be > 0 and tauE >= 0 "
-                         f"(got B0={B0}, tauE={tauE}; tauE=0 = solve from ISS04)")
+        raise ValueError(
+            f"B0 must be > 0 and tauE >= 0 "
+            f"(got B0={B0}, tauE={tauE}; tauE=0 = solve from ISS04)"
+        )
     if not 0.0 <= f1 <= 1.0:
         raise ValueError(f"f1 must be in [0, 1] (got {f1})")
     if fHe < 0 or fimp < 0 or fHe + fimp >= 1.0:
@@ -1042,17 +1217,43 @@ def _check_inputs(R0, a, N_fp, delta_h, Sn, ST, fT, B0, tauE,
         raise ValueError(f"fsig must be >= 0 (got {fsig})")
 
 
-def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
-                      Ti0=None, fT=None, fsig=None, f1=None,
-                      B0=None, tauE=None, fHe=None, fimp=None, Zimp=None,
-                      Rw=None, g=None, icase=None,
-                      delta_h=0.0, iota=None, f_ren=1.0,
-                      etabar=0.05, imp_name=None, f_aux_e=0.5,
-                      H_fac=1.0, use_tauE=1.0,
-                      rc=None, zs=None, Vp_override=0.0,
-                      Sw_override=0.0, shape=None, a=None,
-                      geometry_variants=None, equilibrium=None,
-                      cyclotron_B_nonuniform=0.0) -> StellaratorResult:
+def solve_stellarator(
+    R0=None,
+    A=None,
+    N_fp=None,
+    Sn=None,
+    ST=None,
+    ni0=None,
+    Ti0=None,
+    fT=None,
+    fsig=None,
+    f1=None,
+    B0=None,
+    tauE=None,
+    fHe=None,
+    fimp=None,
+    Zimp=None,
+    Rw=None,
+    g=None,
+    icase=None,
+    delta_h=0.0,
+    iota=None,
+    f_ren=1.0,
+    etabar=0.05,
+    imp_name=None,
+    f_aux_e=0.5,
+    H_fac=1.0,
+    use_tauE=1.0,
+    rc=None,
+    zs=None,
+    Vp_override=0.0,
+    Sw_override=0.0,
+    shape=None,
+    a=None,
+    geometry_variants=None,
+    equilibrium=None,
+    cyclotron_B_nonuniform=0.0,
+) -> StellaratorResult:
     """Evaluate the 0-D stellarator power balance at one operating point.
 
     Single near-axis (Garren-Boozer) geometry (Scheme D).  ``etabar`` [1/m] is
@@ -1068,19 +1269,53 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     near-axis estimate is used.  ``Vp_override`` / ``Sw_override`` (> 0)
     override the geometric plasma volume / wall surface for measured machines.
     """
-    missing = [k for k, v in {
-        "R0": R0, "N_fp": N_fp, "Sn": Sn, "ST": ST, "ni0": ni0,
-        "Ti0": Ti0, "fT": fT, "fsig": fsig, "f1": f1, "B0": B0,
-        "tauE": tauE, "fHe": fHe, "fimp": fimp, "Zimp": Zimp,
-        "Rw": Rw, "g": g, "icase": icase,
-    }.items() if v is None]
+    missing = [
+        k
+        for k, v in {
+            "R0": R0,
+            "N_fp": N_fp,
+            "Sn": Sn,
+            "ST": ST,
+            "ni0": ni0,
+            "Ti0": Ti0,
+            "fT": fT,
+            "fsig": fsig,
+            "f1": f1,
+            "B0": B0,
+            "tauE": tauE,
+            "fHe": fHe,
+            "fimp": fimp,
+            "Zimp": Zimp,
+            "Rw": Rw,
+            "g": g,
+            "icase": icase,
+        }.items()
+        if v is None
+    ]
     if missing:
         raise ValueError(f"missing required stellarator inputs: {', '.join(missing)}")
     a = _minor_radius(R0, a, A)
     icase = int(icase)
     rx = _REACTIONS[icase]
-    _check_inputs(R0, a, N_fp, delta_h, Sn, ST, fT, B0, tauE,
-                  f1, fHe, fimp, Zimp, Rw, g, fsig, etabar)
+    _check_inputs(
+        R0,
+        a,
+        N_fp,
+        delta_h,
+        Sn,
+        ST,
+        fT,
+        B0,
+        tauE,
+        f1,
+        fHe,
+        fimp,
+        Zimp,
+        Rw,
+        g,
+        fsig,
+        etabar,
+    )
     if not 0.0 <= f_aux_e <= 1.0:
         raise ValueError(f"f_aux_e must be in [0, 1] (got {f_aux_e})")
     if H_fac <= 0:
@@ -1094,20 +1329,44 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     # tauE = 0: solve the confinement time PREDICTIVELY from ISS04 — find
     # tauE such that H_ISS04 = H_fac (implicit: tau_ISS04 depends on P_L)
     if tauE == 0:
+
         def _eval_t(t):
-            return solve_stellarator(R0=R0, a=a, N_fp=N_fp, Sn=Sn, ST=ST,
-                                     ni0=ni0, Ti0=Ti0, fT=fT, fsig=fsig,
-                                     f1=f1, B0=B0, tauE=t, fHe=fHe,
-                                     fimp=fimp, Zimp=Zimp, Rw=Rw, g=g,
-                                     icase=icase, delta_h=delta_h, iota=iota,
-                                     f_ren=f_ren, etabar=etabar,
-                                     imp_name=imp_name, f_aux_e=f_aux_e,
-                                     H_fac=H_fac, use_tauE=1.0,
-                                     rc=rc, zs=zs, Vp_override=Vp_override,
-                                     Sw_override=Sw_override, shape=shape,
-                                     geometry_variants=geometry_variants,
-                                     equilibrium=equilibrium,
-                                     cyclotron_B_nonuniform=cyclotron_B_nonuniform)
+            return solve_stellarator(
+                R0=R0,
+                a=a,
+                N_fp=N_fp,
+                Sn=Sn,
+                ST=ST,
+                ni0=ni0,
+                Ti0=Ti0,
+                fT=fT,
+                fsig=fsig,
+                f1=f1,
+                B0=B0,
+                tauE=t,
+                fHe=fHe,
+                fimp=fimp,
+                Zimp=Zimp,
+                Rw=Rw,
+                g=g,
+                icase=icase,
+                delta_h=delta_h,
+                iota=iota,
+                f_ren=f_ren,
+                etabar=etabar,
+                imp_name=imp_name,
+                f_aux_e=f_aux_e,
+                H_fac=H_fac,
+                use_tauE=1.0,
+                rc=rc,
+                zs=zs,
+                Vp_override=Vp_override,
+                Sw_override=Sw_override,
+                shape=shape,
+                geometry_variants=geometry_variants,
+                equilibrium=equilibrium,
+                cyclotron_B_nonuniform=cyclotron_B_nonuniform,
+            )
 
         def _resid_t(t, res):
             return H_fac - res.H_ISS04
@@ -1118,30 +1377,58 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     # fT = 0: solve Te self-consistently from the electron-channel balance
     # (docs/30 batch 2; same closure as the tokamak — shared loss structure)
     if fT == 0:
+
         def _eval(ft):
-            return solve_stellarator(R0=R0, a=a, N_fp=N_fp, Sn=Sn, ST=ST,
-                                     ni0=ni0, Ti0=Ti0, fT=ft, fsig=fsig,
-                                     f1=f1, B0=B0, tauE=tauE, fHe=fHe,
-                                     fimp=fimp, Zimp=Zimp, Rw=Rw, g=g,
-                                     icase=icase, delta_h=delta_h, iota=iota,
-                                     f_ren=f_ren, etabar=etabar,
-                                     imp_name=imp_name, f_aux_e=f_aux_e,
-                                     H_fac=H_fac, use_tauE=1.0,
-                                     rc=rc, zs=zs, Vp_override=Vp_override,
-                                     Sw_override=Sw_override, shape=shape,
-                                     geometry_variants=geometry_variants,
-                                     equilibrium=equilibrium,
-                                     cyclotron_B_nonuniform=cyclotron_B_nonuniform)
+            return solve_stellarator(
+                R0=R0,
+                a=a,
+                N_fp=N_fp,
+                Sn=Sn,
+                ST=ST,
+                ni0=ni0,
+                Ti0=Ti0,
+                fT=ft,
+                fsig=fsig,
+                f1=f1,
+                B0=B0,
+                tauE=tauE,
+                fHe=fHe,
+                fimp=fimp,
+                Zimp=Zimp,
+                Rw=Rw,
+                g=g,
+                icase=icase,
+                delta_h=delta_h,
+                iota=iota,
+                f_ren=f_ren,
+                etabar=etabar,
+                imp_name=imp_name,
+                f_aux_e=f_aux_e,
+                H_fac=H_fac,
+                use_tauE=1.0,
+                rc=rc,
+                zs=zs,
+                Vp_override=Vp_override,
+                Sw_override=Sw_override,
+                shape=shape,
+                geometry_variants=geometry_variants,
+                equilibrium=equilibrium,
+                cyclotron_B_nonuniform=cyclotron_B_nonuniform,
+            )
 
         def _resid(ft, res):
             Eth_e = 1.5 * res.ne0 * ft * Ti0 * 1e3 * QE / (1 + Sn + ST) * res.Vp * 1e-6
-            heat = ((1 - res.f_fast_ion) * (res.Pfus - res.Pn) + res.P_ei
-                    + f_aux_e * max(res.Pheat, 0.0))
+            heat = (
+                (1 - res.f_fast_ion) * (res.Pfus - res.Pn)
+                + res.P_ei
+                + f_aux_e * max(res.Pheat, 0.0)
+            )
             return heat - (res.Pbrem + res.Pcycl + res.P_line + Eth_e / tauE)
 
         ft, res, r, conv = solve_channel_balance(_eval, _resid, 0.03, 2.5)
-        return _dc_replace(res, te_mode=1.0 if conv else 0.5, te_resid=r,
-                           fT_used=ft, Te0=ft * Ti0)
+        return _dc_replace(
+            res, te_mode=1.0 if conv else 0.5, te_resid=r, fT_used=ft, Te0=ft * Ti0
+        )
 
     # scan-invariant geometry (near-axis solves + exact boundary integral),
     # memoized so a POPCON scan / the tauE recursion computes it ONCE.  The
@@ -1149,9 +1436,13 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     # UI draws (shape Fourier for machines, near-axis capped-r2 bean for
     # concepts), so frontend shape and backend power geometry are identical.
     geom = _stellarator_geometry(R0, a, N_fp, delta_h, etabar, g, rc, zs, shape)
-    L_ax = geom["L_ax"]; iota_geom = geom["iota_geom"]
-    helicity = geom["helicity"]; kappa_eff = geom["kappa_eff"]; elong_max = geom["elong_max"]
-    Vp_geom = geom["Vp_integ"]; Sw_geom = geom["Sw_integ"]
+    L_ax = geom["L_ax"]
+    iota_geom = geom["iota_geom"]
+    helicity = geom["helicity"]
+    kappa_eff = geom["kappa_eff"]
+    elong_max = geom["elong_max"]
+    Vp_geom = geom["Vp_integ"]
+    Sw_geom = geom["Sw_integ"]
     Vp = Vp_override if (Vp_override and Vp_override > 0) else Vp_geom
     a_vol = math.sqrt(Vp / (2 * math.pi**2 * R0))
     aspect_geom = R0 / a
@@ -1166,11 +1457,16 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     # diagnostics (iota_geom/kappa_eff/elong_max) are estimates only; flag it.
     # Vp_geom/Sw_geom are reported as the (exact-integral or near-axis) geometry
     # estimate so the user can compare measured vs computed geometry.
-    geom_is_measured = 1.0 if (Vp_override and Vp_override > 0
-                               and Sw_override and Sw_override > 0) else 0.0
+    geom_is_measured = (
+        1.0
+        if (Vp_override and Vp_override > 0 and Sw_override and Sw_override > 0)
+        else 0.0
+    )
     Vp_geom_report = Vp_geom
     Sw_geom_report = Sw_geom
-    boundary_iota = float(iota) if shape is not None and iota is not None and iota > 0 else None
+    boundary_iota = (
+        float(iota) if shape is not None and iota is not None and iota > 0 else None
+    )
     iota_geom_authoritative = 0.0
     if boundary_iota is not None:
         # explicit measured/published transform supplied with the boundary
@@ -1188,22 +1484,28 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
         # such axis, _axis_from_shape falls back to the m=0 centerline, and the
         # near-axis solve there is garbage (W7-X gives ~2.32 vs the real 0.88).
         # Refuse rather than emit that centerline number.
-        has_axis_meta = (isinstance(shape.get("axis_rc"), list)
-                         and isinstance(shape.get("axis_zs"), list)
-                         and shape.get("axis_rc") and shape.get("axis_zs"))
+        has_axis_meta = (
+            isinstance(shape.get("axis_rc"), list)
+            and isinstance(shape.get("axis_zs"), list)
+            and shape.get("axis_rc")
+            and shape.get("axis_zs")
+        )
         if not has_axis_meta:
             raise ValueError(
                 "boundary Fourier without a near-axis axis cannot derive iota "
                 "(the rotational transform needs a full equilibrium, not a "
-                "truncated boundary cartoon); supply the measured 'iota' input")
-        iota_used = iota_geom        # near-axis on the stored real axis: legitimate
+                "truncated boundary cartoon); supply the measured 'iota' input"
+            )
+        iota_used = iota_geom  # near-axis on the stored real axis: legitimate
     else:
         # simple / axis near-axis mode: iota_geom is the self-consistent solve
         iota_used = iota_geom
     if iota_used <= _IOTA_MIN:
-        raise ValueError("rotational transform is ~0: boundary Fourier needs "
-                         "its own iota parameter, while near-axis/axis Fourier "
-                         "needs shaping that produces transform")
+        raise ValueError(
+            "rotational transform is ~0: boundary Fourier needs "
+            "its own iota parameter, while near-axis/axis Fourier "
+            "needs shaping that produces transform"
+        )
 
     # --- composition (identical to funsc) ---
     Te0 = fT * Ti0
@@ -1216,8 +1518,9 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     n10, n20 = x1 * n120, x2 * n120
     nHe0, nimp0 = fHe * ni0, fimp * ni0
     ne0 = (n10 * Z1 + n20 * Z2) / (1 + d12) + nHe0 * ZHe + nimp0 * Zimp
-    Zeff = ((n10 * Z1**2 + n20 * Z2**2) / (1 + d12)
-            + nHe0 * ZHe**2 + nimp0 * Zimp**2) / ne0
+    Zeff = (
+        (n10 * Z1**2 + n20 * Z2**2) / (1 + d12) + nHe0 * ZHe**2 + nimp0 * Zimp**2
+    ) / ne0
     M = (x1 * rx["A1"] + x2 * rx["A2"]) / (1 + d12)
 
     # --- profiles + reactivity integral (identical to funsc) ---
@@ -1228,8 +1531,7 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     drho = rho[1] - rho[0]
     Tx = Ti0 * (1 - rho**2) ** ST
     sgv = reactivity(Tx, icase)
-    Phi = fsig * 2 * float(np.sum(
-        (1 - rho**2) ** (2 * Sn) * sgv * rho * drho))
+    Phi = fsig * 2 * float(np.sum((1 - rho**2) ** (2 * Sn) * sgv * rho * drho))
     Pfus = rx["Y"] / (1 + d12) * n10 * n20 * Phi * Vp * 1e-6
     Pn = Pfus * (1 - rx["fion"])
 
@@ -1237,12 +1539,19 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     # NB grouping follows the JS/golden reference (tokamak.py): Zeff multiplies
     # only the leading e-i term; MATLAB groups the relativistic corrections
     # inside Zeff (~1% at Zeff~2) — documented in docs/27.
-    Pbrem = (5.34e-37 * ne0**2 * math.sqrt(Te0)
-             * (Zeff * (1 / (1 + 2 * Sn + 0.5 * ST))
-                + 0.7936 / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
-                + 1.874 / (1 + 2 * Sn + 2.5 * ST) * (Te0 / MEC2) ** 2
-                + 3 / math.sqrt(2) / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2))
-             * 1e-6 * Vp)
+    Pbrem = (
+        5.34e-37
+        * ne0**2
+        * math.sqrt(Te0)
+        * (
+            Zeff * (1 / (1 + 2 * Sn + 0.5 * ST))
+            + 0.7936 / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
+            + 1.874 / (1 + 2 * Sn + 2.5 * ST) * (Te0 / MEC2) ** 2
+            + 3 / math.sqrt(2) / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
+        )
+        * 1e-6
+        * Vp
+    )
     neff = ne0 / 1e20 / (1 + Sn)
     Teff = Te0 * float(np.sum((1 - rho**2) ** ST)) * drho
     # field-inhomogeneity factor <(|B|/B0)^2.5>_V for the cyclotron-loss term.
@@ -1254,16 +1563,28 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     if isinstance(equilibrium, dict):
         b25_real = equilibrium.get("metrics", {}).get("b25_real")
     cyclotron_B25_factor = (
-        (float(b25_real) if b25_real is not None
-         else stellarator_B25_factor(float(etabar) * a))
-        if bool(cyclotron_B_nonuniform) else 1.0)
-    Pcycl = (4.14e-7 * neff**0.5 * Teff**2.5 * B0**2.5 * (1 - Rw)**0.5
-             * a_vol**-0.5 * (1 + 2.5 * Teff / 511) * Vp
-             * cyclotron_B25_factor)
+        (
+            float(b25_real)
+            if b25_real is not None
+            else stellarator_B25_factor(float(etabar) * a)
+        )
+        if bool(cyclotron_B_nonuniform)
+        else 1.0
+    )
+    Pcycl = (
+        4.14e-7
+        * neff**0.5
+        * Teff**2.5
+        * B0**2.5
+        * (1 - Rw) ** 0.5
+        * a_vol**-0.5
+        * (1 + 2.5 * Teff / 511)
+        * Vp
+        * cyclotron_B25_factor
+    )
 
     # --- impurity line radiation (Mavrin; opt-in, docs/30 P1-2) ---
-    P_line = line_radiation_profile(
-        imp_name, ne0, nimp0, Te0, Sn, ST, Vp, rho, drho)
+    P_line = line_radiation_profile(imp_name, ne0, nimp0, Te0, Sn, ST, Vp, rho, drho)
 
     # --- stored energy, heating, gain (identical structure) ---
     Eth = 1.5 * (ni0 * Ti0 + ne0 * Te0) * 1e3 * QE / (1 + Sn + ST) * Vp * 1e-6
@@ -1290,8 +1611,16 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
     # --- stellarator closure: ISS04 + Sudo (verified docs/23) ---
     PL = rx["fion"] * Pfus + Pheat
     if PL > 0:
-        tau_ISS04 = (0.134 * f_ren * a_vol**2.28 * R0**0.64 * PL**-0.61
-                     * (nbar / 1e19)**0.54 * B0**0.84 * iota_used**0.41)
+        tau_ISS04 = (
+            0.134
+            * f_ren
+            * a_vol**2.28
+            * R0**0.64
+            * PL**-0.61
+            * (nbar / 1e19) ** 0.54
+            * B0**0.84
+            * iota_used**0.41
+        )
         H_ISS04 = tauE / tau_ISS04
         n_Sudo = 0.25 * math.sqrt(PL * B0 / (a_vol**2 * R0)) * 1e20
         nbar_o_Sudo = nbar / n_Sudo
@@ -1305,35 +1634,76 @@ def solve_stellarator(R0=None, A=None, N_fp=None, Sn=None, ST=None, ni0=None,
 
     # --- two-temperature channel diagnostics (docs/30 P1-1) ---
     Ecrit, f_fast, tau_eq, pei = twotemp_diagnostics(
-        rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M)
+        rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M
+    )
     P_ei = pei * Vp / (1 + 2 * Sn + ST) * 1e-6
 
     return StellaratorResult(
-        Eth=Eth, H_ISS04=H_ISS04, Pheat=Pheat, Pn=Pn, Pfus=Pfus, Pwall=Pwall,
-        Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
-        betaT=betaT, beta_o_limit=betaT / _BETA_SOFT_LIMIT,
-        nbar_o_Sudo=nbar_o_Sudo, n_Sudo=n_Sudo,
+        Eth=Eth,
+        H_ISS04=H_ISS04,
+        Pheat=Pheat,
+        Pn=Pn,
+        Pfus=Pfus,
+        Pwall=Pwall,
+        Qfus=Qfus,
+        Qfus_raw=Qfus_raw,
+        ignited=ignited,
+        betaT=betaT,
+        beta_o_limit=betaT / _BETA_SOFT_LIMIT,
+        nbar_o_Sudo=nbar_o_Sudo,
+        n_Sudo=n_Sudo,
         beta_soft_limit=_BETA_SOFT_LIMIT,
-        Pbrem=Pbrem, Pcycl=Pcycl,
+        Pbrem=Pbrem,
+        Pcycl=Pcycl,
         cyclotron_B25_factor=cyclotron_B25_factor,
-        Ptrans=Pth, PL_ISS04=PL, Vp=Vp,
-        iota=iota_used, iota_geom=iota_geom,
+        Ptrans=Pth,
+        PL_ISS04=PL,
+        Vp=Vp,
+        iota=iota_used,
+        iota_geom=iota_geom,
         iota_geom_authoritative=iota_geom_authoritative,
-        helicity=helicity, L_ax=L_ax,
-        kappa_eff=kappa_eff, elong_max=elong_max, tau_ISS04=tau_ISS04,
-        Sp=Sp, Sw=Sw, A_flux=A_flux_eff, a_vol=a_vol,
-        aspect_geom=aspect_geom, aspect_vol=aspect_vol,
-        fnavg=fnavg, fTavg=fTavg, fpavg=fpavg,
+        helicity=helicity,
+        L_ax=L_ax,
+        kappa_eff=kappa_eff,
+        elong_max=elong_max,
+        tau_ISS04=tau_ISS04,
+        Sp=Sp,
+        Sw=Sw,
+        A_flux=A_flux_eff,
+        a_vol=a_vol,
+        aspect_geom=aspect_geom,
+        aspect_vol=aspect_vol,
+        fnavg=fnavg,
+        fTavg=fTavg,
+        fpavg=fpavg,
         C_sec_mean=geom["C_sec_mean"],
-        C_wall_mean=geom["C_wall_mean"], Vp_geom=Vp_geom_report,
-        Sp_geom=geom["Sp_geom"], Sw_geom=Sw_geom_report,
-        geom_volume_ratio=geom_volume_ratio, geom_wall_ratio=geom_wall_ratio,
+        C_wall_mean=geom["C_wall_mean"],
+        Vp_geom=Vp_geom_report,
+        Sp_geom=geom["Sp_geom"],
+        Sw_geom=Sw_geom_report,
+        geom_volume_ratio=geom_volume_ratio,
+        geom_wall_ratio=geom_wall_ratio,
         geom_is_measured=geom_is_measured,
-        ne0=ne0, nbar=nbar, nbar_geom=nbar_geom,
-        Te_line_geom=Te_line_geom, Ti_line_geom=Ti_line_geom,
-        nbar_geom_o_nbar=nbar_geom_o_nbar, M=M, Zeff=Zeff,
-        N_fp=N_fp, etabar=etabar,
-        P_line=P_line, Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
-        P_ei=P_ei, Te0=Te0, fT_used=fT, te_mode=0.0, te_resid=0.0,
-        tauE_used=tauE, taue_mode=0.0, strcase=rx["name"],
+        ne0=ne0,
+        nbar=nbar,
+        nbar_geom=nbar_geom,
+        Te_line_geom=Te_line_geom,
+        Ti_line_geom=Ti_line_geom,
+        nbar_geom_o_nbar=nbar_geom_o_nbar,
+        M=M,
+        Zeff=Zeff,
+        N_fp=N_fp,
+        etabar=etabar,
+        P_line=P_line,
+        Ecrit=Ecrit,
+        f_fast_ion=f_fast,
+        tau_eq_ie=tau_eq,
+        P_ei=P_ei,
+        Te0=Te0,
+        fT_used=fT,
+        te_mode=0.0,
+        te_resid=0.0,
+        tauE_used=tauE,
+        taue_mode=0.0,
+        strcase=rx["name"],
     )

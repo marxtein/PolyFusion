@@ -4,6 +4,7 @@ Three scaling laws live side-by-side in the result (H98 / HST / H_ITPA20) but
 historically only IPB98 fed the root-finder. The ``tauE_scaling`` parameter
 selects which scaling defines the predictive target H_fac.
 """
+
 import math
 import os
 import sys
@@ -17,12 +18,31 @@ from polyfusion.tokamak import funsc  # noqa: E402
 
 
 _ITER_BASE = dict(
-    R0=6.2, A=3.1, kappa=1.86, delta=0.5,
-    Sn=0.5, ST=1.0, ni0=1e20, Ti0=15.0, fT=1.0, fsig=1.0, f1=0.5,
-    BT0=5.3, Ip=15.0, fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7, g=0.05,
-    icase=1, imp_name=None, f_aux_e=0.5,
-    geom_model=0.0, eq=None,
-    Vp_override=0.0, Sw_override=0.0,
+    R0=6.2,
+    A=3.1,
+    kappa=1.86,
+    delta=0.5,
+    Sn=0.5,
+    ST=1.0,
+    ni0=1e20,
+    Ti0=15.0,
+    fT=1.0,
+    fsig=1.0,
+    f1=0.5,
+    BT0=5.3,
+    Ip=15.0,
+    fHe=0.04,
+    fimp=0.01,
+    Zimp=10,
+    Rw=0.7,
+    g=0.05,
+    icase=1,
+    imp_name=None,
+    f_aux_e=0.5,
+    geom_model=0.0,
+    eq=None,
+    Vp_override=0.0,
+    Sw_override=0.0,
     cyclotron_B_nonuniform=0.0,
 )
 
@@ -31,12 +51,31 @@ _ITER_BASE = dict(
 # (~0.03 at tauE=2s) so HST=1 is unreachable in the [1e-3,50]s bracket.
 # Use an NSTX-class operating point for ST-scaling root-finding tests.
 _NSTX_BASE = dict(
-    R0=0.85, A=1.4, kappa=2.0, delta=0.4,
-    Sn=0.5, ST=1.0, ni0=5e19, Ti0=2.0, fT=1.0, fsig=1.0, f1=0.5,
-    BT0=0.5, Ip=1.0, fHe=0.04, fimp=0.01, Zimp=10, Rw=0.7, g=0.05,
-    icase=1, imp_name=None, f_aux_e=0.5,
-    geom_model=0.0, eq=None,
-    Vp_override=0.0, Sw_override=0.0,
+    R0=0.85,
+    A=1.4,
+    kappa=2.0,
+    delta=0.4,
+    Sn=0.5,
+    ST=1.0,
+    ni0=5e19,
+    Ti0=2.0,
+    fT=1.0,
+    fsig=1.0,
+    f1=0.5,
+    BT0=0.5,
+    Ip=1.0,
+    fHe=0.04,
+    fimp=0.01,
+    Zimp=10,
+    Rw=0.7,
+    g=0.05,
+    icase=1,
+    imp_name=None,
+    f_aux_e=0.5,
+    geom_model=0.0,
+    eq=None,
+    Vp_override=0.0,
+    Sw_override=0.0,
     cyclotron_B_nonuniform=0.0,
 )
 
@@ -61,7 +100,8 @@ def test_st_scaling_makes_HST_hit_H_fac():
     assert res.taue_mode == 1.0
     assert res.HST == pytest.approx(1.0, rel=1e-4)
     assert res.H98 != pytest.approx(1.0, rel=1e-2), (
-        "if H98 also hit 1.0 the selector did nothing")
+        "if H98 also hit 1.0 the selector did nothing"
+    )
 
 
 def test_itpa20_scaling_makes_H_ITPA20_hit_H_fac():

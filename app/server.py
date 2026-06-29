@@ -21,21 +21,25 @@ from urllib.parse import unquote
 # linalg.solve (near-axis r2) took ~0.6 s multi-threaded vs ~0.4 ms
 # single-threaded (~1300x).  Every matrix here is tiny, so single-threaded BLAS
 # is strictly faster and numerically identical.  setdefault keeps any user override.
-for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
-           "NUMEXPR_NUM_THREADS"):
+for _v in (
+    "OPENBLAS_NUM_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
     os.environ.setdefault(_v, "1")
 
-import numpy as np
+import numpy as np  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from polyfusion.io import run_case, list_configs   # noqa: E402
-from polyfusion.configs.base import get             # noqa: E402
+from polyfusion.io import run_case, list_configs  # noqa: E402
+from polyfusion.configs.base import get  # noqa: E402
 from polyfusion.scan import scan2d, best_region_mask  # noqa: E402
 from polyfusion.equilibrium_import import (  # noqa: E402
     MAX_FILE_BYTES,
     parse_equilibrium_bytes,
 )
-from polyfusion import eqdsk                          # noqa: E402
+from polyfusion import eqdsk  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOST = "0.0.0.0"
@@ -88,7 +92,11 @@ def _do_scan(req: dict) -> dict:
 
     n_invalid = int(np.sum(np.asarray(g["valid"]) < 0.5)) if "valid" in g else 0
     return {
-        "config": config, "xkey": xk, "ykey": yk, "x": xv.tolist(), "y": yv.tolist(),
+        "config": config,
+        "xkey": xk,
+        "ykey": yk,
+        "x": xv.tolist(),
+        "y": yv.tolist(),
         # transpose (nx,ny)->(ny,nx) so Plotly reads z[y][x]
         "fields": {k: _jsonsafe(g[k].T) for k in fields},
         "best": mask.T.astype(int).tolist(),
@@ -102,7 +110,9 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def _send(self, code, body, ctype="application/json", cache_control="no-store, max-age=0"):
+    def _send(
+        self, code, body, ctype="application/json", cache_control="no-store, max-age=0"
+    ):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", ctype)
@@ -111,7 +121,9 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _send_file(self, fpath, ctype=None, cache_control="public, max-age=31536000, immutable"):
+    def _send_file(
+        self, fpath, ctype=None, cache_control="public, max-age=31536000, immutable"
+    ):
         with open(fpath, "rb") as fh:
             data = fh.read()
         return self._send(
@@ -162,13 +174,19 @@ class Handler(BaseHTTPRequestHandler):
             if n > MAX_FILE_BYTES:
                 limit_mib = MAX_FILE_BYTES // (1024 * 1024)
                 return self._send(
-                    413, json.dumps({"error": f"equilibrium file exceeds {limit_mib} MiB limit"}))
+                    413,
+                    json.dumps(
+                        {"error": f"equilibrium file exceeds {limit_mib} MiB limit"}
+                    ),
+                )
             filename = unquote(self.headers.get("X-Filename", ""))
             try:
                 out = parse_equilibrium_bytes(self.rfile.read(n), filename)
                 body = json.dumps(out)
             except Exception as e:
-                return self._send(400, json.dumps({"error": f"{type(e).__name__}: {e}"}))
+                return self._send(
+                    400, json.dumps({"error": f"{type(e).__name__}: {e}"})
+                )
             return self._send(200, body)
         try:
             req = json.loads(self.rfile.read(n) or b"{}")
@@ -179,14 +197,19 @@ class Handler(BaseHTTPRequestHandler):
                 g = eqdsk.parse_geqdsk(req.get("eqdsk") or "")
                 out = {"config": "tokamak", "eq": eqdsk.equilibrium_geometry(g)}
             elif self.path == "/api/run":
-                out = run_case(_floatify(req.get("overrides")), preset=req.get("preset"),
-                               config=req.get("config", "tokamak"))
+                out = run_case(
+                    _floatify(req.get("overrides")),
+                    preset=req.get("preset"),
+                    config=req.get("config", "tokamak"),
+                )
             elif self.path == "/api/scan":
                 out = _do_scan(req)
             else:
                 return self._send(404, json.dumps({"error": "not found"}))
             # numpy-safe: serialise inside the try so any encoding bug -> 400, not a crash
-            body = json.dumps(out, default=lambda o: o.tolist() if hasattr(o, "tolist") else str(o))
+            body = json.dumps(
+                out, default=lambda o: o.tolist() if hasattr(o, "tolist") else str(o)
+            )
         except Exception as e:
             return self._send(400, json.dumps({"error": f"{type(e).__name__}: {e}"}))
         return self._send(200, body)

@@ -45,7 +45,6 @@ def ellipk_e(k2):
     k2 = np.asarray(k2, dtype=float)
     a = np.ones_like(k2)
     b = np.sqrt(1.0 - k2)
-    c2_sum = k2.copy()          # 2^{n-1} c_n^2 accumulated; n=0 term = k^2/2*... see below
     # E = K (1 - sum_{n>=0} 2^{n-1} c_n^2), c_0 = k
     s = 0.5 * k2
     pow2 = 0.5
@@ -65,7 +64,7 @@ def psi_norm(rho, z):
     """Dimensionless flux function of the unit loop (a=1, mu0*I=1)."""
     rho = np.asarray(rho, dtype=float)
     z = np.asarray(z, dtype=float)
-    denom = (1.0 + rho) ** 2 + z ** 2
+    denom = (1.0 + rho) ** 2 + z**2
     k2 = np.clip(4.0 * rho / denom, 0.0, 1.0 - 1e-14)
     K, E = ellipk_e(k2)
     k = np.sqrt(k2)
@@ -77,8 +76,7 @@ def psi_norm(rho, z):
 class _LoopTables:
     """Universal dimensionless tables B(lam), V(lam), U(lam)."""
 
-    def __init__(self, n_lam=240, n_rho=1000, n_z=500,
-                 rho_max=18.0, z_max=9.0):
+    def __init__(self, n_lam=240, n_rho=1000, n_z=500, rho_max=18.0, z_max=9.0):
         self.lam = np.geomspace(_LAM_MIN, _LAM_MAX, n_lam)
 
         # equatorial |B| from the flux function: Bz = (1/2 pi rho) dpsi/drho
@@ -88,17 +86,19 @@ class _LoopTables:
 
         # enclosed volume V(psi_level) by cell sort + cumulative sum
         rho = np.linspace(rho_max / n_rho, rho_max, n_rho)
-        zz = np.linspace(z_max / n_z / 2, z_max, n_z)   # upper half plane
+        zz = np.linspace(z_max / n_z / 2, z_max, n_z)  # upper half plane
         R, Z = np.meshgrid(rho, zz, indexing="ij")
         psi_cells = psi_norm(R, Z).ravel()
-        vol_cells = (2.0 * 2 * math.pi * R * (rho[1] - rho[0]) * (zz[1] - zz[0])).ravel()
-        order = np.argsort(psi_cells)[::-1]             # descending psi
+        vol_cells = (
+            2.0 * 2 * math.pi * R * (rho[1] - rho[0]) * (zz[1] - zz[0])
+        ).ravel()
+        order = np.argsort(psi_cells)[::-1]  # descending psi
         psi_sorted = psi_cells[order]
         v_cum = np.cumsum(vol_cells[order])
 
         psi_L = psi_norm(self.lam, 0.0)
         # V at each level: interpolate cumulative volume on the sorted curve
-        idx = np.searchsorted(-psi_sorted, -psi_L)      # first cell with psi < level
+        idx = np.searchsorted(-psi_sorted, -psi_L)  # first cell with psi < level
         idx = np.clip(idx, 1, len(v_cum) - 1)
         self.V = v_cum[idx - 1]
         self.psi_L = psi_L
@@ -114,7 +114,8 @@ class _LoopTables:
         if np.any(lam < _LAM_MIN) or np.any(lam > _LAM_MAX):
             raise ValueError(
                 f"lambda = L/r_ring must be in [{_LAM_MIN}, {_LAM_MAX}] "
-                f"for the finite-ring tables (got {lam.min():.3g}..{lam.max():.3g})")
+                f"for the finite-ring tables (got {lam.min():.3g}..{lam.max():.3g})"
+            )
         return np.interp(lam, self.lam, arr)
 
 

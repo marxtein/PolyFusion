@@ -35,7 +35,9 @@ def test_finite_ring_u_ratio_uses_actual_flux_tube_volume():
 
 
 @pytest.mark.parametrize("ring_model", [0, 1])
-def test_shape_payload_has_closed_flux_surfaces_and_unified_profile_coordinate(ring_model):
+def test_shape_payload_has_closed_flux_surfaces_and_unified_profile_coordinate(
+    ring_model,
+):
     params = _params(ring_model=ring_model)
     shape = dipole_shape_outlines(**params)
 

@@ -32,6 +32,7 @@ import numpy as np
 from dataclasses import replace as _dc_replace
 
 from ..constants import QE, MP, ME, MU0, MEC2
+from ..geometry import get_geometry
 from ..reactivity import reactivity
 from ..tokamak import _REACTIONS, twotemp_diagnostics, line_radiation_profile
 from ..twotemp import solve_channel_balance
@@ -44,51 +45,62 @@ _LN_LAMBDA = 17.0
 @dataclass
 class MirrorResult:
     # power balance
-    Pfus: float       # fusion power [MW]
-    Pheat: float      # external heating power required [MW]
-    Qfus: float       # fusion gain (capped at 1000)
-    Qfus_raw: float   # uncapped Pfus/Pheat (negative => ignited/over-driven)
-    ignited: float    # 1 if Pheat <= 0
-    Pbrem: float      # bremsstrahlung [MW]
-    Pcycl: float      # cyclotron [MW]
-    Ptrans: float     # end-loss transport power [MW]
-    Pn: float         # neutron power [MW]
-    Pwall: float      # first-wall load [MW/m^2]
-    P_end_flux: float # end-loss power flux through both throats [MW/m^2]
-    P_coll_flux: float # flux at the expander collector (diluted by B_expand) [MW/m^2]
-    P_alpha_loss: float # charged fusion power escaping before deposit [MW]
+    Pfus: float  # fusion power [MW]
+    Pheat: float  # external heating power required [MW]
+    Qfus: float  # fusion gain (capped at 1000)
+    Qfus_raw: float  # uncapped Pfus/Pheat (negative => ignited/over-driven)
+    ignited: float  # 1 if Pheat <= 0
+    Pbrem: float  # bremsstrahlung [MW]
+    Pcycl: float  # cyclotron [MW]
+    Ptrans: float  # end-loss transport power [MW]
+    Pn: float  # neutron power [MW]
+    Pwall: float  # first-wall load [MW/m^2]
+    P_end_flux: float  # end-loss power flux through both throats [MW/m^2]
+    P_coll_flux: float  # flux at the expander collector (diluted by B_expand) [MW/m^2]
+    P_alpha_loss: float  # charged fusion power escaping before deposit [MW]
     Past_domain: float  # 1 = Pastukhov formula in validity domain, 0 = fallback used
-    Eth: float        # stored thermal energy [MJ]
+    Eth: float  # stored thermal energy [MJ]
     # confinement
-    tau_E: float; tau_m: float; tau_Past: float; tau_gd: float; tau_rho: float
-    phi_i: float      # ion confining potential [keV]
-    phi_e: float      # electron confining potential [keV]
+    tau_E: float
+    tau_m: float
+    tau_Past: float
+    tau_gd: float
+    tau_rho: float
+    phi_i: float  # ion confining potential [keV]
+    phi_e: float  # electron confining potential [keV]
     lambda_ii: float  # ion mean free path [m]
-    coll_ratio: float # lambda_ii/(R_mc*L_c): <1 gas-dynamic, >>1 Pastukhov (audit P1)
+    coll_ratio: float  # lambda_ii/(R_mc*L_c): <1 gas-dynamic, >>1 Pastukhov (audit P1)
     a_over_rhoi: float  # a_c/rho_i: DCLC micro-stability proxy — small values
-                        # (~<20) historically drove drift-cyclotron loss-cone
-                        # modes; large is favourable (docs/30 batch 3a)
-    ntau: float       # ni0 * tau_m
+    # (~<20) historically drove drift-cyclotron loss-cone
+    # modes; large is favourable (docs/30 batch 3a)
+    ntau: float  # ni0 * tau_m
     # stability / fields
-    beta: float       # peak beta
-    beta_avg: float   # volume-averaged beta
-    B0: float         # diamagnetically reduced central field [T]
-    R_mc: float       # effective mirror ratio
+    beta: float  # peak beta
+    beta_avg: float  # volume-averaged beta
+    B0: float  # diamagnetically reduced central field [T]
+    R_mc: float  # effective mirror ratio
     # geometry
-    Vp: float; Sp: float; Sw: float; A_throat: float
+    Vp: float
+    Sp: float
+    Sw: float
+    A_throat: float
     # plasma
-    ne0: float; nbar: float; Zeff: float; M: float
-    fTavg: float; fnavg: float
-    P_line: float     # impurity line radiation [MW] (0 unless imp_name given)
-    tauC_eff: float   # effective cyclotron-radiation energy-loss time [s]
-    Ecrit: float      # Stix critical energy [keV]
-    f_fast_ion: float # fast-product energy fraction to ions
+    ne0: float
+    nbar: float
+    Zeff: float
+    M: float
+    fTavg: float
+    fnavg: float
+    P_line: float  # impurity line radiation [MW] (0 unless imp_name given)
+    tauC_eff: float  # effective cyclotron-radiation energy-loss time [s]
+    Ecrit: float  # Stix critical energy [keV]
+    f_fast_ion: float  # fast-product energy fraction to ions
     tau_eq_ie: float  # ion-electron equilibration time [s]
-    P_ei: float       # ion->electron exchange power [MW] (diagnostic)
+    P_ei: float  # ion->electron exchange power [MW] (diagnostic)
     f_alpha_used: float  # charged-product deposition fraction actually used
-    Te0_used: float   # electron temperature actually used [keV]
-    te_mode: float    # 0 = Te0 input, 1 = solved, 0.5 = pinned
-    te_resid: float   # electron-channel residual at solution [MW]
+    Te0_used: float  # electron temperature actually used [keV]
+    te_mode: float  # 0 = Te0 input, 1 = solved, 0.5 = pinned
+    te_resid: float  # electron-channel residual at solution [MW]
     strcase: str
 
     def as_dict(self) -> dict:
@@ -119,14 +131,24 @@ def _cyclotron_effective_temperature(Te0: float, ST: float) -> float:
     return Te0 * math.exp(log_i_t2 - log_i_t)
 
 
-def _mirror_cyclotron_power(ne0: float, Te0: float, Sn: float, ST: float,
-                             Rw: float, a_c: float, L_c: float, B0: float,
-                             R_mc: float, f_throat: float) -> float:
+def _mirror_cyclotron_power(
+    ne0: float,
+    Te0: float,
+    Sn: float,
+    ST: float,
+    Rw: float,
+    a_c: float,
+    L_c: float,
+    B0: float,
+    R_mc: float,
+    f_throat: float,
+) -> float:
     """Mirror cyclotron loss [MW] using an axial Trubnikov-scale integral."""
     Teff = _cyclotron_effective_temperature(Te0, ST)
     neff = ne0 / 1e20 / (1 + Sn)
-    prefactor = (4.14e-7 * neff**0.5 * Teff**2.5 * (1 - Rw)**0.5
-                 * (1 + 2.5 * Teff / 511))
+    prefactor = (
+        4.14e-7 * neff**0.5 * Teff**2.5 * (1 - Rw) ** 0.5 * (1 + 2.5 * Teff / 511)
+    )
 
     field_moment = B0**2.5 * math.pi * a_c**2 * L_c
     L_th = f_throat * L_c
@@ -141,13 +163,37 @@ def _mirror_cyclotron_power(ne0: float, Te0: float, Sn: float, ST: float,
     return prefactor * a_c**-0.5 * field_moment
 
 
-def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
-                 Sn=0.0, ST=0.0, g=0.0, fsig=1.0, f_throat=0.1,
-                 f_alpha=None, B_expand=100.0,
-                 Rw=0.8, icase=1, f1=0.5, fHe=0.0, fimp=0.0, Zimp=10,
-                 phi_i_over_Te=None, lnLambda=_LN_LAMBDA,
-                 imp_name=None, f_aux_e=0.5, use_tauE=1.0,
-                 use_tauC=0.0, tauC=None) -> MirrorResult:
+def solve_mirror(
+    a_c,
+    L_c,
+    B_vac,
+    R_mirror,
+    ni0,
+    Ti0,
+    Te0,
+    tauE=1.0,
+    Sn=0.0,
+    ST=0.0,
+    g=0.0,
+    fsig=1.0,
+    f_throat=0.1,
+    f_alpha=None,
+    B_expand=100.0,
+    Rw=0.8,
+    icase=1,
+    f1=0.5,
+    fHe=0.0,
+    fimp=0.0,
+    Zimp=10,
+    phi_i_over_Te=None,
+    lnLambda=_LN_LAMBDA,
+    imp_name=None,
+    f_aux_e=0.5,
+    use_tauE=1.0,
+    use_tauC=0.0,
+    tauC=None,
+    geometry="sin2_simple",
+) -> MirrorResult:
     """Evaluate the 0-D mirror power balance at one operating point.
 
     Parameters (SI / keV / m^-3); see docs/24 §3 for the full table.
@@ -177,35 +223,67 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
     if manual_tauE and tauE <= 0:
         raise ValueError(f"tauE must be > 0 when use_tauE is enabled (got {tauE})")
     if manual_tauE and Te0 == 0:
-        raise ValueError("Te0=0 self-consistent solve is only available when use_tauE is disabled")
+        raise ValueError(
+            "Te0=0 self-consistent solve is only available when use_tauE is disabled"
+        )
     manual_tauC = bool(use_tauC)
     if manual_tauC and (tauC is None or tauC <= 0):
         raise ValueError(f"tauC must be > 0 when use_tauC is enabled (got {tauC})")
 
     if Te0 == 0:
+
         def _eval(te):
-            return solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, te, tauE=tauE,
-                                Sn=Sn, ST=ST, g=g, fsig=fsig, f_throat=f_throat,
-                                f_alpha=f_alpha, B_expand=B_expand, Rw=Rw,
-                                icase=icase, f1=f1, fHe=fHe, fimp=fimp,
-                                Zimp=Zimp, phi_i_over_Te=phi_i_over_Te,
-                                lnLambda=lnLambda, imp_name=imp_name,
-                                f_aux_e=f_aux_e, use_tauE=use_tauE,
-                                use_tauC=use_tauC, tauC=tauC)
+            return solve_mirror(
+                a_c,
+                L_c,
+                B_vac,
+                R_mirror,
+                ni0,
+                Ti0,
+                te,
+                tauE=tauE,
+                Sn=Sn,
+                ST=ST,
+                g=g,
+                fsig=fsig,
+                f_throat=f_throat,
+                f_alpha=f_alpha,
+                B_expand=B_expand,
+                Rw=Rw,
+                icase=icase,
+                f1=f1,
+                fHe=fHe,
+                fimp=fimp,
+                Zimp=Zimp,
+                phi_i_over_Te=phi_i_over_Te,
+                lnLambda=lnLambda,
+                imp_name=imp_name,
+                f_aux_e=f_aux_e,
+                use_tauE=use_tauE,
+                use_tauC=use_tauC,
+                tauC=tauC,
+            )
 
         def _resid(te, res):
             # electron share of the end loss (phi_e + Te per escaping electron)
-            Ptrans_e = ((res.ne0 * res.phi_e / (1 + Sn)
-                         + res.ne0 * te / (1 + Sn + ST))
-                        * _KEV_J * res.Vp / res.tau_m * 1e-6)
-            heat = ((1 - res.f_fast_ion) * res.f_alpha_used * (res.Pfus - res.Pn)
-                    + res.P_ei + f_aux_e * max(res.Pheat, 0.0))
+            Ptrans_e = (
+                (res.ne0 * res.phi_e / (1 + Sn) + res.ne0 * te / (1 + Sn + ST))
+                * _KEV_J
+                * res.Vp
+                / res.tau_m
+                * 1e-6
+            )
+            heat = (
+                (1 - res.f_fast_ion) * res.f_alpha_used * (res.Pfus - res.Pn)
+                + res.P_ei
+                + f_aux_e * max(res.Pheat, 0.0)
+            )
             return heat - (res.Pbrem + res.Pcycl + res.P_line + Ptrans_e)
 
         te, res, r, conv = solve_channel_balance(
-            _eval, _resid, max(0.005, 0.01 * Ti0), 1.5 * Ti0)
-        return _dc_replace(res, te_mode=1.0 if conv else 0.5, te_resid=r,
-                           Te0_used=te)
+            _eval, _resid, max(0.005, 0.01 * Ti0), 1.5 * Ti0
+        )
+        return _dc_replace(res, te_mode=1.0 if conv else 0.5, te_resid=r, Te0_used=te)
 
     # --- input-domain guards (audit P0) ---
     if a_c <= 0 or L_c <= 0 or B_vac <= 0:
@@ -247,8 +325,9 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
     n10, n20 = x1 * n120, x2 * n120
     nHe0, nimp0 = fHe * ni0, fimp * ni0
     ne0 = (n10 * Z1 + n20 * Z2) / (1 + d12) + nHe0 * ZHe + nimp0 * Zimp
-    Zeff = ((n10 * Z1**2 + n20 * Z2**2) / (1 + d12)
-            + nHe0 * ZHe**2 + nimp0 * Zimp**2) / ne0
+    Zeff = (
+        (n10 * Z1**2 + n20 * Z2**2) / (1 + d12) + nHe0 * ZHe**2 + nimp0 * Zimp**2
+    ) / ne0
     M = (x1 * rx["A1"] + x2 * rx["A2"]) / (1 + d12)
     mi = M * MP
 
@@ -261,30 +340,47 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
 
     # ---------- geometry: cylinder + flux-mapped throat regions ----------
     L_th = f_throat * L_c
-    V_cyl = math.pi * a_c**2 * L_c
-    # B(z)/Bc = 1+(R_mc-1) sin^2(pi z/2L_th): integral of Bc/B over the throat
-    # is L_th/sqrt(R_mc) (analytic), giving the end-region volume exactly.
-    V_end = 2 * math.pi * a_c**2 * L_th / math.sqrt(R_mc) if L_th > 0 else 0.0
-    Vp = V_cyl + V_end
-    # plasma side surface: cylinder part + throat part (numeric, a(z) flux map)
-    if L_th > 0:
-        zt = np.linspace(0.0, 1.0, 60)
-        a_z = a_c / np.sqrt(1 + (R_mc - 1) * np.sin(math.pi * zt / 2) ** 2)
-        S_end = 2 * 2 * math.pi * float(np.trapezoid(a_z, zt)) * L_th
+    if geometry == "sin2_simple":
+        geom = get_geometry("sin2_simple")(
+            a_c=a_c,
+            L_c=L_c,
+            B_vac=B_vac,
+            R_mirror=R_mirror,
+            beta=beta,
+            f_throat=f_throat,
+            g=g,
+        )
+    elif geometry == "multi_zone":
+        geom = get_geometry("multi_zone")(
+            a_c=a_c,
+            L_c=L_c,
+            B_vac=B_vac,
+            R_mirror=R_mirror,
+            beta=beta,
+            L_th=L_th,
+            g=g,
+            B_expand=B_expand,
+        )
     else:
-        S_end = 0.0
-    Sp = 2 * math.pi * a_c * L_c + S_end
-    r_w = a_c + g
-    Sw = 2 * math.pi * r_w * L_c + 2 * math.pi * r_w**2   # side + end plates
-    A_throat = math.pi * a_c**2 * math.sqrt(1 - beta) / R_mirror
+        raise ValueError(
+            f"Unknown mirror geometry '{geometry}'. "
+            "Choose 'sin2_simple' or 'multi_zone'."
+        )
+    Vp = geom.volume()
+    Sp = geom.surface()
+    Sw = geom.wall_surface()
+    A_throat = geom.throat_area()
 
     # charged-product deposition: default = prompt loss-cone bound (docs/30
     # batch 2).  An isotropically born alpha falls in the loss cone with
     # solid-angle fraction 1 - sqrt(1 - 1/R_mc); the deposited fraction is
     # the complement.  Ignores scattering INTO the cone during slow-down, so
     # it is an OPTIMISTIC bound — explicit f_alpha input overrides.
-    f_alpha_used = 1.0 if manual_tauE else (
-        math.sqrt(1.0 - 1.0 / R_mc) if f_alpha is None else f_alpha)
+    f_alpha_used = (
+        1.0
+        if manual_tauE
+        else (math.sqrt(1.0 - 1.0 / R_mc) if f_alpha is None else f_alpha)
+    )
 
     # ---------- radial profiles and volume averages (tokamak family) ----------
     x = np.linspace(0.0, 1.0, 101)
@@ -295,8 +391,11 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
 
     # ---------- ambipolar potentials [keV] ----------
     # phi_i_over_Te: None or 0 = auto (Te*ln R); > 0 = explicit override
-    phi_i = ((phi_i_over_Te * Te0) if (phi_i_over_Te is not None and phi_i_over_Te > 0)
-             else Te0 * math.log(R_mirror))
+    phi_i = (
+        (phi_i_over_Te * Te0)
+        if (phi_i_over_Te is not None and phi_i_over_Te > 0)
+        else Te0 * math.log(R_mirror)
+    )
     K = math.sqrt(mi / ME) * (Ti0 / Te0) ** 1.5 * (phi_i / Ti0) * math.exp(phi_i / Ti0)
     phi_e = _solve_phi_e_over_Te(K) * Te0
 
@@ -327,28 +426,35 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
     tau_gd = math.sqrt(math.pi) * R_mc * (L_c / v_th) * math.exp(r)
     rho_i = v_th / (Z1 * QE * B0 / mi)
     a_over_rhoi = a_c / rho_i
-    tau_rho = a_over_rhoi ** 2 * tau_ii
+    tau_rho = a_over_rhoi**2 * tau_ii
     tau_m = 1.0 / (1.0 / (tau_Past + tau_gd) + 1.0 / tau_rho)
 
     # ---------- fusion power: radial profile integral (tokamak form) ----------
     Tx = Ti0 * (1 - x**2) ** ST
     sgv = reactivity(Tx, icase)
     Phi = fsig * 2 * float(np.sum((1 - x**2) ** (2 * Sn) * sgv * x * dx))
-    Pfus = rx["Y"] / (1 + d12) * n10 * n20 * Phi * Vp * 1e-6   # MW
+    Pfus = rx["Y"] / (1 + d12) * n10 * n20 * Phi * Vp * 1e-6  # MW
     Pn = Pfus * (1 - rx["fion"])
 
     # ---------- radiation: tokamak profile-weighted forms ----------
-    Pbrem = (5.34e-37 * ne0**2 * math.sqrt(Te0)
-             * (Zeff * (1 / (1 + 2 * Sn + 0.5 * ST))
-                + 0.7936 / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
-                + 1.874 / (1 + 2 * Sn + 2.5 * ST) * (Te0 / MEC2) ** 2
-                + 3 / math.sqrt(2) / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2))
-             * 1e-6 * Vp)
+    Pbrem = (
+        5.34e-37
+        * ne0**2
+        * math.sqrt(Te0)
+        * (
+            Zeff * (1 / (1 + 2 * Sn + 0.5 * ST))
+            + 0.7936 / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
+            + 1.874 / (1 + 2 * Sn + 2.5 * ST) * (Te0 / MEC2) ** 2
+            + 3 / math.sqrt(2) / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
+        )
+        * 1e-6
+        * Vp
+    )
     Eth_e = 1.5 * ne0 * Te0 * _KEV_J / (1 + Sn + ST) * Vp * 1e-6
     formula_Pcycl = _mirror_cyclotron_power(
-        ne0, Te0, Sn, ST, Rw, a_c, L_c, B0, R_mc, f_throat)
-    Pcycl, tauC_eff = resolve_cyclotron_power(
-        formula_Pcycl, Eth_e, use_tauC, tauC)
+        ne0, Te0, Sn, ST, Rw, a_c, L_c, B0, R_mc, f_throat
+    )
+    Pcycl, tauC_eff = resolve_cyclotron_power(formula_Pcycl, Eth_e, use_tauC, tauC)
 
     # ---------- stored energy & transport power ----------
     Eth = 1.5 * (ni0 * Ti0 + ne0 * Te0) * _KEV_J / (1 + Sn + ST) * Vp * 1e-6  # MJ
@@ -357,8 +463,16 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
     else:
         # loss power density n(phi+T)/tau integrated over profiles:
         #   Int n dV = n0 V/(1+Sn);  Int nT dV = n0T0 V/(1+Sn+ST)
-        Ptrans = ((ni0 * phi_i + ne0 * phi_e) / (1 + Sn)
-                  + (ni0 * Ti0 + ne0 * Te0) / (1 + Sn + ST)) * _KEV_J * Vp / tau_m * 1e-6
+        Ptrans = (
+            (
+                (ni0 * phi_i + ne0 * phi_e) / (1 + Sn)
+                + (ni0 * Ti0 + ne0 * Te0) / (1 + Sn + ST)
+            )
+            * _KEV_J
+            * Vp
+            / tau_m
+            * 1e-6
+        )
 
     # alpha/charged-product deposition: in an open trap part of the charged
     # fusion power escapes through the loss cone before slowing down
@@ -382,29 +496,68 @@ def solve_mirror(a_c, L_c, B_vac, R_mirror, ni0, Ti0, Te0, tauE=1.0,
         P_end_flux = Ptrans / (2 * A_throat) if A_throat > 0 else 0.0
         # end-expander engineering (audit §4.6): the throat flux is spread
         # onto a collector where B has dropped by B_expand.
-        P_coll_flux = ((Ptrans + P_alpha_loss) / (2 * A_throat * B_expand)
-                       if A_throat > 0 and B_expand > 0 else 0.0)
+        P_coll_flux = (
+            (Ptrans + P_alpha_loss) / (2 * A_throat * B_expand)
+            if A_throat > 0 and B_expand > 0
+            else 0.0
+        )
 
     # two-temperature channel diagnostics (docs/30 P1-1)
     Ecrit, f_fast, tau_eq, pei = twotemp_diagnostics(
-        rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M)
+        rx, ni0, Te0, Ti0, n10, n20, nHe0, nimp0, Zimp, M
+    )
     P_ei = pei * Vp / (1 + 2 * Sn + ST) * 1e-6
 
     return MirrorResult(
-        Pfus=Pfus, Pheat=Pheat, Qfus=Qfus, Qfus_raw=Qfus_raw, ignited=ignited,
-        Pbrem=Pbrem, Pcycl=Pcycl,
-        Ptrans=Ptrans, Pn=Pn, Pwall=Pwall, P_end_flux=P_end_flux,
-        P_coll_flux=P_coll_flux, P_alpha_loss=P_alpha_loss, Past_domain=Past_domain,
+        Pfus=Pfus,
+        Pheat=Pheat,
+        Qfus=Qfus,
+        Qfus_raw=Qfus_raw,
+        ignited=ignited,
+        Pbrem=Pbrem,
+        Pcycl=Pcycl,
+        Ptrans=Ptrans,
+        Pn=Pn,
+        Pwall=Pwall,
+        P_end_flux=P_end_flux,
+        P_coll_flux=P_coll_flux,
+        P_alpha_loss=P_alpha_loss,
+        Past_domain=Past_domain,
         Eth=Eth,
         tau_E=tauE if manual_tauE else tau_m,
-        tau_m=tau_m, tau_Past=tau_Past, tau_gd=tau_gd, tau_rho=tau_rho,
-        phi_i=phi_i, phi_e=phi_e, lambda_ii=lambda_ii, coll_ratio=coll_ratio,
-        a_over_rhoi=a_over_rhoi, ntau=ni0 * (tauE if manual_tauE else tau_m),
-        beta=beta, beta_avg=beta_avg, B0=B0, R_mc=R_mc,
-        Vp=Vp, Sp=Sp, Sw=Sw, A_throat=A_throat,
-        ne0=ne0, nbar=nbar, Zeff=Zeff, M=M, fTavg=fTavg, fnavg=fnavg,
-        P_line=P_line, tauC_eff=tauC_eff,
-        Ecrit=Ecrit, f_fast_ion=f_fast, tau_eq_ie=tau_eq,
-        P_ei=P_ei, f_alpha_used=f_alpha_used, Te0_used=Te0,
-        te_mode=0.0, te_resid=0.0, strcase=rx["name"],
+        tau_m=tau_m,
+        tau_Past=tau_Past,
+        tau_gd=tau_gd,
+        tau_rho=tau_rho,
+        phi_i=phi_i,
+        phi_e=phi_e,
+        lambda_ii=lambda_ii,
+        coll_ratio=coll_ratio,
+        a_over_rhoi=a_over_rhoi,
+        ntau=ni0 * (tauE if manual_tauE else tau_m),
+        beta=beta,
+        beta_avg=beta_avg,
+        B0=B0,
+        R_mc=R_mc,
+        Vp=Vp,
+        Sp=Sp,
+        Sw=Sw,
+        A_throat=A_throat,
+        ne0=ne0,
+        nbar=nbar,
+        Zeff=Zeff,
+        M=M,
+        fTavg=fTavg,
+        fnavg=fnavg,
+        P_line=P_line,
+        tauC_eff=tauC_eff,
+        Ecrit=Ecrit,
+        f_fast_ion=f_fast,
+        tau_eq_ie=tau_eq,
+        P_ei=P_ei,
+        f_alpha_used=f_alpha_used,
+        Te0_used=Te0,
+        te_mode=0.0,
+        te_resid=0.0,
+        strcase=rx["name"],
     )

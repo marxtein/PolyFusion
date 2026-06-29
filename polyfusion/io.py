@@ -24,8 +24,9 @@ def _normalize_params(config: str, params: dict) -> dict:
     return out
 
 
-def run_case(params: dict, *, preset: str | None = None,
-             config: str = "tokamak") -> dict[str, Any]:
+def run_case(
+    params: dict, *, preset: str | None = None, config: str = "tokamak"
+) -> dict[str, Any]:
     """Evaluate one operating point of a configuration.
 
     Parameters
@@ -52,8 +53,11 @@ def run_case(params: dict, *, preset: str | None = None,
     try:
         outputs = spec.solve(base)
     except Exception as e:  # solver-level domain guard (audit P0)
-        return {"config": config, "errors": [f"{type(e).__name__}: {e}"],
-                "inputs": base}
+        return {
+            "config": config,
+            "errors": [f"{type(e).__name__}: {e}"],
+            "inputs": base,
+        }
     result = {"config": config, "inputs": base, "outputs": outputs}
     if spec.shape_fn is not None:
         try:
@@ -72,10 +76,14 @@ def list_configs() -> dict[str, dict]:
     """Metadata for every registered configuration (for UIs)."""
     return {
         c.name: {
-            "label": c.label, "params": c.params, "presets": list(c.presets),
+            "label": c.label,
+            "params": c.params,
+            "presets": list(c.presets),
             "preset_groups": c.preset_groups,
-            "contour_fields": c.contour_fields, "scan_defaults": c.scan_defaults,
-            "best_window": c.best_window, "optional_window": c.optional_window,
+            "contour_fields": c.contour_fields,
+            "scan_defaults": c.scan_defaults,
+            "best_window": c.best_window,
+            "optional_window": c.optional_window,
             "contour_spec": c.contour_spec,
         }
         for c in REGISTRY.values()

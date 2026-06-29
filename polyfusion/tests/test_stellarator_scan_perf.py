@@ -13,14 +13,19 @@ Run: python polyfusion/tests/test_stellarator_scan_perf.py
 """
 
 import os
-for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
-           "NUMEXPR_NUM_THREADS"):
+
+for _v in (
+    "OPENBLAS_NUM_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
     os.environ.setdefault(_v, "1")
 
-import sys
-import time
+import sys  # noqa: E402
+import time  # noqa: E402
 
-import numpy as np
+import numpy as np  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from polyfusion.configs import get  # noqa: E402
@@ -47,15 +52,18 @@ def main():
     t = time.time()
     g = scan2d(spec, base, "Ti0", "ni0", xv, yv)
     dt = time.time() - t
-    ok(dt < 15.0,
-       f"7x7 HELIAS Ti0xni0 scan is fast ({dt:.2f}s; ~200s without the fix)")
-    ok(len(_GEOM_CACHE) == 1,
-       f"geometry computed ONCE for the whole scan (cache size {len(_GEOM_CACHE)})")
+    ok(dt < 15.0, f"7x7 HELIAS Ti0xni0 scan is fast ({dt:.2f}s; ~200s without the fix)")
+    ok(
+        len(_GEOM_CACHE) == 1,
+        f"geometry computed ONCE for the whole scan (cache size {len(_GEOM_CACHE)})",
+    )
 
     Vp = np.asarray(g["Vp"], float)
     vals = Vp[np.isfinite(Vp)]
-    ok(vals.size > 0 and np.ptp(vals) < 1e-6 * np.mean(vals),
-       "Vp identical across the Ti0xni0 grid (geometry scan-invariant)")
+    ok(
+        vals.size > 0 and np.ptp(vals) < 1e-6 * np.mean(vals),
+        "Vp identical across the Ti0xni0 grid (geometry scan-invariant)",
+    )
     iota = np.asarray(g["iota"], float)
     iv = iota[np.isfinite(iota)]
     ok(np.ptp(iv) < 1e-9 * abs(np.mean(iv)), "iota identical across the grid")
@@ -63,18 +71,28 @@ def main():
     # --- cached solve is byte-identical to the first (uncached) solve ---
     _GEOM_CACHE.clear()
     p = {**base, "Ti0": 15.0, "ni0": 2e20}
-    r1 = spec.solve(p)                 # cache miss (computes geometry)
-    r2 = spec.solve(p)                 # cache hit
-    ok(r1["Vp"] == r2["Vp"] and r1["iota"] == r2["iota"] and r1["Sw"] == r2["Sw"],
-       "cached solve identical to the first computed solve")
+    r1 = spec.solve(p)  # cache miss (computes geometry)
+    r2 = spec.solve(p)  # cache hit
+    ok(
+        r1["Vp"] == r2["Vp"] and r1["iota"] == r2["iota"] and r1["Sw"] == r2["Sw"],
+        "cached solve identical to the first computed solve",
+    )
 
     # --- a GEOMETRIC scan key recomputes geometry per distinct value ---
     _GEOM_CACHE.clear()
-    scan2d(spec, base, "etabar", "Ti0",
-           np.linspace(0.04, 0.06, 4), np.linspace(10.0, 20.0, 3))
-    ok(len(_GEOM_CACHE) == 4,
-       f"geometric scan key recomputes geometry per distinct etabar "
-       f"(cache size {len(_GEOM_CACHE)}, expected 4)")
+    scan2d(
+        spec,
+        base,
+        "etabar",
+        "Ti0",
+        np.linspace(0.04, 0.06, 4),
+        np.linspace(10.0, 20.0, 3),
+    )
+    ok(
+        len(_GEOM_CACHE) == 4,
+        f"geometric scan key recomputes geometry per distinct etabar "
+        f"(cache size {len(_GEOM_CACHE)}, expected 4)",
+    )
 
     print("\nRESULT:", "SCAN PERF PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1

@@ -69,11 +69,10 @@ def scan2d(spec: ConfigSpec, base: dict, xkey: str, ykey: str, xvals, yvals) -> 
                 v = out.get(k)
                 if isinstance(v, (int, float)) and not isinstance(v, bool):
                     grids[k][i, j] = v
-    if "valid" not in grids:        # pragma: no cover (solve always sets it)
+    if "valid" not in grids:  # pragma: no cover (solve always sets it)
         grids["valid"] = np.ones((nx, ny))
     # points that failed validation/solve are invalid by definition
-    solved = np.array([[outs[i][j] is not None for j in range(ny)]
-                       for i in range(nx)])
+    solved = np.array([[outs[i][j] is not None for j in range(ny)] for i in range(nx)])
     grids["valid"] = np.where(solved, grids["valid"], 0.0)
 
     grids["xx"] = xx
@@ -82,7 +81,9 @@ def scan2d(spec: ConfigSpec, base: dict, xkey: str, ykey: str, xvals, yvals) -> 
     return grids
 
 
-def best_region_mask(grids: dict, ge: dict | None = None, le: dict | None = None) -> np.ndarray:
+def best_region_mask(
+    grids: dict, ge: dict | None = None, le: dict | None = None
+) -> np.ndarray:
     """Boolean operating-window mask.
 
     ``ge``/``le`` map output field -> threshold (>= / <=).  Criteria whose field

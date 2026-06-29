@@ -17,6 +17,25 @@ from .presets_io import load_presets
 PRESETS, PRESET_GROUPS = load_presets("tokamak")
 
 # Canonical parameter order accepted positionally by funsc().
-PARAM_ORDER = ["R0", "A", "kappa", "delta", "Sn", "ST", "ni0", "Ti0", "fT",
-               "fsig", "f1", "BT0", "Ip", "tauE", "fHe", "fimp", "Zimp",
-               "Rw", "g", "icase"]
+PARAM_ORDER = [
+    "R0",
+    "A",
+    "kappa",
+    "delta",
+    "Sn",
+    "ST",
+    "ni0",
+    "Ti0",
+    "fT",
+    "fsig",
+    "f1",
+    "BT0",
+    "Ip",
+    "tauE",
+    "fHe",
+    "fimp",
+    "Zimp",
+    "Rw",
+    "g",
+    "icase",
+]

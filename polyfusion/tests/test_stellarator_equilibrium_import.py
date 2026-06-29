@@ -63,7 +63,9 @@ def _vmec_fixture_ripple(path, ripple):
 
 def _desc_fixture(path):
     with h5py.File(path, "w") as f:
-        f.create_dataset("__class__", data=np.bytes_("desc.equilibrium.equilibrium.EquilibriaFamily"))
+        f.create_dataset(
+            "__class__", data=np.bytes_("desc.equilibrium.equilibrium.EquilibriaFamily")
+        )
         f.create_dataset("__version__", data=np.bytes_("0.14.0"))
         family = f.create_group("_equilibria")
         family.create_dataset("__class__", data=np.bytes_("list"))
@@ -82,14 +84,17 @@ def _desc_fixture(path):
         axis = eq.create_group("_axis")
         axis.create_dataset("_NFP", data=4)
         axis.create_group("_R_basis").create_dataset(
-            "_modes", data=np.array([[0, 0, 0], [0, 0, 1]], dtype=int))
+            "_modes", data=np.array([[0, 0, 0], [0, 0, 1]], dtype=int)
+        )
         axis.create_group("_Z_basis").create_dataset(
-            "_modes", data=np.array([[0, 0, -1]], dtype=int))
+            "_modes", data=np.array([[0, 0, -1]], dtype=int)
+        )
         axis.create_dataset("_R_n", data=[5.0, 0.1])
         axis.create_dataset("_Z_n", data=[-0.1])
         iota = eq.create_group("_iota")
         iota.create_group("_basis").create_dataset(
-            "_modes", data=np.array([[0, 0, 0], [2, 0, 0]], dtype=int))
+            "_modes", data=np.array([[0, 0, 0], [2, 0, 0]], dtype=int)
+        )
         iota.create_dataset("_params", data=[0.4, 0.09])
 
 
@@ -107,7 +112,8 @@ def test_vmec_wout_import_maps_lcfs_and_iota_rho_two_thirds():
     assert out["metrics"]["Vp_m3"] == 30.0
     assert out["B0_T"] == 2.5
     assert out["iota"]["rho_2_3"] == pytest.approx(
-        np.interp(4 / 9, [0, 0.5, 1], [0.7, 0.8, 0.9]))
+        np.interp(4 / 9, [0, 0.5, 1], [0.7, 0.8, 0.9])
+    )
     assert [1, 1, pytest.approx(0.12 / 0.55)] in out["shape"]["R"]
     assert [-1, -1, pytest.approx(0.12 / 0.55)] in out["shape"]["R"]
 
@@ -147,7 +153,8 @@ def test_imported_real_field_b25_overrides_first_order_in_power_balance():
     run = run_case(base, config="stellarator")
     assert "errors" not in run, run.get("errors")
     assert run["outputs"]["cyclotron_B25_factor"] == pytest.approx(
-        imported["metrics"]["b25_real"], rel=1e-9)
+        imported["metrics"]["b25_real"], rel=1e-9
+    )
 
 
 def test_desc_import_reads_final_equilibrium_surface_axis_and_profile():
@@ -210,8 +217,10 @@ def test_equilibrium_preview_http_endpoint_accepts_raw_binary():
             f"http://127.0.0.1:{server.server_port}/api/stellarator/equilibrium/preview",
             data=data,
             method="POST",
-            headers={"Content-Type": "application/octet-stream",
-                     "X-Filename": "wout_uploaded.nc"},
+            headers={
+                "Content-Type": "application/octet-stream",
+                "X-Filename": "wout_uploaded.nc",
+            },
         )
         with urllib.request.urlopen(req) as response:
             out = json.loads(response.read())
@@ -257,7 +266,7 @@ def _extract_js_function(src, name):
         elif src[i] == "}":
             depth -= 1
             if depth == 0:
-                return src[start:i + 1]
+                return src[start : i + 1]
     raise AssertionError(name)
 
 
@@ -280,7 +289,12 @@ def test_frontend_import_application_preserves_operating_inputs_and_b0_fallback(
     fn = _extract_js_function(html, "applyImportedEquilibrium")
     imported = {
         "nfp": 5,
-        "shape": {"kind": "equilibrium_fourier", "nfp": 5, "R": [[1, 0, 1]], "Z": [[-1, 0, 1]]},
+        "shape": {
+            "kind": "equilibrium_fourier",
+            "nfp": 5,
+            "R": [[1, 0, 1]],
+            "Z": [[-1, 0, 1]],
+        },
         "iota": {"rho_2_3": -0.88},
         "metrics": {"R0_m": 5.5, "boundary_scale_m": 0.6, "Vp_m3": 31},
         "B0_T": None,
@@ -312,7 +326,9 @@ def test_import_rejects_more_than_mode_limit():
             surf = f["_equilibria/0/_surface"]
             del surf["_R_basis/_modes"]
             del surf["_R_lmn"]
-            surf["_R_basis"].create_dataset("_modes", data=np.zeros((4097, 3), dtype=int))
+            surf["_R_basis"].create_dataset(
+                "_modes", data=np.zeros((4097, 3), dtype=int)
+            )
             surf.create_dataset("_R_lmn", data=np.ones(4097))
         with pytest.raises(ValueError, match="4096"):
             parse_equilibrium_file(path)

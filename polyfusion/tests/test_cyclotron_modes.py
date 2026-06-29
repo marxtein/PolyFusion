@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 import os
 import sys
 
@@ -44,17 +43,13 @@ def test_frc_uses_B_25_volume_moment_not_mean_field_power():
         * result.Vp
     )
     assert result.Pcycl > old
-    assert result.Pcycl / old == pytest.approx(
-        result.GB25 / result.GB**2.5, rel=1e-10
-    )
+    assert result.Pcycl / old == pytest.approx(result.GB25 / result.GB**2.5, rel=1e-10)
 
 
 def test_frc_manual_tauC_uses_electron_energy():
     result = _frc(use_tauC=1.0, tauC=2.0)
     p = FRC_PRESETS["FRC-DT"]
-    eth_e = (
-        1.5 * result.ne0 * p["Te"] * 1e3 * QE * result.G1 * result.Vp * 1e-6
-    )
+    eth_e = 1.5 * result.ne0 * p["Te"] * 1e3 * QE * result.G1 * result.Vp * 1e-6
     assert result.Pcycl == pytest.approx(eth_e / 2.0)
     assert result.tauC_eff == pytest.approx(2.0)
     assert _frc(use_tauC=1.0, tauC=2.0, Rw=0.1).Pcycl == pytest.approx(

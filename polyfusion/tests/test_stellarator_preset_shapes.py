@@ -58,16 +58,21 @@ def main():
         for s in sh["sections"]:
             cR = float(np.mean(s["R"][:-1]))
             cZ = float(np.mean(s["Z"][:-1]))
-            extent = float(np.max(np.hypot(np.array(s["R"]) - cR,
-                                           np.array(s["Z"]) - cZ)))
+            extent = float(
+                np.max(np.hypot(np.array(s["R"]) - cR, np.array(s["Z"]) - cZ))
+            )
             # plasma drawn at the real minor radius, NOT a microscopic speck
-            ok(extent >= 0.4 * a,
-               f"{name}/{s['label']}: cross-section sized to a "
-               f"(extent {extent:.3f} >= 0.4*a={0.4*a:.3f})")
+            ok(
+                extent >= 0.4 * a,
+                f"{name}/{s['label']}: cross-section sized to a "
+                f"(extent {extent:.3f} >= 0.4*a={0.4 * a:.3f})",
+            )
             # simple closed curve, no self-intersection
             si = _self_intersections(s["R"], s["Z"])
-            ok(si == 0,
-               f"{name}/{s['label']}: boundary is a simple curve (self-int {si})")
+            ok(
+                si == 0,
+                f"{name}/{s['label']}: boundary is a simple curve (self-int {si})",
+            )
 
     print("\nRESULT:", "PRESET SHAPE CHECKS PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1

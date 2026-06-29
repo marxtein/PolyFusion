@@ -23,10 +23,15 @@ from polyfusion.configs.stellarator import _offset_closed_curve_normal  # noqa: 
 
 
 def _inside(px, py, R, Z):
-    R = np.asarray(R); Z = np.asarray(Z); n = len(R); inside = False; j = n - 1
+    R = np.asarray(R)
+    Z = np.asarray(Z)
+    n = len(R)
+    inside = False
+    j = n - 1
     for i in range(n):
         if ((Z[i] > py) != (Z[j] > py)) and (
-                px < (R[j] - R[i]) * (py - Z[i]) / (Z[j] - Z[i] + 1e-30) + R[i]):
+            px < (R[j] - R[i]) * (py - Z[i]) / (Z[j] - Z[i] + 1e-30) + R[i]
+        ):
             inside = not inside
         j = i
     return inside
@@ -59,10 +64,13 @@ def test_convex_section_wall_outside_and_enlarged():
     Z = np.append(0.8 * np.sin(t), 0.0)
     wR, wZ = _offset_closed_curve_normal(R, Z, 0.1)
     assert sum(_inside(x, y, R, Z) for x, y in zip(wR, wZ)) == 0
+
     # wall area strictly larger than plasma area (shoelace magnitude)
     def area2(R, Z):
-        R = np.asarray(R); Z = np.asarray(Z)
+        R = np.asarray(R)
+        Z = np.asarray(Z)
         return abs(float(np.sum(R * np.roll(Z, -1) - np.roll(R, -1) * Z)))
+
     assert area2(wR, wZ) > area2(R, Z)
 
 
@@ -76,8 +84,14 @@ def test_imported_equilibrium_flux_surfaces_inside_boundary():
     per-vertex clamp to the first boundary crossing.
     """
     import os
-    nc = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                      "app", "equilibria", "stellarator", "W7-X.nc")
+
+    nc = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "app",
+        "equilibria",
+        "stellarator",
+        "W7-X.nc",
+    )
     if not os.path.isfile(nc):
         return  # bundled file absent (skip)
     from polyfusion import equilibrium_import as EI
@@ -85,18 +99,19 @@ def test_imported_equilibrium_flux_surfaces_inside_boundary():
 
     imp = EI._read_vmec(nc)
     m = imp["metrics"]
-    out = _machine_boundary_outlines(m["R0_m"], m["boundary_scale_m"],
-                                     imp["nfp"], 0.0, 0.05, imp["shape"], 200)
+    out = _machine_boundary_outlines(
+        m["R0_m"], m["boundary_scale_m"], imp["nfp"], 0.0, 0.05, imp["shape"], 200
+    )
     for s in out["sections"]:
         bR, bZ = s["R"], s["Z"]
         for su in s["surfaces"]:
             if su["rho"] >= 0.999:
                 continue  # rho=1 coincides with the boundary
-            outside = sum(not _inside(x, y, bR, bZ)
-                          for x, y in zip(su["R"], su["Z"]))
+            outside = sum(not _inside(x, y, bR, bZ) for x, y in zip(su["R"], su["Z"]))
             assert outside == 0, (
                 f"{s['label']} rho={su['rho']:.2f}: {outside} surface points "
-                f"outside boundary")
+                f"outside boundary"
+            )
 
 
 def test_imported_equilibrium_uses_real_nested_interior_surfaces():
@@ -104,8 +119,14 @@ def test_imported_equilibrium_uses_real_nested_interior_surfaces():
     OWN interior flux surfaces (nested by construction), not the synthesized
     cartoon fade.  Non-imported presets keep the fade (no interior_surfaces)."""
     import os
-    nc = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                      "app", "equilibria", "stellarator", "W7-X.nc")
+
+    nc = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "app",
+        "equilibria",
+        "stellarator",
+        "W7-X.nc",
+    )
     if not os.path.isfile(nc):
         return
     from polyfusion import equilibrium_import as EI
@@ -116,17 +137,25 @@ def test_imported_equilibrium_uses_real_nested_interior_surfaces():
     assert interior and len(interior) >= 3, "import must carry real interior surfaces"
     assert interior[-1]["rho"] == 1.0
 
-    out = _machine_boundary_outlines(imp["metrics"]["R0_m"],
-                                     imp["metrics"]["boundary_scale_m"],
-                                     imp["nfp"], 0.0, 0.05, imp["shape"], 200)
+    out = _machine_boundary_outlines(
+        imp["metrics"]["R0_m"],
+        imp["metrics"]["boundary_scale_m"],
+        imp["nfp"],
+        0.0,
+        0.05,
+        imp["shape"],
+        200,
+    )
     for s in out["sections"]:
         sfc = s["surfaces"]
         # each surface strictly inside the next one out (real nesting)
         for k in range(len(sfc) - 1):
             inner, outer = sfc[k], sfc[k + 1]
-            bad = sum(not _inside(x, y, outer["R"], outer["Z"])
-                      for x, y in zip(inner["R"], inner["Z"]))
-            assert bad == 0, f"{s['label']} surface {k} not nested inside {k+1}"
+            bad = sum(
+                not _inside(x, y, outer["R"], outer["Z"])
+                for x, y in zip(inner["R"], inner["Z"])
+            )
+            assert bad == 0, f"{s['label']} surface {k} not nested inside {k + 1}"
 
 
 if __name__ == "__main__":

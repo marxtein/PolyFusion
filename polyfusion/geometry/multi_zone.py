@@ -156,8 +156,10 @@ class MultiZoneGeometry(MirrorGeometry):
             x = np.linspace(a, b, n)
             h = (b - a) / (n - 1)
             y = np.array([f(xi) for xi in x])
-            return h / 3.0 * (
-                y[0] + y[-1] + 4.0 * np.sum(y[1:-1:2]) + 2.0 * np.sum(y[2:-2:2])
+            return (
+                h
+                / 3.0
+                * (y[0] + y[-1] + 4.0 * np.sum(y[1:-1:2]) + 2.0 * np.sum(y[2:-2:2]))
             )
 
         # ---- Plasma volume ---------------------------------------------------
@@ -184,7 +186,9 @@ class MultiZoneGeometry(MirrorGeometry):
             self._V_expander = (
                 2.0
                 * math.pi
-                * _simpson(lambda z: self._a_at(z) ** 2, self._z_mirror, self._z_collector)
+                * _simpson(
+                    lambda z: self._a_at(z) ** 2, self._z_mirror, self._z_collector
+                )
             )
             self._S_expander = (
                 2.0
@@ -197,9 +201,7 @@ class MultiZoneGeometry(MirrorGeometry):
 
         # ---- Plasma side surface ---------------------------------------------
         self._Sp = (
-            2.0 * math.pi * self.a_c * self.L_c
-            + self._S_throat
-            + self._S_expander
+            2.0 * math.pi * self.a_c * self.L_c + self._S_throat + self._S_expander
         )
 
         # ---- Wall surface (includes gap g) -----------------------------------
@@ -209,10 +211,7 @@ class MultiZoneGeometry(MirrorGeometry):
         if self.L_th > 0:
             a_throat_avg = float(
                 np.mean(
-                    [
-                        self._a_at(z)
-                        for z in np.linspace(self._z_cc, self._z_mirror, 40)
-                    ]
+                    [self._a_at(z) for z in np.linspace(self._z_cc, self._z_mirror, 40)]
                 )
             )
             Sw_throat = 2.0 * 2.0 * math.pi * (a_throat_avg + self.g) * self.L_th

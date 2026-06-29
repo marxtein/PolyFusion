@@ -11,6 +11,7 @@ the m=0 centerline and produced iota~2.32 (real 0.88). The backend must instead:
     axis (``axis_rc``/``axis_zs`` metadata — concepts synthesised from near-axis), OR
   * refuse (raise) when neither is available, rather than emit the centerline garbage.
 """
+
 import os
 import sys
 
@@ -25,8 +26,13 @@ from polyfusion.presets import load_presets  # noqa: E402
 def _boundary_payload(preset):
     p = dict(preset)
     v = preset["geometry_variants"]["boundary"]
-    p.update({k: v[k] for k in ("shape", "iota", "Vp_override", "Sw_override", "etabar")
-              if k in v})
+    p.update(
+        {
+            k: v[k]
+            for k in ("shape", "iota", "Vp_override", "Sw_override", "etabar")
+            if k in v
+        }
+    )
     for k in ("rc", "zs", "delta_h"):
         p.pop(k, None)
     return p
@@ -48,9 +54,11 @@ def test_real_machine_boundary_without_iota_refuses_centerline_garbage():
     presets, _ = load_presets("stellarator")
     p = _boundary_payload(presets["W7-X"])
     p["iota"] = 0.0
-    assert "axis_rc" not in p["shape"]      # the condition that makes near-axis garbage
+    assert "axis_rc" not in p["shape"]  # the condition that makes near-axis garbage
     run = run_case(p, config="stellarator")
-    assert "errors" in run, "expected a refusal, got " + str(run.get("outputs", {}).get("iota"))
+    assert "errors" in run, "expected a refusal, got " + str(
+        run.get("outputs", {}).get("iota")
+    )
     assert any("iota" in e.lower() for e in run["errors"])
 
 
@@ -64,12 +72,17 @@ def test_concept_boundary_with_axis_metadata_uses_nearaxis_iota():
     bvar = helias["geometry_variants"]["boundary"]
     assert isinstance(bvar["shape"].get("axis_rc"), list)
     p = dict(helias)
-    p.update({k: bvar[k] for k in ("shape", "iota", "Vp_override", "Sw_override", "etabar")
-              if k in bvar})
+    p.update(
+        {
+            k: bvar[k]
+            for k in ("shape", "iota", "Vp_override", "Sw_override", "etabar")
+            if k in bvar
+        }
+    )
     for k in ("rc", "zs", "delta_h"):
         p.pop(k, None)
-    p["iota"] = 0.0          # rely on the near-axis-on-real-axis computation
+    p["iota"] = 0.0  # rely on the near-axis-on-real-axis computation
     run = run_case(p, config="stellarator")
     assert "errors" not in run, run.get("errors")
     assert run["outputs"]["iota"] > 0.0
-    assert run["outputs"]["iota"] < 2.0     # a sane near-axis transform, not garbage
+    assert run["outputs"]["iota"] < 2.0  # a sane near-axis transform, not garbage

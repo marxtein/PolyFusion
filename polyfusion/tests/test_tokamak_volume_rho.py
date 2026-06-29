@@ -14,7 +14,7 @@ Key invariants:
     (profiles stay defined in the volume radius; the area-equivalent line
     average still degenerates to the analytic Gamma factor).
 """
-import math
+
 import os
 import sys
 
@@ -45,7 +45,7 @@ def test_layer_integration_shaped_departs_from_self_similar_and_is_monotone():
     s, rho, vfrac = tokamak_profile_volume_fraction(6.2, 2.0, 1.8, 0.5, 0.3, 1)
     assert vfrac[0] == pytest.approx(0.0)
     assert vfrac[-1] == pytest.approx(1.0)
-    assert np.all(np.diff(vfrac) >= -1e-12)               # monotone
+    assert np.all(np.diff(vfrac) >= -1e-12)  # monotone
     np.testing.assert_allclose(rho, np.sqrt(np.clip(vfrac, 0, 1)), rtol=1e-12)
     # elongation tapers inward, so V(s) is NOT proportional to s^2: the mapping
     # must differ from the self-similar one somewhere in the interior.
@@ -66,8 +66,34 @@ def test_nbar_geom_unchanged_by_layer_integration():
     # the analytic Gamma factor in BOTH circular and shaped cases (the change is
     # infrastructure-only; it must not move any reported number).
     for kappa, delta in ((1.0, 0.0), (1.8, 0.5)):
-        res = funsc(6.2, 2.0, kappa, delta, 0.5, 1.0, 1e20, 15.0, 1.0, 1.0, 0.5,
-                    5.3, 15.0, 1.0, 0.04, 0.01, 10, 0.7, 0.1, 1)
-        assert res.nbar_geom == pytest.approx(res.ne0 * _line_average_factor(0.5), rel=1e-9)
-        assert res.Te_line_geom == pytest.approx(res.Te0 * _line_average_factor(1.0), rel=1e-9)
-        assert res.Ti_line_geom == pytest.approx(15.0 * _line_average_factor(1.0), rel=1e-9)
+        res = funsc(
+            6.2,
+            2.0,
+            kappa,
+            delta,
+            0.5,
+            1.0,
+            1e20,
+            15.0,
+            1.0,
+            1.0,
+            0.5,
+            5.3,
+            15.0,
+            1.0,
+            0.04,
+            0.01,
+            10,
+            0.7,
+            0.1,
+            1,
+        )
+        assert res.nbar_geom == pytest.approx(
+            res.ne0 * _line_average_factor(0.5), rel=1e-9
+        )
+        assert res.Te_line_geom == pytest.approx(
+            res.Te0 * _line_average_factor(1.0), rel=1e-9
+        )
+        assert res.Ti_line_geom == pytest.approx(
+            15.0 * _line_average_factor(1.0), rel=1e-9
+        )

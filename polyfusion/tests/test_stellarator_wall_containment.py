@@ -28,10 +28,15 @@ def ok(cond, msg):
 
 
 def _inside(px, py, R, Z):
-    R = np.asarray(R); Z = np.asarray(Z); n = len(R); inside = False; j = n - 1
+    R = np.asarray(R)
+    Z = np.asarray(Z)
+    n = len(R)
+    inside = False
+    j = n - 1
     for i in range(n):
         if ((Z[i] > py) != (Z[j] > py)) and (
-                px < (R[j] - R[i]) * (py - Z[i]) / (Z[j] - Z[i] + 1e-30) + R[i]):
+            px < (R[j] - R[i]) * (py - Z[i]) / (Z[j] - Z[i] + 1e-30) + R[i]
+        ):
             inside = not inside
         j = i
     return inside
@@ -46,13 +51,15 @@ def main():
         for s in sh["sections"]:
             wR, wZ = s["wall"]["R"], s["wall"]["Z"]
             outside = 0
-            for su in s["surfaces"]:               # every nested flux surface
+            for su in s["surfaces"]:  # every nested flux surface
                 for x, y in zip(su["R"], su["Z"]):
                     if not _inside(x, y, wR, wZ):
                         outside += 1
-            ok(outside == 0,
-               f"{name}/{s['label']}: all flux-surface points inside wall "
-               f"({outside} outside)  [{sh['metric_mode']}]")
+            ok(
+                outside == 0,
+                f"{name}/{s['label']}: all flux-surface points inside wall "
+                f"({outside} outside)  [{sh['metric_mode']}]",
+            )
 
     print("\nRESULT:", "WALL CONTAINMENT PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1

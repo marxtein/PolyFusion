@@ -21,8 +21,8 @@ HERE = os.path.dirname(__file__)
 GOLDEN = json.load(open(os.path.join(HERE, "golden.json"), encoding="utf-8"))
 
 # Tolerances (relative) per quantity class.
-TIGHT = 1e-9   # grid-independent (pure algebra)
-LOOSE = 2e-2   # reactivity-coupled (depend on the energy-grid quadrature)
+TIGHT = 1e-9  # grid-independent (pure algebra)
+LOOSE = 2e-2  # reactivity-coupled (depend on the energy-grid quadrature)
 
 _LOOSE_KEYS = {"Pfus", "Pn", "Qfus", "Pheat", "Pwall", "H98", "HST"}
 # keys present in golden JSON that map directly to Result fields

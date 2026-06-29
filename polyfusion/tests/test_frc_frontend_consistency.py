@@ -21,7 +21,9 @@ def test_frontend_states_frc_fit_and_dipole_coordinate_and_wall_limits():
     src = open(INDEX, encoding="utf-8").read()
     assert "中面磁通锚定拟合，非完整二维平衡" in src
     assert "midplane-flux-anchored fit, not a full 2-D equilibrium" in src
-    assert "ρ<sub>U</sub>=ln(U/U<sub>in</sub>)/ln(U<sub>out</sub>/U<sub>in</sub>)" in src
+    assert (
+        "ρ<sub>U</sub>=ln(U/U<sub>in</sub>)/ln(U<sub>out</sub>/U<sub>in</sub>)" in src
+    )
     assert "球形面积代理" in src
     assert "spherical-area proxy" in src
 

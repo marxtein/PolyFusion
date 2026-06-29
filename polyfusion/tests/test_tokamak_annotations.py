@@ -20,7 +20,7 @@ def _extract_js_function(src: str, name: str) -> str:
         elif src[i] == "}":
             depth -= 1
             if depth == 0:
-                return src[start:i + 1]
+                return src[start : i + 1]
     raise AssertionError(name)
 
 
@@ -41,9 +41,7 @@ console.log(JSON.stringify(tokamakAnnotationGeometry(
   {json.dumps(tok)}, {json.dumps(shape)}
 )));
 """
-    geom = json.loads(
-        subprocess.check_output(["node", "-e", js], cwd=ROOT, text=True)
-    )
+    geom = json.loads(subprocess.check_output(["node", "-e", js], cwd=ROOT, text=True))
 
     assert geom["R0"] == pytest.approx(6.2)
     assert geom["a"] == pytest.approx(2.0)
@@ -103,8 +101,10 @@ console.log(JSON.stringify(tokamakAxisTrace(3.2,0,'磁轴')));
 
 def test_double_ellipse_uses_shared_zero_gap_wall_overlay_rule():
     html = open(os.path.join(ROOT, "app", "index.html"), encoding="utf-8").read()
-    branch = html[html.index("const rr=[0.2*a"):html.index(
-        "// Geometry for the dimension callouts"
-    )]
+    branch = html[
+        html.index("const rr=[0.2*a") : html.index(
+            "// Geometry for the dimension callouts"
+        )
+    ]
     assert "tokamakWallDrawSpec(g)" in branch
     assert "if(wallSpec.afterBoundary)" in branch

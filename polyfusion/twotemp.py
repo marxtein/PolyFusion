@@ -60,15 +60,16 @@ def ion_deposition_fraction(E0_keV: float, Ecrit_keV: float, n: int = 400) -> fl
         raise ValueError("energies must be positive")
     x = E0_keV / Ecrit_keV
     u = np.linspace(0.0, x, 2 * n + 1)
-    f = 1.0 / (1.0 + u ** 1.5)
+    f = 1.0 / (1.0 + u**1.5)
     # composite Simpson
     h = x / (2 * n)
     integral = h / 3.0 * (f[0] + f[-1] + 4 * f[1:-1:2].sum() + 2 * f[2:-2:2].sum())
     return float(integral / x)
 
 
-def equilibration_time(n_i: float, Te_keV: float, Z: float, A: float,
-                       lnLambda: float = 17.0) -> float:
+def equilibration_time(
+    n_i: float, Te_keV: float, Z: float, A: float, lnLambda: float = 17.0
+) -> float:
     """Ion-electron temperature equilibration time [s] (NRL formulary).
 
     nu_eq = 1.8e-19 sqrt(m_e m_i) Z^2 n_i lnLambda / (m_i Te + m_e Ti)^{3/2}
@@ -78,17 +79,19 @@ def equilibration_time(n_i: float, Te_keV: float, Z: float, A: float,
     """
     if n_i <= 0 or Te_keV <= 0:
         raise ValueError("n_i and Te must be positive")
-    m_e = ME * 1e3                       # g
-    m_i = A * MP * 1e3                   # g
+    m_e = ME * 1e3  # g
+    m_i = A * MP * 1e3  # g
     Te_eV = Te_keV * 1e3
     n_cm3 = n_i * 1e-6
-    nu = (1.8e-19 * math.sqrt(m_e * m_i) * Z * Z * n_cm3 * lnLambda
-          / (m_i * Te_eV) ** 1.5)
+    nu = (
+        1.8e-19 * math.sqrt(m_e * m_i) * Z * Z * n_cm3 * lnLambda / (m_i * Te_eV) ** 1.5
+    )
     return 1.0 / nu
 
 
-def p_ei_exchange(n_i: float, Ti_keV: float, Te_keV: float, Z: float, A: float,
-                  lnLambda: float = 17.0) -> float:
+def p_ei_exchange(
+    n_i: float, Ti_keV: float, Te_keV: float, Z: float, A: float, lnLambda: float = 17.0
+) -> float:
     """Net ion->electron collisional heat-exchange power density [W/m^3].
 
     P_ei = (3/2) n_i (Ti - Te) e*10^3 / tau_eq.  Positive when ions are
@@ -98,9 +101,16 @@ def p_ei_exchange(n_i: float, Ti_keV: float, Te_keV: float, Z: float, A: float,
     return 1.5 * n_i * (Ti_keV - Te_keV) * _KEV_J / tau
 
 
-def solve_channel_balance(evaluate, residual, lo: float, hi: float,
-                          n_scan: int = 8, iters: int = 22,
-                          monotone: bool = False, tol: float = 0.0):
+def solve_channel_balance(
+    evaluate,
+    residual,
+    lo: float,
+    hi: float,
+    n_scan: int = 8,
+    iters: int = 22,
+    monotone: bool = False,
+    tol: float = 0.0,
+):
     """Generic 1-D self-consistency solver for the electron channel.
 
     ``evaluate(v)`` runs the full configuration solver at parameter value
@@ -154,9 +164,9 @@ def solve_channel_balance(evaluate, residual, lo: float, hi: float,
         else:
             # no sign change: electrons pinned at an endpoint
             if prev_r is not None and prev_r > 0:
-                return prev_v, prev_res, prev_r, 0.0          # even hottest: net heating
+                return prev_v, prev_res, prev_r, 0.0  # even hottest: net heating
             res = evaluate(lo)
-            return lo, res, residual(lo, res), 0.0            # even coldest: net cooling
+            return lo, res, residual(lo, res), 0.0  # even coldest: net cooling
 
         a, b = bracket
         res_m, r_m = res, r

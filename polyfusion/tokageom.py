@@ -60,7 +60,7 @@ def offset_outward(R, Z, gap):
     Zc = Z[:-1] if closed else Z
     tR = np.roll(Rc, -1) - np.roll(Rc, 1)
     tZ = np.roll(Zc, -1) - np.roll(Zc, 1)
-    nR, nZ = tZ.copy(), -tR.copy()              # outward normal = tangent rotated -90 deg
+    nR, nZ = tZ.copy(), -tR.copy()  # outward normal = tangent rotated -90 deg
     norm = np.hypot(nR, nZ)
     norm[norm == 0.0] = 1.0
     Rw = Rc + gap * nR / norm
@@ -74,8 +74,8 @@ def offset_outward(R, Z, gap):
 def miller_boundary(R0, a, kappa, delta, n_theta=360):
     """Miller D-shape LCFS contour (R, Z) [m], open (endpoint excluded).
 
-        R(t) = R0 + a cos(t + arcsin(delta) sin t)
-        Z(t) = kappa a sin t
+    R(t) = R0 + a cos(t + arcsin(delta) sin t)
+    Z(t) = kappa a sin t
     """
     if R0 <= 0 or a <= 0 or kappa <= 0:
         raise ValueError(f"R0, a, kappa must be > 0 (got {R0}, {a}, {kappa})")
@@ -89,79 +89,114 @@ def miller_boundary(R0, a, kappa, delta, n_theta=360):
 
 # --- Cerfon-Freidberg analytic Grad-Shafranov (Phys. Plasmas 17, 032502) ---
 # Normalized coordinates x = R/R0, y = Z/R0. psi = psi_p + sum_i c_i psi_i.
-_CF_A = -0.155   # FF'/p' weighting (ITER-like reference; LCFS weakly depends on it)
+_CF_A = -0.155  # FF'/p' weighting (ITER-like reference; LCFS weakly depends on it)
 
 
 def _cf_homogeneous(x, y):
     """Return (7, 5) array: rows = psi_1..psi_7, cols = [val, d/dx, d/dy, d2/dx2, d2/dy2]."""
     L = np.log(x)
-    return np.array([
-        [1.0, 0.0, 0.0, 0.0, 0.0],
-        [x**2, 2 * x, 0.0, 2.0, 0.0],
-        [y**2 - x**2 * L, -2 * x * L - x, 2 * y, -2 * L - 3, 2.0],
-        [x**4 - 4 * x**2 * y**2, 4 * x**3 - 8 * x * y**2, -8 * x**2 * y,
-         12 * x**2 - 8 * y**2, -8 * x**2],
-        [2 * y**4 - 9 * y**2 * x**2 + 3 * x**4 * L - 12 * x**2 * y**2 * L,
-         12 * x**3 * L + 3 * x**3 - 24 * x * y**2 * L - 30 * x * y**2,
-         -24 * x**2 * y * L - 18 * x**2 * y + 8 * y**3,
-         36 * x**2 * L + 21 * x**2 - 24 * y**2 * L - 54 * y**2,
-         -24 * x**2 * L - 18 * x**2 + 24 * y**2],
-        [x**6 - 12 * x**4 * y**2 + 8 * x**2 * y**4,
-         6 * x**5 - 48 * x**3 * y**2 + 16 * x * y**4,
-         -24 * x**4 * y + 32 * x**2 * y**3,
-         30 * x**4 - 144 * x**2 * y**2 + 16 * y**4,
-         -24 * x**4 + 96 * x**2 * y**2],
-        [8 * y**6 - 140 * y**4 * x**2 + 75 * y**2 * x**4 - 15 * x**6 * L
-         + 180 * x**4 * y**2 * L - 120 * x**2 * y**4 * L,
-         -90 * x**5 * L - 15 * x**5 + 720 * x**3 * y**2 * L + 480 * x**3 * y**2
-         - 240 * x * y**4 * L - 400 * x * y**4,
-         360 * x**4 * y * L + 150 * x**4 * y - 480 * x**2 * y**3 * L
-         - 560 * x**2 * y**3 + 48 * y**5,
-         -450 * x**4 * L - 165 * x**4 + 2160 * x**2 * y**2 * L
-         + 2160 * x**2 * y**2 - 240 * y**4 * L - 640 * y**4,
-         360 * x**4 * L + 150 * x**4 - 1440 * x**2 * y**2 * L
-         - 1680 * x**2 * y**2 + 240 * y**4],
-    ], dtype=float)
+    return np.array(
+        [
+            [1.0, 0.0, 0.0, 0.0, 0.0],
+            [x**2, 2 * x, 0.0, 2.0, 0.0],
+            [y**2 - x**2 * L, -2 * x * L - x, 2 * y, -2 * L - 3, 2.0],
+            [
+                x**4 - 4 * x**2 * y**2,
+                4 * x**3 - 8 * x * y**2,
+                -8 * x**2 * y,
+                12 * x**2 - 8 * y**2,
+                -8 * x**2,
+            ],
+            [
+                2 * y**4 - 9 * y**2 * x**2 + 3 * x**4 * L - 12 * x**2 * y**2 * L,
+                12 * x**3 * L + 3 * x**3 - 24 * x * y**2 * L - 30 * x * y**2,
+                -24 * x**2 * y * L - 18 * x**2 * y + 8 * y**3,
+                36 * x**2 * L + 21 * x**2 - 24 * y**2 * L - 54 * y**2,
+                -24 * x**2 * L - 18 * x**2 + 24 * y**2,
+            ],
+            [
+                x**6 - 12 * x**4 * y**2 + 8 * x**2 * y**4,
+                6 * x**5 - 48 * x**3 * y**2 + 16 * x * y**4,
+                -24 * x**4 * y + 32 * x**2 * y**3,
+                30 * x**4 - 144 * x**2 * y**2 + 16 * y**4,
+                -24 * x**4 + 96 * x**2 * y**2,
+            ],
+            [
+                8 * y**6
+                - 140 * y**4 * x**2
+                + 75 * y**2 * x**4
+                - 15 * x**6 * L
+                + 180 * x**4 * y**2 * L
+                - 120 * x**2 * y**4 * L,
+                -90 * x**5 * L
+                - 15 * x**5
+                + 720 * x**3 * y**2 * L
+                + 480 * x**3 * y**2
+                - 240 * x * y**4 * L
+                - 400 * x * y**4,
+                360 * x**4 * y * L
+                + 150 * x**4 * y
+                - 480 * x**2 * y**3 * L
+                - 560 * x**2 * y**3
+                + 48 * y**5,
+                -450 * x**4 * L
+                - 165 * x**4
+                + 2160 * x**2 * y**2 * L
+                + 2160 * x**2 * y**2
+                - 240 * y**4 * L
+                - 640 * y**4,
+                360 * x**4 * L
+                + 150 * x**4
+                - 1440 * x**2 * y**2 * L
+                - 1680 * x**2 * y**2
+                + 240 * y**4,
+            ],
+        ],
+        dtype=float,
+    )
 
 
 def _cf_particular(x, y, A):
     """Particular solution row [val, d/dx, d/dy, d2/dx2, d2/dy2] at (x, y)."""
     L = np.log(x)
-    return np.array([
-        x**4 / 8 + A * (0.5 * x**2 * L - x**4 / 8),
-        x**3 / 2 + A * (x * L + 0.5 * x - 0.5 * x**3),
-        0.0,
-        1.5 * x**2 + A * (L + 1.5 - 1.5 * x**2),
-        0.0,
-    ], dtype=float)
+    return np.array(
+        [
+            x**4 / 8 + A * (0.5 * x**2 * L - x**4 / 8),
+            x**3 / 2 + A * (x * L + 0.5 * x - 0.5 * x**3),
+            0.0,
+            1.5 * x**2 + A * (L + 1.5 - 1.5 * x**2),
+            0.0,
+        ],
+        dtype=float,
+    )
 
 
 def _cf_coeffs(eps, kappa, delta, A=_CF_A):
     """Solve the 7x7 linear system for the homogeneous coefficients c_1..c_7 (limiter)."""
     alpha = math.asin(delta)
-    N1 = -(1 + alpha)**2 / (eps * kappa**2)
-    N2 = (1 - alpha)**2 / (eps * kappa**2)
-    po = (1 + eps, 0.0)        # outer equatorial
-    pin = (1 - eps, 0.0)       # inner equatorial
+    N1 = -((1 + alpha) ** 2) / (eps * kappa**2)
+    N2 = (1 - alpha) ** 2 / (eps * kappa**2)
+    po = (1 + eps, 0.0)  # outer equatorial
+    pin = (1 - eps, 0.0)  # inner equatorial
     M = np.zeros((7, 7))
     b = np.zeros(7)
 
     def add(i, point, sel):
         """sel(row5) -> scalar; row5 is [val,dx,dy,dxx,dyy]."""
-        H = _cf_homogeneous(*point)        # (7,5)
-        P = _cf_particular(*point, A)       # (5,)
+        H = _cf_homogeneous(*point)  # (7,5)
+        P = _cf_particular(*point, A)  # (5,)
         M[i, :] = np.array([sel(H[j]) for j in range(7)])
         b[i] = -sel(P)
 
-    add(0, po, lambda r: r[0])                          # psi = 0 outer
-    add(1, pin, lambda r: r[0])                         # psi = 0 inner
-    add(4, po, lambda r: r[4] + N1 * r[1])              # curvature outer
-    add(5, pin, lambda r: r[4] + N2 * r[1])             # curvature inner
-    ph = (1 - delta * eps, kappa * eps)                 # limiter: smooth high point
-    N3 = -kappa / (eps * math.cos(alpha)**2)
-    add(2, ph, lambda r: r[0])                          # psi = 0 high point
-    add(3, ph, lambda r: r[1])                          # d/dx = 0 (maximum)
-    add(6, ph, lambda r: r[3] + N3 * r[2])              # curvature high
+    add(0, po, lambda r: r[0])  # psi = 0 outer
+    add(1, pin, lambda r: r[0])  # psi = 0 inner
+    add(4, po, lambda r: r[4] + N1 * r[1])  # curvature outer
+    add(5, pin, lambda r: r[4] + N2 * r[1])  # curvature inner
+    ph = (1 - delta * eps, kappa * eps)  # limiter: smooth high point
+    N3 = -kappa / (eps * math.cos(alpha) ** 2)
+    add(2, ph, lambda r: r[0])  # psi = 0 high point
+    add(3, ph, lambda r: r[1])  # d/dx = 0 (maximum)
+    add(6, ph, lambda r: r[3] + N3 * r[2])  # curvature high
     return np.linalg.solve(M, b)
 
 
@@ -183,13 +218,19 @@ def _cf_psi_value(x, y, coeffs, A=_CF_A):
     L = np.log(x)
     x2, y2 = x**2, y**2
     c = coeffs
-    psi = x2**2 / 8 + A * (0.5 * x2 * L - x2**2 / 8)            # particular value
+    psi = x2**2 / 8 + A * (0.5 * x2 * L - x2**2 / 8)  # particular value
     psi = psi + c[0] + c[1] * x2 + c[2] * (y2 - x2 * L)
     psi = psi + c[3] * (x2**2 - 4 * x2 * y2)
     psi = psi + c[4] * (2 * y2**2 - 9 * y2 * x2 + 3 * x2**2 * L - 12 * x2 * y2 * L)
     psi = psi + c[5] * (x2**3 - 12 * x2**2 * y2 + 8 * x2 * y2**2)
-    psi = psi + c[6] * (8 * y2**3 - 140 * y2**2 * x2 + 75 * y2 * x2**2
-                        - 15 * x2**3 * L + 180 * x2**2 * y2 * L - 120 * x2 * y2**2 * L)
+    psi = psi + c[6] * (
+        8 * y2**3
+        - 140 * y2**2 * x2
+        + 75 * y2 * x2**2
+        - 15 * x2**3 * L
+        + 180 * x2**2 * y2 * L
+        - 120 * x2 * y2**2 * L
+    )
     return psi
 
 
@@ -220,20 +261,20 @@ def cf_boundary(R0, a, kappa, delta, n_theta=360):
     dy = np.sin(th)
     s0 = np.full(th.shape, 1e-4)
     s1 = np.full(th.shape, 1.2 * eps + 0.4)
-    inward = dx < 0                       # cap inward rays so x = xc + s*dx > 0 (log domain)
+    inward = dx < 0  # cap inward rays so x = xc + s*dx > 0 (log domain)
     s1 = np.where(inward, np.minimum(s1, (xc - 1e-3) / np.where(inward, -dx, 1.0)), s1)
     f0 = _cf_psi_value(xc + s0 * dx, s0 * dy, coeffs)
     f1 = _cf_psi_value(xc + s1 * dx, s1 * dy, coeffs)
-    bracketed = f0 * f1 <= 0             # rays that cross the boundary
+    bracketed = f0 * f1 <= 0  # rays that cross the boundary
     lo, hi, flo = s0.copy(), s1.copy(), f0.copy()
     for _ in range(60):
         sm = 0.5 * (lo + hi)
         fm = _cf_psi_value(xc + sm * dx, sm * dy, coeffs)
-        left = flo * fm <= 0            # root in [lo, sm]
+        left = flo * fm <= 0  # root in [lo, sm]
         hi = np.where(left, sm, hi)
         lo = np.where(left, lo, sm)
         flo = np.where(left, flo, fm)
-    s = np.where(bracketed, 0.5 * (lo + hi), eps)   # missed rays (X-point notch) -> eps
+    s = np.where(bracketed, 0.5 * (lo + hi), eps)  # missed rays (X-point notch) -> eps
     R = (xc + s * dx) * R0
     Z = s * dy * R0
     # magnetic axis = flux minimum on the midplane
@@ -250,13 +291,14 @@ def cf_boundary(R0, a, kappa, delta, n_theta=360):
     # bracketed conventional cases remain bit-for-bit on the CF path.
     if not np.all(bracketed):
         R, Z = miller_boundary(R0, a, kappa, delta, n_theta)
-    R.flags.writeable = False           # shared cache entry: read-only to callers
+    R.flags.writeable = False  # shared cache entry: read-only to callers
     Z.flags.writeable = False
     return R, Z, shaf_shift
 
 
-def tokamak_shape_outlines(R0, A, kappa, delta, g=0.0, geom_model=1,
-                           eq=None, n_theta=181, **_ignored):
+def tokamak_shape_outlines(
+    R0, A, kappa, delta, g=0.0, geom_model=1, eq=None, n_theta=181, **_ignored
+):
     """JSON-able cross-section outline for the UI shape view.
 
     Returns {lcfs:{R,Z}, wall:{R,Z}, axis:{R,Z}, flux:[{R,Z}...],
@@ -270,9 +312,14 @@ def tokamak_shape_outlines(R0, A, kappa, delta, g=0.0, geom_model=1,
     gm = int(geom_model)
     flux = []
     if gm == 0:
-        return {"lcfs": {"R": [], "Z": []}, "wall": {"R": [], "Z": []},
-                "axis": {"R": [], "Z": []}, "flux": [], "geom_model": 0,
-                "shaf_shift": 0.0}
+        return {
+            "lcfs": {"R": [], "Z": []},
+            "wall": {"R": [], "Z": []},
+            "axis": {"R": [], "Z": []},
+            "flux": [],
+            "geom_model": 0,
+            "shaf_shift": 0.0,
+        }
     if gm == 2 and isinstance(eq, dict) and eq.get("boundary"):
         R = np.asarray(eq["boundary"]["R"], float)
         Z = np.asarray(eq["boundary"]["Z"], float)
@@ -292,7 +339,9 @@ def tokamak_shape_outlines(R0, A, kappa, delta, g=0.0, geom_model=1,
         "lcfs": {"R": R.tolist(), "Z": Z.tolist()},
         "wall": {"R": Rw.tolist(), "Z": Zw.tolist()},
         "axis": {"R": list(ax["R"]), "Z": list(ax["Z"])},
-        "flux": flux, "geom_model": gm, "shaf_shift": shaf,
+        "flux": flux,
+        "geom_model": gm,
+        "shaf_shift": shaf,
     }
 
 
@@ -308,8 +357,9 @@ def tokamak_shape_outlines(R0, A, kappa, delta, g=0.0, geom_model=1,
 _KAPPA_EXCESS_AXIS_FRAC = 0.44
 
 
-def miller_flux_surfaces(R0, a, kappa, delta, shaf=0.0,
-                         levels=(0.2, 0.4, 0.6, 0.8), n_theta=121):
+def miller_flux_surfaces(
+    R0, a, kappa, delta, shaf=0.0, levels=(0.2, 0.4, 0.6, 0.8), n_theta=121
+):
     """Nested Miller flux surfaces with a physically-tapered shaping profile.
 
     Each surface at flux label ``rho`` is a Miller curve whose elongation
@@ -337,8 +387,9 @@ def miller_flux_surfaces(R0, a, kappa, delta, shaf=0.0,
 
 
 @lru_cache(maxsize=256)
-def tokamak_profile_volume_fraction(R0, a, kappa, delta, shaf=0.0,
-                                    geom_model=1, n_rho=64, n_theta=180):
+def tokamak_profile_volume_fraction(
+    R0, a, kappa, delta, shaf=0.0, geom_model=1, n_rho=64, n_theta=180
+):
     """Map nested-flux-surface internal scale ``s`` to volume radius ``rho``.
 
     Builds the tapered Miller nested surface at each internal scale ``s`` in
@@ -364,7 +415,7 @@ def tokamak_profile_volume_fraction(R0, a, kappa, delta, shaf=0.0,
     """
     s = np.linspace(0.0, 1.0, int(n_rho))
     if int(geom_model) == 0:
-        vfrac = s ** 2
+        vfrac = s**2
         return s, np.sqrt(vfrac), vfrac
     f = _KAPPA_EXCESS_AXIS_FRAC
     t = np.linspace(0.0, 2 * math.pi, int(n_theta), endpoint=False)
@@ -372,16 +423,16 @@ def tokamak_profile_volume_fraction(R0, a, kappa, delta, shaf=0.0,
     for i in range(1, len(s)):
         rho = s[i]
         ar = a * rho
-        kr = 1.0 + (kappa - 1.0) * (f + (1.0 - f) * rho ** 4)
-        dr = max(-0.999, min(0.999, delta * rho ** 2))
-        cR = R0 + shaf * (1.0 - rho ** 2)
+        kr = 1.0 + (kappa - 1.0) * (f + (1.0 - f) * rho**4)
+        dr = max(-0.999, min(0.999, delta * rho**2))
+        cR = R0 + shaf * (1.0 - rho**2)
         R = cR + ar * np.cos(t + math.asin(dr) * np.sin(t))
         Z = kr * ar * np.sin(t)
         vol[i], _ = revolution_metrics(R, Z)
     total = float(vol[-1])
     if total <= 0.0 or not math.isfinite(total):
         raise ValueError("tokamak nested-surface volume must be positive")
-    vol = np.maximum.accumulate(vol)        # guard tiny non-monotone numeric noise
+    vol = np.maximum.accumulate(vol)  # guard tiny non-monotone numeric noise
     vol[0] = 0.0
     vol[-1] = total
     vfrac = vol / total
@@ -392,14 +443,17 @@ def legacy_metrics(R0, A, kappa, delta, g):
     """Original closed-form D-shape fits (funsc verbatim) — geom model 0."""
     a = R0 / A
     Ad = R0 / (g + a)
-    Vp = (2 * math.pi**2 * kappa * (A - delta) + 16 * math.pi * kappa * delta / 3) * a**3
+    Vp = (
+        2 * math.pi**2 * kappa * (A - delta) + 16 * math.pi * kappa * delta / 3
+    ) * a**3
     Sp = (4 * math.pi**2 * A * kappa**0.65 - 4 * kappa * delta) * a**2
-    Sw = (4 * math.pi**2 * Ad * kappa**0.65 - 4 * kappa * delta) * (a + g)**2
+    Sw = (4 * math.pi**2 * Ad * kappa**0.65 - 4 * kappa * delta) * (a + g) ** 2
     return a, Vp, Sp, Sw
 
 
-def tokamak_geometry(geom_model, R0, A, kappa, delta, g, eq,
-                     Vp_override, Sw_override, n_theta=360):
+def tokamak_geometry(
+    geom_model, R0, A, kappa, delta, g, eq, Vp_override, Sw_override, n_theta=360
+):
     """Dispatch geometry by model and return a metrics dict.
 
     geom_model: 0 legacy fits, 1 Miller boundary, 2 equilibrium.
@@ -437,13 +491,20 @@ def tokamak_geometry(geom_model, R0, A, kappa, delta, g, eq,
     # volume radius from nested-flux-surface layer integration (rho = sqrt(V/Vp));
     # power account is unaffected, this exposes the s<->rho map for profile import
     p_scale, p_rho, p_vfrac = tokamak_profile_volume_fraction(
-        R0, a, kappa, delta, shaf, int(geom_model))
+        R0, a, kappa, delta, shaf, int(geom_model)
+    )
     return {
-        "a": a, "Vp": Vp, "Sp": Sp_g, "Sw": Sw,
-        "Vp_geom": Vp_g, "Sp_geom": Sp_g, "Sw_geom": Sw_g,
+        "a": a,
+        "Vp": Vp,
+        "Sp": Sp_g,
+        "Sw": Sw,
+        "Vp_geom": Vp_g,
+        "Sp_geom": Sp_g,
+        "Sw_geom": Sw_g,
         "geom_volume_ratio": Vp_g / Vp if Vp else float("nan"),
         "geom_wall_ratio": Sw_g / Sw if Sw else float("nan"),
-        "shaf_shift": shaf, "geom_model": float(geom_model),
+        "shaf_shift": shaf,
+        "geom_model": float(geom_model),
         "profile_surface_scale": p_scale.tolist(),
         "profile_rho": p_rho.tolist(),
         "profile_vfrac": p_vfrac.tolist(),

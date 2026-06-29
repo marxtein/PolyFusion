@@ -29,8 +29,11 @@ def _finite(value, name):
 
 
 def _rows(mapping):
-    return [[int(m), int(n), float(c)] for (m, n), c in sorted(mapping.items())
-            if abs(float(c)) > 1e-14]
+    return [
+        [int(m), int(n), float(c)]
+        for (m, n), c in sorted(mapping.items())
+        if abs(float(c)) > 1e-14
+    ]
 
 
 def _add(mapping, m, n, value):
@@ -62,8 +65,10 @@ def _expand_sin(mapping, m, n, value):
 
 def _axis_lists(rc, zs):
     nmax = max([0, *rc.keys(), *zs.keys()])
-    return ([float(rc.get(n, 0.0)) for n in range(nmax + 1)],
-            [float(zs.get(n, 0.0)) for n in range(nmax + 1)])
+    return (
+        [float(rc.get(n, 0.0)) for n in range(nmax + 1)],
+        [float(zs.get(n, 0.0)) for n in range(nmax + 1)],
+    )
 
 
 def _normalise_shape(nfp, r_phys, z_phys, axis_rc, axis_zs, source):
@@ -77,7 +82,8 @@ def _normalise_shape(nfp, r_phys, z_phys, axis_rc, axis_zs, source):
     r_rows, z_rows = _rows(r_phys), _rows(z_phys)
     if max(len(r_rows), len(z_rows)) > MAX_MODES:
         raise ValueError(
-            f"converted equilibrium has more than {MAX_MODES} modes; limit is {MAX_MODES}")
+            f"converted equilibrium has more than {MAX_MODES} modes; limit is {MAX_MODES}"
+        )
     shape = {
         "kind": "equilibrium_fourier",
         "nfp": int(nfp),
@@ -98,8 +104,7 @@ def _geometry_metrics(R0, a, shape):
     return float(volume), float(plasma_surface)
 
 
-def _real_field_b25(ds, nfp, b0_ref=None, exponent=2.5,
-                    n_theta=64, n_phi=64):
+def _real_field_b25(ds, nfp, b0_ref=None, exponent=2.5, n_theta=64, n_phi=64):
     """Volume average of ``(|B| / B_axis) ** exponent`` over the REAL field.
 
     This is the field-inhomogeneity factor that enters the cyclotron-loss
@@ -135,10 +140,16 @@ def _real_field_b25(ds, nfp, b0_ref=None, exponent=2.5,
     gmnc = np.asarray(ds.variables["gmnc"][:], dtype=float)
     if bmnc.ndim != 2 or gmnc.shape != bmnc.shape or bmnc.shape[1] != xm.size:
         return None
-    bmns = (np.asarray(ds.variables["bmns"][:], dtype=float)
-            if "bmns" in ds.variables else None)
-    gmns = (np.asarray(ds.variables["gmns"][:], dtype=float)
-            if "gmns" in ds.variables else None)
+    bmns = (
+        np.asarray(ds.variables["bmns"][:], dtype=float)
+        if "bmns" in ds.variables
+        else None
+    )
+    gmns = (
+        np.asarray(ds.variables["gmns"][:], dtype=float)
+        if "gmns" in ds.variables
+        else None
+    )
 
     ns = bmnc.shape[0]
     if ns < 2:
@@ -163,13 +174,14 @@ def _real_field_b25(ds, nfp, b0_ref=None, exponent=2.5,
 
     theta = np.linspace(0.0, 2 * math.pi, n_theta, endpoint=False)
     phi = np.linspace(0.0, 2 * math.pi, n_phi, endpoint=False)
-    th, ph = np.meshgrid(theta, phi, indexing="ij")            # (n_theta, n_phi)
-    angle = (xm[:, None, None] * th[None, :, :]
-             - xn[:, None, None] * ph[None, :, :])             # (mn, nt, np)
+    th, ph = np.meshgrid(theta, phi, indexing="ij")  # (n_theta, n_phi)
+    angle = (
+        xm[:, None, None] * th[None, :, :] - xn[:, None, None] * ph[None, :, :]
+    )  # (mn, nt, np)
     cosA = np.cos(angle)
     sinA = np.sin(angle) if (bmns is not None or gmns is not None) else None
 
-    js = slice(1, ns)                                          # valid half mesh
+    js = slice(1, ns)  # valid half mesh
     B = np.einsum("jm,mtp->jtp", bmnc[js], cosA)
     g = np.einsum("jm,mtp->jtp", gmnc[js], cosA)
     if bmns is not None:
@@ -198,6 +210,7 @@ def _source(path, fmt, version):
 
 def _read_vmec(path):
     with Dataset(path, "r") as ds:
+
         def required(name):
             if name not in ds.variables:
                 raise ValueError(f"VMEC wout missing variable {name}")
@@ -211,8 +224,12 @@ def _read_vmec(path):
             raise ValueError("VMEC xn values must be integer multiples of nfp")
         rmnc_all = required("rmnc")
         zmns_all = required("zmns")
-        rmns_all = np.asarray(ds.variables["rmns"][:]) if "rmns" in ds.variables else None
-        zmnc_all = np.asarray(ds.variables["zmnc"][:]) if "zmnc" in ds.variables else None
+        rmns_all = (
+            np.asarray(ds.variables["rmns"][:]) if "rmns" in ds.variables else None
+        )
+        zmnc_all = (
+            np.asarray(ds.variables["zmnc"][:]) if "zmnc" in ds.variables else None
+        )
         rmnc = rmnc_all[-1]
         zmns = zmns_all[-1]
         if len(xm) > MAX_MODES:
@@ -230,13 +247,30 @@ def _read_vmec(path):
             for m, n, c in zip(xm, xn, np.asarray(ds.variables["zmnc"][:])[-1]):
                 _expand_cos(z_phys, int(m), int(n), _finite(c, "zmnc"))
 
-        rc = {i: float(v) for i, v in enumerate(
-            np.asarray(ds.variables["raxis_cc"][:]).reshape(-1))} if "raxis_cc" in ds.variables else {}
-        zs = {i: float(v) for i, v in enumerate(
-            np.asarray(ds.variables["zaxis_cs"][:]).reshape(-1))} if "zaxis_cs" in ds.variables else {}
+        rc = (
+            {
+                i: float(v)
+                for i, v in enumerate(
+                    np.asarray(ds.variables["raxis_cc"][:]).reshape(-1)
+                )
+            }
+            if "raxis_cc" in ds.variables
+            else {}
+        )
+        zs = (
+            {
+                i: float(v)
+                for i, v in enumerate(
+                    np.asarray(ds.variables["zaxis_cs"][:]).reshape(-1)
+                )
+            }
+            if "zaxis_cs" in ds.variables
+            else {}
+        )
         axis_rc, axis_zs = _axis_lists(rc, zs)
         R0, scale, shape = _normalise_shape(
-            nfp, r_phys, z_phys, axis_rc, axis_zs, "VMEC wout LCFS")
+            nfp, r_phys, z_phys, axis_rc, axis_zs, "VMEC wout LCFS"
+        )
 
         # Real interior flux surfaces from the wout (rmnc/zmns at several radial
         # surfaces, NOT just the LCFS), kept in native VMEC Fourier so the shape
@@ -260,17 +294,22 @@ def _read_vmec(path):
             Vfrac_of_s = s_grid_full
 
         def _native_modes(coeffs):
-            return [[int(m), int(n), float(c)]
-                    for m, n, c in zip(xm, xn, coeffs) if abs(float(c)) > 1e-9]
+            return [
+                [int(m), int(n), float(c)]
+                for m, n, c in zip(xm, xn, coeffs)
+                if abs(float(c)) > 1e-9
+            ]
 
         interior = []
         for rho in (0.18, 0.344, 0.508, 0.672, 0.836, 1.0):
             # volume fraction = rho^2 -> s (via V(s)) -> nearest radial index
             s_target = float(np.interp(rho * rho, Vfrac_of_s, s_grid_full))
             j = min(ns - 1, max(1, int(round(s_target * (ns - 1)))))
-            surf = {"rho": float(rho),
-                    "R_c": _native_modes(rmnc_all[j]),
-                    "Z_s": _native_modes(zmns_all[j])}
+            surf = {
+                "rho": float(rho),
+                "R_c": _native_modes(rmnc_all[j]),
+                "Z_s": _native_modes(zmns_all[j]),
+            }
             if rmns_all is not None:
                 surf["R_s"] = _native_modes(rmns_all[j])
             if zmnc_all is not None:
@@ -336,8 +375,10 @@ def _read_desc(path):
     with h5py.File(path, "r") as f:
         if "_equilibria" not in f:
             raise ValueError("unsupported DESC HDF5: missing _equilibria")
-        keys = sorted((key for key in f["_equilibria"].keys() if key.isdigit()),
-                      key=lambda x: int(x))
+        keys = sorted(
+            (key for key in f["_equilibria"].keys() if key.isdigit()),
+            key=lambda x: int(x),
+        )
         if not keys:
             raise ValueError("DESC file contains no equilibria")
         eq = f["_equilibria"][keys[-1]]
@@ -349,7 +390,8 @@ def _read_desc(path):
         z_coeff = np.asarray(surf["_Z_lmn"][()])
         if max(len(r_modes), len(z_modes)) > MAX_MODES:
             raise ValueError(
-                f"equilibrium has more than {MAX_MODES} modes; limit is {MAX_MODES}")
+                f"equilibrium has more than {MAX_MODES} modes; limit is {MAX_MODES}"
+            )
 
         r_phys, z_phys = defaultdict(float), defaultdict(float)
         for mode, coeff in zip(r_modes, r_coeff):
@@ -361,19 +403,22 @@ def _read_desc(path):
 
         axis = eq["_axis"]
         rc, zs = {}, {}
-        for mode, coeff in zip(np.asarray(axis["_R_basis/_modes"][()]),
-                               np.asarray(axis["_R_n"][()])):
+        for mode, coeff in zip(
+            np.asarray(axis["_R_basis/_modes"][()]), np.asarray(axis["_R_n"][()])
+        ):
             n = int(mode[2])
             if n >= 0:
                 rc[n] = float(coeff)
-        for mode, coeff in zip(np.asarray(axis["_Z_basis/_modes"][()]),
-                               np.asarray(axis["_Z_n"][()])):
+        for mode, coeff in zip(
+            np.asarray(axis["_Z_basis/_modes"][()]), np.asarray(axis["_Z_n"][()])
+        ):
             n = int(mode[2])
             if n < 0:
                 zs[-n] = float(coeff)
         axis_rc, axis_zs = _axis_lists(rc, zs)
         R0, scale, shape = _normalise_shape(
-            nfp, r_phys, z_phys, axis_rc, axis_zs, "DESC native LCFS")
+            nfp, r_phys, z_phys, axis_rc, axis_zs, "DESC native LCFS"
+        )
 
         profile = eq["_iota"]
         powers = np.asarray(profile["_basis/_modes"][()])[:, 0].astype(int)
@@ -382,8 +427,11 @@ def _read_desc(path):
         def eval_iota(rho):
             return float(np.sum(params * float(rho) ** powers))
 
-        iota = {"axis": eval_iota(0.0), "rho_2_3": eval_iota(2.0 / 3.0),
-                "edge": eval_iota(1.0)}
+        iota = {
+            "axis": eval_iota(0.0),
+            "rho_2_3": eval_iota(2.0 / 3.0),
+            "edge": eval_iota(1.0),
+        }
         volume, surface = _geometry_metrics(R0, scale, shape)
         a_vol = math.sqrt(volume / (2 * math.pi**2 * R0))
         version = _decode(f["__version__"][()]) if "__version__" in f else ""
@@ -404,7 +452,9 @@ def _read_desc(path):
         },
         "B0_T": None,
         "mode_count": int(max(len(shape["R"]), len(shape["Z"]))),
-        "warnings": ["DESC native file does not provide a validated B0 scalar; current B0 is preserved."],
+        "warnings": [
+            "DESC native file does not provide a validated B0 scalar; current B0 is preserved."
+        ],
     }
 
 
@@ -423,7 +473,9 @@ def parse_equilibrium_bytes(data, filename):
     if not isinstance(data, (bytes, bytearray)):
         raise TypeError("equilibrium upload must be bytes")
     if len(data) > MAX_FILE_BYTES:
-        raise ValueError(f"equilibrium file exceeds {MAX_FILE_BYTES // (1024 * 1024)} MiB limit")
+        raise ValueError(
+            f"equilibrium file exceeds {MAX_FILE_BYTES // (1024 * 1024)} MiB limit"
+        )
     suffix = os.path.splitext(filename or "")[1].lower()
     if suffix not in (".nc", ".h5", ".hdf5"):
         raise ValueError("equilibrium file must be .nc, .h5, or .hdf5")

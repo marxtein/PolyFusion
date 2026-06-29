@@ -74,9 +74,7 @@ def test_throat_uses_global_optical_radius_with_B25_volume_moment():
     one_throat = np.trapezoid(
         (B0 * ratio) ** 2.5 * math.pi * a_z**2 * f_throat * L_c, u
     )
-    field_moment = (
-        B0**2.5 * math.pi * a_c**2 * L_c + 2 * one_throat
-    )
+    field_moment = B0**2.5 * math.pi * a_c**2 * L_c + 2 * one_throat
     teff = _cyclotron_effective_temperature(Te0, ST)
     prefactor = (
         4.14e-7
@@ -86,9 +84,7 @@ def test_throat_uses_global_optical_radius_with_B25_volume_moment():
         * (1 + 2.5 * teff / 511)
     )
     expected = prefactor * a_c**-0.5 * field_moment
-    actual = _mirror_cyclotron_power(
-        ne0, Te0, Sn, ST, Rw, a_c, L_c, B0, R_mc, f_throat
-    )
+    actual = _mirror_cyclotron_power(ne0, Te0, Sn, ST, Rw, a_c, L_c, B0, R_mc, f_throat)
     assert actual == pytest.approx(expected, rel=2e-7)
 
 
@@ -97,14 +93,7 @@ def test_manual_tauC_uses_electron_energy_and_scales_inverse_with_time():
     two = _beam(use_tauC=1.0, tauC=2.0)
     p = MIRROR_PRESETS["BEAM"]
     expected_eth_e = (
-        1.5
-        * one.ne0
-        * p["Te0"]
-        * 1e3
-        * QE
-        / (1 + p["Sn"] + p["ST"])
-        * one.Vp
-        * 1e-6
+        1.5 * one.ne0 * p["Te0"] * 1e3 * QE / (1 + p["Sn"] + p["ST"]) * one.Vp * 1e-6
     )
     assert one.Pcycl == pytest.approx(expected_eth_e)
     assert one.Pcycl == pytest.approx(2 * two.Pcycl)
@@ -135,9 +124,7 @@ def test_tauC_must_be_positive_only_in_manual_mode():
     assert _beam(use_tauC=0.0, tauC=0.0).Pcycl >= 0
     with pytest.raises(ValueError, match="tauC must be > 0"):
         _beam(use_tauC=1.0, tauC=0.0)
-    result = run_case(
-        {"use_tauC": 1.0, "tauC": 0.0}, preset="BEAM", config="mirror"
-    )
+    result = run_case({"use_tauC": 1.0, "tauC": 0.0}, preset="BEAM", config="mirror")
     assert any("tauC must be > 0" in message for message in result["errors"])
     missing = get("mirror").validate(
         {k: v for k, v in MIRROR_PRESETS["BEAM"].items() if k != "tauC"}

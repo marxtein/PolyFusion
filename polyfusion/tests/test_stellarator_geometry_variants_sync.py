@@ -50,7 +50,13 @@ def _payload_for_mode(preset: dict, mode: str) -> dict:
         for k in ("shape", "delta_h", "iota", "Vp_override", "Sw_override"):
             p.pop(k, None)
     elif mode == "boundary":
-        p.update({k: v[k] for k in ("shape", "iota", "Vp_override", "Sw_override", "etabar") if k in v})
+        p.update(
+            {
+                k: v[k]
+                for k in ("shape", "iota", "Vp_override", "Sw_override", "etabar")
+                if k in v
+            }
+        )
         for k in ("rc", "zs", "delta_h"):
             p.pop(k, None)
     else:
@@ -139,12 +145,18 @@ def test_shape_view_uses_same_200_point_boundary_sampling_as_integral_path():
         assert sec["Z"][0] == pytest.approx(sec["Z"][-1])
         if "shape" in payload:
             boundary_fn, _ = _shape_boundary_fn_with_rho(
-                payload["R0"], payload["a"], payload["shape"])
+                payload["R0"], payload["a"], payload["shape"]
+            )
         else:
             boundary_fn, _ = _nearaxis_boundary_fn_with_rho(
-                payload["R0"], payload["a"], payload["N_fp"],
-                payload.get("delta_h", 0.0), payload["etabar"],
-                rc=payload.get("rc"), zs=payload.get("zs"))
+                payload["R0"],
+                payload["a"],
+                payload["N_fp"],
+                payload.get("delta_h", 0.0),
+                payload["etabar"],
+                rc=payload.get("rc"),
+                zs=payload.get("zs"),
+            )
         integ_R, integ_Z = boundary_fn(0.0, 1.0)
         assert display_R == pytest.approx(integ_R.tolist())
         assert display_Z == pytest.approx(integ_Z.tolist())
@@ -235,13 +247,25 @@ def test_frontend_mode_switch_prefers_geometry_variants():
         "N_fp": 5,
         "delta_h": 0.25,
         "etabar": 0.119,
-        "shape": {"kind": "fourier", "nfp": 5, "R": [[1, 0, 1]], "Z": [[-1, 0, 1]], "source": "auth"},
+        "shape": {
+            "kind": "fourier",
+            "nfp": 5,
+            "R": [[1, 0, 1]],
+            "Z": [[-1, 0, 1]],
+            "source": "auth",
+        },
         "geometry_variants": {
             "authority": "boundary",
             "simple": {"delta_h": 0.31, "etabar": 0.119},
             "axis": {"rc": [5.5, 0.123], "zs": [0, -0.456], "etabar": 0.119},
             "boundary": {
-                "shape": {"kind": "fourier", "nfp": 5, "R": [[1, 0, 1]], "Z": [[-1, 0, 1]], "source": "variant-boundary"},
+                "shape": {
+                    "kind": "fourier",
+                    "nfp": 5,
+                    "R": [[1, 0, 1]],
+                    "Z": [[-1, 0, 1]],
+                    "source": "variant-boundary",
+                },
                 "iota": 0.88,
                 "Vp_override": 30,
                 "Sw_override": 128,
@@ -267,8 +291,20 @@ console.log(JSON.stringify({{axis, boundary, simple}}));
     out = subprocess.check_output(["node", "-e", js], cwd=ROOT, text=True)
     data = json.loads(out)
     assert data["axis"] == {"rc": [5.5, 0.123], "zs": [0, -0.456], "hasShape": False}
-    assert data["boundary"] == {"source": "variant-boundary", "iota": 0.88, "vp": 30, "sw": 128, "hasRc": False}
-    assert data["simple"] == {"delta_h": 0.31, "etabar": 0.119, "hasShape": False, "hasRc": False, "hasIota": False}
+    assert data["boundary"] == {
+        "source": "variant-boundary",
+        "iota": 0.88,
+        "vp": 30,
+        "sw": 128,
+        "hasRc": False,
+    }
+    assert data["simple"] == {
+        "delta_h": 0.31,
+        "etabar": 0.119,
+        "hasShape": False,
+        "hasRc": False,
+        "hasIota": False,
+    }
 
 
 def test_frontend_restores_matching_authoritative_boundary_iota_from_stale_zero():
@@ -282,8 +318,10 @@ def test_frontend_restores_matching_authoritative_boundary_iota_from_stale_zero(
         _extract_function(src, "normalizeStellBoundaryIota"),
     ]
     shape = {
-        "kind": "fourier", "nfp": 5,
-        "R": [[1, 0, 1.0]], "Z": [[-1, 0, 1.0]],
+        "kind": "fourier",
+        "nfp": 5,
+        "R": [[1, 0, 1.0]],
+        "Z": [[-1, 0, 1.0]],
     }
     vals = {
         "_geom_mode": "boundary",
@@ -364,6 +402,6 @@ def test_boundary_authority_axis_and_simple_iota_are_close_to_authority():
             payload = _payload_for_mode(preset, mode)
             run = run_case(payload, config="stellarator")
             assert "errors" not in run, f"{name}/{mode}: {run.get('errors')}"
-            assert abs(run["outputs"]["iota_geom"] - target) < max(0.25, 0.5 * target), (
-                name, mode, run["outputs"]["iota_geom"], target
-            )
+            assert abs(run["outputs"]["iota_geom"] - target) < max(
+                0.25, 0.5 * target
+            ), (name, mode, run["outputs"]["iota_geom"], target)

@@ -4,7 +4,8 @@ Run: python polyfusion/tests/test_mirror_geometry.py
 """
 
 import math
-import sys, os
+import sys
+import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from polyfusion.geometry import get_geometry  # noqa: E402
@@ -15,7 +16,9 @@ from polyfusion.configs.base import MIRROR_PRESETS  # noqa: E402
 def test_sin2_volume_matches_original():
     """sin2_simple volume matches the analytic formula from mirror.py."""
     geom_cls = get_geometry("sin2_simple")
-    geom = geom_cls(a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, beta=0.336, f_throat=0.1)
+    geom = geom_cls(
+        a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, beta=0.336, f_throat=0.1
+    )
     R_mc = 10.0 / math.sqrt(1 - 0.336)
     V_cyl = math.pi * 0.09 * 10.0
     V_end = 2 * math.pi * 0.09 * 1.0 / math.sqrt(R_mc)
@@ -48,15 +51,23 @@ def test_multi_zone_wall_larger():
     """multi_zone wall surface includes throat, so > sin2_simple."""
     from polyfusion.geometry.sin2_simple import Sin2SimpleGeometry
     from polyfusion.geometry.multi_zone import MultiZoneGeometry
-    g1 = Sin2SimpleGeometry(a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, beta=0.336, f_throat=0.1)
-    g2 = MultiZoneGeometry(a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, beta=0.336, L_th=1.0)
+
+    g1 = Sin2SimpleGeometry(
+        a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, beta=0.336, f_throat=0.1
+    )
+    g2 = MultiZoneGeometry(
+        a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, beta=0.336, L_th=1.0
+    )
     assert g2.wall_surface() > g1.wall_surface()
 
 
 def test_multi_zone_f_axial():
     """f_axial is stored on geometry instance."""
     from polyfusion.geometry.multi_zone import MultiZoneGeometry
-    g = MultiZoneGeometry(a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, beta=0.336, f_axial=0.65)
+
+    g = MultiZoneGeometry(
+        a_c=0.3, L_c=10.0, B_vac=3.0, R_mirror=10.0, beta=0.336, f_axial=0.65
+    )
     assert abs(g.f_axial - 0.65) < 1e-12
 
 

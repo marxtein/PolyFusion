@@ -43,34 +43,42 @@ def ok(cond, msg):
 
 
 def _selfint(R, Z):
-    R = np.asarray(R[:-1], float); Z = np.asarray(Z[:-1], float)
-    n = R.size; P = list(zip(R, Z)); c = 0
+    R = np.asarray(R[:-1], float)
+    Z = np.asarray(Z[:-1], float)
+    n = R.size
+    P = list(zip(R, Z))
+    c = 0
 
     def ccw(p, q, r):
-        return (r[1]-p[1])*(q[0]-p[0]) > (q[1]-p[1])*(r[0]-p[0])
+        return (r[1] - p[1]) * (q[0] - p[0]) > (q[1] - p[1]) * (r[0] - p[0])
+
     for i in range(n):
-        for j in range(i+2, n):
-            if i == 0 and j == n-1:
+        for j in range(i + 2, n):
+            if i == 0 and j == n - 1:
                 continue
-            a, b, cc, d = P[i], P[(i+1) % n], P[j], P[(j+1) % n]
+            a, b, cc, d = P[i], P[(i + 1) % n], P[j], P[(j + 1) % n]
             if ccw(a, cc, d) != ccw(b, cc, d) and ccw(a, b, cc) != ccw(a, b, d):
                 c += 1
     return c
 
 
 def _box_elong(R, Z):
-    R = np.asarray(R); Z = np.asarray(Z)
-    return (Z.max()-Z.min())/(R.max()-R.min())
+    R = np.asarray(R)
+    Z = np.asarray(Z)
+    return (Z.max() - Z.min()) / (R.max() - R.min())
 
 
 def _concave_frac(R, Z):
-    R = np.asarray(R[:-1], float); Z = np.asarray(Z[:-1], float); n = R.size
+    R = np.asarray(R[:-1], float)
+    Z = np.asarray(Z[:-1], float)
+    n = R.size
     cr = []
     for i in range(n):
-        ax, ay = R[(i+1) % n]-R[i], Z[(i+1) % n]-Z[i]
-        bx, by = R[(i+2) % n]-R[(i+1) % n], Z[(i+2) % n]-Z[(i+1) % n]
-        cr.append(ax*by - ay*bx)
-    cr = np.array(cr); sgn = np.sign(np.sum(cr))
+        ax, ay = R[(i + 1) % n] - R[i], Z[(i + 1) % n] - Z[i]
+        bx, by = R[(i + 2) % n] - R[(i + 1) % n], Z[(i + 2) % n] - Z[(i + 1) % n]
+        cr.append(ax * by - ay * bx)
+    cr = np.array(cr)
+    sgn = np.sign(np.sum(cr))
     return float(np.mean(np.sign(cr) != sgn))
 
 
@@ -78,10 +86,10 @@ def _distinct(secs):
     """min pairwise boundary difference across the 3 cuts (normalized by a)."""
     d = 1e9
     for i in range(len(secs)):
-        for j in range(i+1, len(secs)):
+        for j in range(i + 1, len(secs)):
             Ri, Zi = np.array(secs[i]["R"]), np.array(secs[i]["Z"])
             Rj, Zj = np.array(secs[j]["R"]), np.array(secs[j]["Z"])
-            d = min(d, float(np.max(np.hypot(Ri-Rj, Zi-Zj))))
+            d = min(d, float(np.max(np.hypot(Ri - Rj, Zi - Zj))))
     return d
 
 
@@ -95,42 +103,58 @@ def main():
     for name in MACHINES:
         sh = section_outlines(**presets[name])
         a = sh["a"]
-        ok("boundary" in sh["metric_mode"],
-           f"{name}: explicit machine boundary ({sh['metric_mode']})")
+        ok(
+            "boundary" in sh["metric_mode"],
+            f"{name}: explicit machine boundary ({sh['metric_mode']})",
+        )
         ok(len(sh["sections"]) == 3, f"{name}: 3 sections")
         # all three cuts are DISTINCT (this is exactly the LHD bug)
         dd = _distinct(sh["sections"])
-        ok(dd > 0.05 * a,
-           f"{name}: three cuts are distinct (min pairwise diff {dd:.3f} m)")
+        ok(
+            dd > 0.05 * a,
+            f"{name}: three cuts are distinct (min pairwise diff {dd:.3f} m)",
+        )
         for s in sh["sections"]:
             R, Z = s["R"], s["Z"]
             ok(_selfint(R, Z) == 0, f"{name}/{s['label']}: simple closed curve")
             cR, cZ = np.mean(R[:-1]), np.mean(Z[:-1])
-            ext = float(np.max(np.hypot(np.array(R)-cR, np.array(Z)-cZ)))
-            ok(0.4*a <= ext <= 4*a,
-               f"{name}/{s['label']}: sane size (extent {ext:.3f} ~ a={a:.3f})")
-            ok("wall" in s and len(s["wall"]["R"]) == len(R),
-               f"{name}/{s['label']}: wall layer present")
+            ext = float(np.max(np.hypot(np.array(R) - cR, np.array(Z) - cZ)))
+            ok(
+                0.4 * a <= ext <= 4 * a,
+                f"{name}/{s['label']}: sane size (extent {ext:.3f} ~ a={a:.3f})",
+            )
+            ok(
+                "wall" in s and len(s["wall"]["R"]) == len(R),
+                f"{name}/{s['label']}: wall layer present",
+            )
 
     # W7-X: bean (concave) at one cut, strongly elongated at another
     w = section_outlines(**presets["W7-X"])["sections"]
-    ok(max(_concave_frac(s["R"], s["Z"]) for s in w) > 0.05,
-       "W7-X: at least one bean (concave) cross-section")
+    ok(
+        max(_concave_frac(s["R"], s["Z"]) for s in w) > 0.05,
+        "W7-X: at least one bean (concave) cross-section",
+    )
     elongs = [_box_elong(s["R"], s["Z"]) for s in w]
-    ok(max(elongs) - min(elongs) > 0.5,
-       f"W7-X: cross-section morphs bean<->triangle (box-elong {['%.2f'%e for e in elongs]})")
+    ok(
+        max(elongs) - min(elongs) > 0.5,
+        f"W7-X: cross-section morphs bean<->triangle (box-elong {['%.2f' % e for e in elongs]})",
+    )
 
     # LHD: rotating ellipse -> box elongation swings strongly across cuts
     lh = section_outlines(**presets["LHD"])["sections"]
     le = [_box_elong(s["R"], s["Z"]) for s in lh]
-    ok(max(le) / min(le) > 1.5,
-       f"LHD: rotating ellipse (box-elong swing {['%.2f'%e for e in le]})")
+    ok(
+        max(le) / min(le) > 1.5,
+        f"LHD: rotating ellipse (box-elong swing {['%.2f' % e for e in le]})",
+    )
 
     # concept reactors stay on the near-axis path
     for name in CONCEPTS:
         sh = section_outlines(**presets[name])
-        ok("near-axis" in sh["metric_mode"],
-           f"{name}: still near-axis ({sh['metric_mode']})")
+        ok(
+            "near-axis" in sh["metric_mode"],
+            f"{name}: still near-axis ({sh['metric_mode']})",
+        )
 
     print("\nRESULT:", "MACHINE BOUNDARY CHECKS PASS" if PASS else "SOME FAILED")
     return 0 if PASS else 1

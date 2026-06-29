@@ -1,5 +1,4 @@
 import os
-import math
 import numpy as np
 import pytest
 from polyfusion import eqdsk
@@ -41,6 +40,7 @@ def test_equilibrium_geometry_real_fixture():
 
 def test_equilibrium_geometry_jsonable():
     import json
+
     g = eqdsk.parse_geqdsk(open(FIXTURE).read())
     eq = eqdsk.equilibrium_geometry(g)
     json.dumps(eq)

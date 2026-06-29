@@ -13,12 +13,17 @@ Public API:
 # setdefault respects an explicit user override.  (Entry points that import
 # numpy before polyfusion should set these themselves — e.g. app/server.py does.)
 import os as _os
-for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
-           "NUMEXPR_NUM_THREADS"):
+
+for _v in (
+    "OPENBLAS_NUM_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
     _os.environ.setdefault(_v, "1")
 
-from .tokamak import funsc, Result
-from .reactivity import reactivity
+from .tokamak import funsc, Result  # noqa: E402
+from .reactivity import reactivity  # noqa: E402
 
 __all__ = ["funsc", "Result", "reactivity"]
 __version__ = "0.1.0"

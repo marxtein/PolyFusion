@@ -33,19 +33,23 @@ def _check_frames(name):
         for k in ("frac", "R", "Z", "surfaces", "wall"):
             ok(k in fr, f"{name}: frame has key '{k}'")
     fracs = [fr["frac"] for fr in frames]
-    ok(all(fracs[i] < fracs[i+1] for i in range(len(fracs)-1)),
-       f"{name}: frame fracs increase monotonically over the period")
-    f0, fm = frames[0], frames[len(frames)//2]
+    ok(
+        all(fracs[i] < fracs[i + 1] for i in range(len(fracs) - 1)),
+        f"{name}: frame fracs increase monotonically over the period",
+    )
+    f0, fm = frames[0], frames[len(frames) // 2]
     d = float(np.max(np.abs(np.array(f0["R"]) - np.array(fm["R"]))))
     ok(d > 0.02 * sh["a"], f"{name}: frames vary with phi (max dR {d:.3f})")
     # frames must nest strictly too (the slider draws them)
     from matplotlib.path import Path
-    for fr in (frames[0], frames[len(frames)//3], frames[len(frames)//2]):
+
+    for fr in (frames[0], frames[len(frames) // 3], frames[len(frames) // 2]):
         s = fr["surfaces"]
         for i in range(len(s) - 1):
-            poly = Path(np.column_stack([s[i+1]["R"], s[i+1]["Z"]]))
-            out = int((~poly.contains_points(
-                np.column_stack([s[i]["R"], s[i]["Z"]]))).sum())
+            poly = Path(np.column_stack([s[i + 1]["R"], s[i + 1]["Z"]]))
+            out = int(
+                (~poly.contains_points(np.column_stack([s[i]["R"], s[i]["Z"]]))).sum()
+            )
             ok(out == 0, f"{name}: frame phi={fr['frac']:.2f} surface {i} nested")
 
 
