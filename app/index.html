@@ -259,6 +259,7 @@
     <span><span class="dot"></span> <span class="val">CORE ONLINE</span></span>
     <span class="userbox" id="userBox" style="display:none"><span class="uname" id="userName">—</span><button id="logoutBtn">退出</button></span>
     <button class="hbtn book" id="manualBtn" title="使用说明书 / Manual">说明书</button>
+    <button class="hbtn report" id="reportBtn" title="一键生成模拟报告 / Generate simulation report">📋 报告</button>
     <button class="hbtn" id="helpBtn">?</button>
     <button class="hbtn" id="themeTog" title="主题 / Theme">☾ Dark</button>
     <button class="hbtn" id="langTog" title="语言 / Language">EN</button>
@@ -322,6 +323,7 @@
         <button id="saveP" data-t="saveP">⬇ 保存参数</button><button id="loadP" data-t="loadP">⬆ 加载参数</button>
         <button id="expJson" data-t="expJson">⬇ 结果 JSON</button><button id="expCsv" data-t="expCsv">⬇ 扫描 CSV</button>
         <button id="expPng" data-t="expPng">⬇ 当前图像 PNG</button>
+        <button id="genReport" data-t="genReport" style="grid-column:1/-1;background:var(--amber);color:var(--btn-ink);border-color:var(--amber);font-weight:700">📋 生成完整报告</button>
       </div>
       <input id="fileIn" type="file" accept=".json" style="display:none">
       <input id="equilibriumFileIn" type="file" accept=".nc,.h5,.hdf5" style="display:none">
@@ -1788,6 +1790,119 @@ function dl(name,text){const b=new Blob([text],{type:'text/plain'});const a=docu
 function scanCsv(s){const F=Object.keys(s.fields);let out='# '+s.xkey+','+s.ykey+','+F.join(',')+'\n';
   for(let j=0;j<s.y.length;j++)for(let i=0;i<s.x.length;i++)out+=s.x[i]+','+s.y[j]+','+F.map(f=>s.fields[f][j][i]).join(',')+'\n';return out;}
 // bind auth-wall UI once (independent of init gating)
+// ---- phase 4: one-click simulation report ----
+async function capturePlotImage(maxW, maxH){
+  // Grab the rendered plot as a base64 PNG data URI. Returns null when the
+  // plot is empty (Plotly purged or never drawn) so callers can skip that
+  // section gracefully instead of embedding a broken image.
+  if(!plotlyReady())return null;
+  const gd=document.getElementById('plot');
+  if(!gd||!gd.data||!gd.data.length)return null;
+  const w=Math.min(maxW||1200,Math.max(640,Math.round(gd.clientWidth||900)));
+  const h=Math.min(maxH||900,Math.max(480,Math.round(gd.clientHeight||640)));
+  try{
+    const uri=await Plotly.toImage(gd,{format:'png',width:w,height:h,scale:1.5});
+    return typeof uri==='string'&&uri.startsWith('data:image')?uri:null;
+  }catch(e){return null;}
+}
+async function generateSimulationReport(opts){
+  opts=opts||{};
+  const ee=document.getElementById('err');if(ee)ee.textContent='';
+  if(!plotlyReady()){showPlotlyMissing();return;}
+  if(!LASTRUN){if(ee)ee.textContent=L('请先运行一次工作点计算再生成报告。','Run an operating-point calculation before generating a report.');return;}
+  const origView=VIEW;
+  const cfgLabel=(CONFIGS&&CUR&&CONFIGS[CUR]&&CONFIGS[CUR].label)||CUR||'PolyFusion';
+  const images={};
+  // Render each view in turn, snapshot, then we'll restore the user's view.
+  // 'quick' mode (header button) skips tab-tour and just captures the current view.
+  const views=opts.quick?[origView]:['popcon','shape','profile'];
+  try{
+    for(const v of views){
+      if(v==='popcon'&&!LASTSCAN)continue;
+      setView(v);
+      // Plotly react runs synchronously inside draw*, but toImage needs the
+      // layout to settle on the rasterised canvas. One animation frame is enough.
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const uri=await capturePlotImage(1200,900);
+      if(uri)images[v]=uri;
+    }
+  }finally{setView(origView);}
+  const payload={
+    config:CUR,
+    config_label:cfgLabel,
+    preset:(document.getElementById('preset')||{}).value||null,
+    params:snapshotParamsForReport(),
+    last_run:stripLargeArrays(LASTRUN),
+    last_scan:stripLargeArrays(LASTSCAN),
+    images:images,
+    timestamp:new Date().toISOString(),
+    user:AUTH_USER||'anonymous',
+    lang:LANG||'zh',
+  };
+  try{
+    const r=await fetch('/api/report',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload),
+      credentials:'same-origin',
+    });
+    if(r.status===401){_handleAuthResponse(r);return;}
+    if(!r.ok){const d=await r.json().catch(()=>({}));if(ee)ee.textContent=L('生成报告失败：','Report generation failed: ')+(d.error||r.status);return;}
+    const html=await r.text();
+    const w=window.open('','_blank');
+    if(!w){if(ee)ee.textContent=L('新窗口被浏览器拦截，请允许弹出窗口后重试。','Pop-up blocked. Please allow pop-ups and retry.');return;}
+    w.document.open();w.document.write(html);w.document.close();
+  }catch(e){if(ee)ee.textContent=L('生成报告失败：','Report generation failed: ')+(e&&e.message?e.message:String(e));}
+}
+function snapshotParamsForReport(){
+  // shallow copy VALS minus internal flags the report does not need
+  const out={};
+  if(!VALS)return out;
+  for(const k in VALS){out[k]=VALS[k];}
+  return out;
+}
+function stripLargeArrays(obj){
+  // last_run/last_scan carry dense arrays (fields[][], shape.sections.R…).
+  // The report only needs scalar outputs + scan metadata, so strip the
+  // known-heavy leaves and keep everything else.
+  if(!obj||typeof obj!=='object')return obj;
+  const DROP_KEYS=new Set([
+    // last_run
+    'inputs','shape','equilibrium','_geom_mode',
+    // last_scan
+    'fields','x','y','valid','scan_errors',
+  ]);
+  const isScalar=x=>x===null||typeof x==='number'||typeof x==='string'||typeof x==='boolean';
+  const arrayFootprint=v=>{
+    // bytes-ish budget: product of dims times a per-cell guess
+    let cells=1,depth=0,nested=v;
+    while(Array.isArray(nested)){cells*=nested.length||1;nested=nested[0];depth++;}
+    if(depth===0||cells===0)return 0;
+    // sampling first leaf: if non-scalar, treat as huge so we drop it
+    if(!isScalar(nested))return Number.MAX_SAFE_INTEGER;
+    return cells;
+  };
+  const out={};
+  for(const k in obj){
+    if(DROP_KEYS.has(k))continue;
+    const v=obj[k];
+    if(v&&typeof v==='object'&&!Array.isArray(v)){
+      // shallow scalar dict (e.g. last_run.outputs) — keep, but only if every
+      // value is itself scalar so we don't smuggle in another big sub-tree.
+      let allScalar=true;
+      for(const kk in v){
+        if(!isScalar(v[kk])){allScalar=false;break;}
+      }
+      if(allScalar)out[k]=v;
+    }else if(Array.isArray(v)){
+      // keep small int/number grids (e.g. scan.best boolean mask, up to ~40k cells)
+      if(arrayFootprint(v)<=40000)out[k]=v;
+    }else{
+      out[k]=v;
+    }
+  }
+  return out;
+}
 // ---- phase 3: slide-out manual panel ----
 let MANUAL_CACHE=null,MANUAL_CONFIG=null,MANUAL_LANG=null;
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -1849,6 +1964,8 @@ td:first-child,th:first-child{font-family:monospace;color:#49586f;white-space:no
   el('mpX').onclick=closeManual;
   el('mpRefresh').onclick=()=>loadManual(true);
   el('mpExport').onclick=exportManualHtml;
+  el('reportBtn').onclick=()=>generateSimulationReport({quick:true});
+  el('genReport').onclick=()=>generateSimulationReport({quick:false});
 })();
 init();
 </script>

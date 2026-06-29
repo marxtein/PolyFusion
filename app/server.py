@@ -44,6 +44,7 @@ from polyfusion import eqdsk  # noqa: E402
 from polyfusion import auth as auth_mod  # noqa: E402
 from polyfusion.auth import AuthError  # noqa: E402
 from polyfusion.docs_generator import generate_manual  # noqa: E402
+from polyfusion.report_generator import generate_report  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOST = "0.0.0.0"
@@ -52,6 +53,10 @@ PORT = int(os.environ.get("PORT", 8765))
 REQUIRE_AUTH = os.environ.get("REQUIRE_AUTH", "1") != "0"
 USE_HTTPS = os.environ.get("USE_HTTPS", "0") == "1"
 SESSION_COOKIE = "polyfusion_session"
+
+# Report bodies carry 1-3 base64 PNGs; cap at 20 MiB to keep the service
+# responsive (matches the equilibrium import ceiling's order of magnitude).
+MAX_REPORT_BYTES = 20 * 1024 * 1024
 
 PROTECTED_PATHS = {
     "/api/run",
@@ -279,6 +284,34 @@ class Handler(BaseHTTPRequestHandler):
                     400, json.dumps({"error": f"{type(e).__name__}: {e}"})
                 )
             return self._send(200, body)
+
+        if self.path == "/api/report":
+            # auth gate: report embeds user's compute results
+            user = self._require_auth()
+            if not user:
+                return None
+            if n > MAX_REPORT_BYTES:
+                limit_mib = MAX_REPORT_BYTES // (1024 * 1024)
+                return self._send(
+                    413,
+                    json.dumps({"error": f"report body exceeds {limit_mib} MiB limit"}),
+                )
+            try:
+                req = json.loads(self.rfile.read(n) or b"{}")
+                req.setdefault("user", user)
+                html_body = generate_report(req)
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+            except Exception as e:
+                return self._send(
+                    400, json.dumps({"error": f"{type(e).__name__}: {e}"})
+                )
+            return self._send(
+                200,
+                html_body,
+                ctype="text/html; charset=utf-8",
+                cache_control="no-store, max-age=0",
+            )
 
         # --- protected compute routes ---
         if self.path in PROTECTED_PATHS:
