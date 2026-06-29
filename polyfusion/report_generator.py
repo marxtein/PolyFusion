@@ -1,18 +1,21 @@
 """One-click simulation report generator for PolyFusion.
 
 Renders a self-contained HTML report from a snapshot of the current UI
-state (operating point, POPCON scan, embedded Plotly PNGs). Stdlib only:
-no Jinja, no server-side PDF. The user prints-to-PDF from the browser.
+state (operating point, POPCON scan, embedded Plotly PNGs). HTML rendering
+uses the Python standard library only: no Jinja, no server-side PDF. The
+user prints-to-PDF from the browser.
 
 The HTML escapes every user-supplied field so a malicious parameter
-value cannot inject markup. Image payloads are expected to already be
-``data:image/png;base64,...`` URIs produced client-side by Plotly.toImage.
+value cannot inject markup. Image payloads must be valid
+``data:image/png;base64,...`` URIs produced client-side by Plotly.toImage;
+anything else is silently dropped.
 """
 
 from __future__ import annotations
 
 import html
 import os
+import re
 import subprocess
 from datetime import datetime, timezone
 from typing import Any, Iterable
@@ -111,6 +114,18 @@ def _kv_table(rows: Iterable[tuple[str, Any, str]]) -> str:
     return "".join(out)
 
 
+def _mean_2d(grid: list[list[Any]]) -> float:
+    """Compute the mean of a rectangular 2-D numeric grid using stdlib only."""
+    total = 0.0
+    count = 0
+    for row in grid:
+        for v in row:
+            if isinstance(v, (int, float)):
+                total += float(v)
+                count += 1
+    return total / count if count else float("nan")
+
+
 def _summary_text(last_run: dict | None, last_scan: dict | None) -> str:
     """Auto-generated one-line conclusion based on the operating window."""
     if not last_run:
@@ -128,11 +143,8 @@ def _summary_text(last_run: dict | None, last_scan: dict | None) -> str:
         parts.append(f"P_wall={_fmt(pwall)} MW/m²")
     head = "工作点 / Operating point: " + (" · ".join(parts) if parts else "无关键指标")
     if last_scan and "best" in last_scan:
-        import numpy as np  # local: only needed when scan present
-
-        best = np.asarray(last_scan["best"])
         try:
-            area_frac = float(best.mean())
+            area_frac = _mean_2d(last_scan["best"])
         except (TypeError, ValueError):
             area_frac = float("nan")
         if area_frac == area_frac:
@@ -206,9 +218,14 @@ def _scan_block(last_scan: dict | None) -> str:
     return _kv_table(rows)
 
 
+_DATA_IMAGE_PNG_RE = re.compile(r"^data:image/png;base64,[A-Za-z0-9+/=]+$")
+
+
 def _image_block(images: dict, key: str, caption_zh: str, caption_en: str) -> str:
     src = (images or {}).get(key)
     if not src:
+        return ""
+    if not _DATA_IMAGE_PNG_RE.match(src):
         return ""
     return (
         f'<div class="imgbox"><img src="{_esc(src)}" alt="{_esc(caption_en)}">'

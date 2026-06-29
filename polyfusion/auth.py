@@ -22,6 +22,7 @@ import secrets
 import tempfile
 import threading
 import time
+import warnings
 from pathlib import Path
 from typing import Optional
 
@@ -106,7 +107,7 @@ def _data_dir(override: Optional[str] = None) -> Path:
     try:
         os.chmod(d, 0o700)
     except OSError:
-        pass
+        warnings.warn(f"could not chmod 0o700 {d}", RuntimeWarning, stacklevel=2)
     return d
 
 
@@ -126,7 +127,12 @@ class UserStore:
         try:
             with path.open("r", encoding="utf-8") as f:
                 return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
+        except FileNotFoundError:
+            return default
+        except json.JSONDecodeError as e:
+            warnings.warn(
+                f"corrupted JSON at {path}: {e}; starting fresh", RuntimeWarning
+            )
             return default
 
     def _save(self) -> None:
@@ -143,7 +149,9 @@ class UserStore:
             try:
                 os.chmod(tmp, 0o600)
             except OSError:
-                pass
+                warnings.warn(
+                    f"could not chmod 0o600 {tmp}", RuntimeWarning, stacklevel=2
+                )
             os.replace(tmp, path)
         finally:
             try:
@@ -246,14 +254,21 @@ def reset_store_for_tests(store: UserStore) -> None:
         _store = store
 
 
+_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
+
+
 def parse_session_cookie(cookie_header: Optional[str]) -> Optional[str]:
-    """Extract the ``polyfusion_session`` token from a Cookie header."""
+    """Extract the ``polyfusion_session`` token from a Cookie header.
+
+    Validates the token shape so obviously malformed or over-long cookie
+    values cannot be passed into storage lookups.
+    """
     if not cookie_header:
         return None
     for part in cookie_header.split(";"):
         if "=" not in part:
             continue
         k, v = part.strip().split("=", 1)
-        if k == "polyfusion_session":
+        if k == "polyfusion_session" and _TOKEN_RE.match(v):
             return v
     return None

@@ -34,7 +34,7 @@ import numpy as np  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from polyfusion.io import run_case, list_configs  # noqa: E402
-from polyfusion.configs.base import get  # noqa: E402
+from polyfusion.configs.base import get, REGISTRY  # noqa: E402
 from polyfusion.scan import scan2d, best_region_mask  # noqa: E402
 from polyfusion.equilibrium_import import (  # noqa: E402
     MAX_FILE_BYTES,
@@ -66,7 +66,10 @@ PROTECTED_PATHS = {
 
 
 def _cookie_for_token(token: str) -> str:
-    flags = f"{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict"
+    flags = (
+        f"{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; "
+        f"Max-Age={24 * 3600}"
+    )
     if USE_HTTPS:
         flags += "; Secure"
     return flags
@@ -383,10 +386,11 @@ class Handler(BaseHTTPRequestHandler):
         qs = parse_qs(urlparse(self.path).query)
         config = (qs.get("config") or ["tokamak"])[0]
         lang = (qs.get("lang") or ["zh"])[0]
-        try:
-            out = generate_manual(config, lang)
-        except KeyError:
+        if config not in REGISTRY:
             return self._send(404, json.dumps({"error": f"unknown config: {config}"}))
+        if lang not in ("zh", "en"):
+            lang = "zh"
+        out = generate_manual(config, lang)
         return self._send(200, json.dumps(out, ensure_ascii=False))
 
 

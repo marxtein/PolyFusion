@@ -157,8 +157,14 @@ def test_concurrent_registration_is_safe(tmp_path, monkeypatch):
 def test_parse_session_cookie():
     assert auth.parse_session_cookie(None) is None
     assert auth.parse_session_cookie("") is None
-    assert auth.parse_session_cookie("polyfusion_session=abc; other=x") == "abc"
+    assert auth.parse_session_cookie("polyfusion_session=abc; other=x") is None
+    # only URL-safe base64-ish tokens of reasonable length are accepted
+    valid = "abcd1234-_abcd1234-_abcd1234-_abcd1234"
+    assert auth.parse_session_cookie(f"polyfusion_session={valid}; other=x") == valid
     assert auth.parse_session_cookie("foo=bar") is None
+    # over-long / malformed tokens rejected
+    assert auth.parse_session_cookie("polyfusion_session=<script>") is None
+    assert auth.parse_session_cookie("polyfusion_session=" + "x" * 200) is None
 
 
 def test_verify_password_malformed_hash():

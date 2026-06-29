@@ -1855,10 +1855,14 @@ async function generateSimulationReport(opts){
   }catch(e){if(ee)ee.textContent=L('生成报告失败：','Report generation failed: ')+(e&&e.message?e.message:String(e));}
 }
 function snapshotParamsForReport(){
-  // shallow copy VALS minus internal flags the report does not need
+  // shallow copy VALS minus internal flags and opaque objects the report does not need
   const out={};
   if(!VALS)return out;
-  for(const k in VALS){out[k]=VALS[k];}
+  for(const k in VALS){
+    if(k.startsWith('_'))continue;
+    if(OPAQUE_PARAMS.has(k))continue;
+    out[k]=VALS[k];
+  }
   return out;
 }
 function stripLargeArrays(obj){
@@ -1943,7 +1947,7 @@ function exportManualHtml(){
     if(sec.groups)inner+=sec.groups.map(g=>`<h4>${esc(g.title)}</h4><table>`+g.items.map(it=>`<tr><td>${esc(it.k)}</td><td>${esc(it.desc)}</td><td>${esc(it.unit)}</td></tr>`).join('')+'</table>').join('');
     return `<section><h3>${esc(sec.title)}</h3>${inner}</section>`;
   }).join('');
-  const html=`<!DOCTYPE html><html lang="${m.lang||'zh'}"><head><meta charset="utf-8"><title>${esc(m.title)}</title>
+  const html=`<!DOCTYPE html><html lang="${esc(m.lang||'zh')}"><head><meta charset="utf-8"><title>${esc(m.title)}</title>
 <style>body{font-family:system-ui,"Microsoft YaHei",sans-serif;max-width:820px;margin:32px auto;padding:0 20px;color:#1a2332;line-height:1.6}
 h1{color:#a35f00}h3{color:#0c8678;border-bottom:1px solid #c3cddc;padding-bottom:4px;margin-top:24px}
 table{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}td,th{padding:4px 8px;border-bottom:1px solid #e0e5ee;text-align:left}

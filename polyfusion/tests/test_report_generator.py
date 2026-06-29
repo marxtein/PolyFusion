@@ -98,6 +98,34 @@ def test_report_escapes_malicious_param_value():
     assert "&lt;script&gt;" in html
 
 
+def test_report_rejects_malicious_image_uris():
+    data = _sample_data()
+    data["images"] = {
+        "popcon": "data:image/png;base64,iVBORw0KGgoAAA==",
+        "shape": "javascript:alert(1)",
+        "profile": "data:text/html,<script>alert(1)</script>",
+    }
+    html = generate_report(data)
+    # only the valid png URI survives; dangerous ones are dropped
+    assert "data:image/png;base64,iVBORw0KGgoAAA==" in html
+    assert "javascript:alert" not in html
+    assert "data:text/html" not in html
+    # exactly one img tag rendered
+    assert html.count("<img") == 1
+
+
+def test_report_area_frac_computed_without_numpy():
+    """Ensure _summary_text no longer imports numpy for the best-region mean."""
+    import sys
+
+    # numpy must not appear as a newly loaded module from this call
+    before = set(sys.modules.keys())
+    html = generate_report(_sample_data())
+    after = set(sys.modules.keys())
+    assert "numpy" not in (after - before)
+    assert "最佳区占扫描网格 50.0%" in html
+
+
 def test_report_escapes_malicious_user_field():
     data = _sample_data()
     data["user"] = '"><img src=x onerror=alert(1)>'
