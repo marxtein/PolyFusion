@@ -156,15 +156,56 @@
   .eqload .eb{font-size:9px;font-weight:700;color:var(--btn-ink);background:var(--amber);border-radius:10px;padding:1px 6px;letter-spacing:.04em}
   .eqload.proxy{color:var(--mut);border-color:var(--line2)}.eqload.proxy .eb{color:var(--btn-ink);background:var(--mut)}
   .eqnote{margin-top:4px;font-size:10px;line-height:1.4;color:var(--dim);font-family:"JetBrains Mono"}
+  /* ---- auth wall ---- */
+  #authWall{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;
+    background:radial-gradient(120% 100% at 50% 0%,rgba(255,176,46,.10),transparent 60%),var(--ink)}
+  #authWall.on{display:flex}
+  #authWall .card{width:min(420px,92vw);background:var(--panel);border:1px solid var(--line2);border-radius:14px;
+    padding:30px 32px;box-shadow:0 30px 80px -20px #000}
+  #authWall .card h2{margin:0 0 4px;color:var(--fg);font-size:22px;letter-spacing:.04em}
+  #authWall .card h2 b{color:var(--amber)}
+  #authWall .card .hint{color:var(--mut);font-size:12px;margin:0 0 18px}
+  #authWall .tabs{display:flex;gap:6px;margin-bottom:16px}
+  #authWall .atab{flex:1;padding:8px;text-align:center;border:1px solid var(--line2);background:var(--ink2);
+    color:var(--mut);border-radius:7px;cursor:pointer;font-size:12px;letter-spacing:.05em}
+  #authWall .atab.on{color:var(--btn-ink);background:var(--amber);border-color:var(--amber);font-weight:700}
+  #authWall .fld{margin-bottom:12px}
+  #authWall .fld label{display:block;font-size:11px;color:var(--mut);margin-bottom:4px;letter-spacing:.05em}
+  #authWall .authErr{color:var(--red);font-size:11px;min-height:14px;margin:4px 0 8px;font-family:"JetBrains Mono"}
+  #authWall button.submit{width:100%;padding:11px;border:0;border-radius:8px;cursor:pointer;
+    font-weight:700;letter-spacing:.1em;font-size:12.5px;text-transform:uppercase;color:var(--btn-ink);
+    background:linear-gradient(180deg,var(--amber),var(--amber-d));box-shadow:var(--glow);transition:.15s}
+  #authWall button.submit:hover{filter:brightness(1.08);transform:translateY(-1px)}
+  #authWall button.submit:disabled{filter:grayscale(.5) brightness(.7);cursor:wait}
+  .userbox{display:inline-flex;align-items:center;gap:8px;margin-left:6px;padding:3px 9px;border:1px solid var(--line2);
+    border-radius:20px;background:var(--panel2);font-size:11px;color:var(--mut)}
+  .userbox .uname{color:var(--fg);font-weight:600}
+  .userbox button{border:0;background:transparent;color:var(--mut);cursor:pointer;font-size:11px;padding:0}
+  .userbox button:hover{color:var(--red)}
 </style>
 </head>
 <body>
+<div id="authWall">
+  <div class="card">
+    <h2>Poly<b>Fusion</b></h2>
+    <p class="hint" id="authHint">多位形零维系统设计台 · 请登录后使用</p>
+    <div class="tabs">
+      <div class="atab on" id="atabLogin">登录 Login</div>
+      <div class="atab" id="atabReg">注册 Register</div>
+    </div>
+    <div class="fld"><label>用户名 Username</label><input id="authUser" type="text" autocomplete="username"></div>
+    <div class="fld"><label>密码 Password</label><input id="authPass" type="password" autocomplete="current-password"></div>
+    <div class="authErr" id="authErr"></div>
+    <button class="submit" id="authSubmit">登录 Login</button>
+  </div>
+</div>
 <header>
   <div class="brand"><span class="logo">Poly<b>Fusion</b></span><span class="sub" id="subTitle">Zero-D Reactor Design Console</span></div>
   <div class="status">
     <span id="stCfgL">位形</span> <span class="val" id="stCfg">—</span>
     <span id="stRxL">反应</span> <span class="val" id="stRx">—</span>
     <span><span class="dot"></span> <span class="val">CORE ONLINE</span></span>
+    <span class="userbox" id="userBox" style="display:none"><span class="uname" id="userName">—</span><button id="logoutBtn">退出</button></span>
     <button class="hbtn" id="helpBtn">?</button>
     <button class="hbtn" id="themeTog" title="主题 / Theme">☾ Dark</button>
     <button class="hbtn" id="langTog" title="语言 / Language">EN</button>
@@ -318,7 +359,9 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
   help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='shape',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
-let THEME=(()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}})();
+let THEME=((()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}}))();
+let AUTH_REQUIRED=false,AUTH_MODE='login',AUTH_USER=null;
+class AuthRequiredError extends Error{constructor(m){super(m);this.name='AuthRequiredError';}}
 let EQMAN={};  // bundled real-equilibrium manifest {config:{preset:{file,format,...}}}
 let STELL_STASH={};
 const ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override']);  // expert-only inputs
@@ -511,9 +554,16 @@ const RANGES={
   r_ring:[0.1,3],R_p:[1,20],etabar:[0.01,0.2],N_fp:[1,10],delta_h:[0,3],
   Sn:[0,2],ST:[0,3],fsig:[0.1,2],f_shape:[2/3,1],fimp:[0,0.05],fHe:[0,0.2],Zimp:[1,74]
 };
-const jget=async u=>(await fetch(u)).json();
-const jpost=async(u,b)=>(await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})).json();
-const jpostBinary=async(u,data,name)=>(await fetch(u,{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Filename':encodeURIComponent(name)},body:data})).json();
+// credentials:'same-origin' so the session cookie is sent with every call.
+// On 401 we surface the auth wall so the user can re-login instead of failing
+// silently into a broken state.
+const _handleAuthResponse=async r=>{
+  if(r.status===401){showAuthWall();throw new AuthRequiredError('login required');}
+  return r;
+};
+const jget=async u=>(await _handleAuthResponse(await fetch(u,{credentials:'same-origin'}))).json();
+const jpost=async(u,b)=>(await _handleAuthResponse(await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b),credentials:'same-origin'}))).json();
+const jpostBinary=async(u,data,name)=>(await _handleAuthResponse(await fetch(u,{method:'POST',headers:{'Content-Type':'application/octet-stream','X-Filename':encodeURIComponent(name)},body:data,credentials:'same-origin'}))).json();
 
 function applyImportedEquilibrium(imported){
   const metrics=imported.metrics||{},iota=imported.iota||{};
@@ -631,7 +681,76 @@ function refreshPresetOptions(selectedName){
 // enable the delete button only when the selected option is a user preset
 function updateDelState(){const b=document.getElementById('delP');if(b)b.disabled=!(preset.value||'').startsWith(UMARK);}
 
+// ---- auth wall ----
+function showAuthWall(){
+  const w=document.getElementById('authWall');if(!w)return;
+  w.classList.add('on');
+  const u=document.getElementById('authUser');if(u)setTimeout(()=>u.focus(),50);
+}
+function hideAuthWall(){document.getElementById('authWall').classList.remove('on');}
+function applyAuthUser(user){
+  AUTH_USER=user;
+  const box=document.getElementById('userBox');
+  if(!user){if(box)box.style.display='none';return;}
+  if(box){box.style.display='inline-flex';document.getElementById('userName').textContent=user;}
+}
+function setAuthMode(mode){
+  AUTH_MODE=mode;
+  document.getElementById('atabLogin').classList.toggle('on',mode==='login');
+  document.getElementById('atabReg').classList.toggle('on',mode==='register');
+  const btn=document.getElementById('authSubmit');
+  const hint=document.getElementById('authHint');
+  if(mode==='login'){btn.textContent=L('登录 Login','Login');hint.textContent=L('多位形零维系统设计台 · 请登录后使用','Zero-D reactor design console · please log in');}
+  else{btn.textContent=L('注册 Register','Register');hint.textContent=L('创建新账号（用户名 3-32 位，密码 ≥ 8 位）','Create account (username 3-32 chars, password ≥ 8)');}
+}
+async function doAuth(){
+  const username=(document.getElementById('authUser').value||'').trim();
+  const password=document.getElementById('authPass').value||'';
+  const err=document.getElementById('authErr');err.textContent='';
+  const btn=document.getElementById('authSubmit');btn.disabled=true;
+  const orig=btn.textContent;btn.textContent=L('处理中…','Working…');
+  try{
+    const ep=AUTH_MODE==='login'?'/api/auth/login':'/api/auth/register';
+    const r=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password}),credentials:'same-origin'});
+    const data=await r.json().catch(()=>({error:'bad response'}));
+    if(!r.ok){err.textContent=data.error||(r.status===401?'invalid credentials':'failed');return;}
+    if(AUTH_MODE==='register'){
+      // auto-login after successful registration
+      const lr=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password}),credentials:'same-origin'});
+      if(!lr.ok){const ld=await lr.json().catch(()=>({}));err.textContent=ld.error||'login failed after register';return;}
+    }
+    document.getElementById('authPass').value='';
+    const me=await jget('/api/auth/me');
+    applyAuthUser(me&&me.user?me.user:username);
+    hideAuthWall();
+    if(!CONFIGS)await initAfterAuth();
+  }catch(e){err.textContent=(e&&e.message)||String(e);}
+  finally{btn.disabled=false;btn.textContent=orig;}
+}
+async function doLogout(){
+  try{await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'});}catch(e){}
+  applyAuthUser(null);AUTH_USER=null;
+  if(AUTH_REQUIRED){showAuthWall();}
+}
+
+
 async function init(){
+  // Auth bootstrap: gate the whole app behind a login wall when the backend
+  // requires it. /api/meta reports auth_required and stays public so we can
+  // probe it before the user has a session.
+  try{
+    const meta=await jget('/api/meta');
+    AUTH_REQUIRED=!!meta.auth_required;
+  }catch(e){AUTH_REQUIRED=false;}
+  if(AUTH_REQUIRED){
+    const me=await jget('/api/auth/me');
+    if(!me||!me.user){showAuthWall();return;}
+    applyAuthUser(me.user);
+  }
+  await initAfterAuth();
+}
+
+async function initAfterAuth(){
   CONFIGS=(await jget('/api/meta')).configs;
   try{EQMAN=await jget('/api/equilibria');}catch(e){EQMAN={};}
   buildConfigPick();
@@ -1564,6 +1683,16 @@ function onLoadFile(e){const f=e.target.files[0];if(!f)return;const rd=new FileR
 function dl(name,text){const b=new Blob([text],{type:'text/plain'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();URL.revokeObjectURL(a.href);}
 function scanCsv(s){const F=Object.keys(s.fields);let out='# '+s.xkey+','+s.ykey+','+F.join(',')+'\n';
   for(let j=0;j<s.y.length;j++)for(let i=0;i<s.x.length;i++)out+=s.x[i]+','+s.y[j]+','+F.map(f=>s.fields[f][j][i]).join(',')+'\n';return out;}
+// bind auth-wall UI once (independent of init gating)
+(function bindAuthUI(){
+  const el=id=>document.getElementById(id);
+  el('atabLogin').onclick=()=>setAuthMode('login');
+  el('atabReg').onclick=()=>setAuthMode('register');
+  el('authSubmit').onclick=doAuth;
+  el('logoutBtn').onclick=doLogout;
+  el('authPass').addEventListener('keydown',e=>{if(e.key==='Enter')doAuth();});
+  el('authUser').addEventListener('keydown',e=>{if(e.key==='Enter')el('authPass').focus();});
+})();
 init();
 </script>
 </body>

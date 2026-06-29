@@ -14,6 +14,7 @@ import mimetypes
 import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Optional
 from urllib.parse import unquote
 
 # Cap BLAS threads BEFORE numpy loads.  On this Windows numpy build the OpenBLAS
@@ -40,10 +41,36 @@ from polyfusion.equilibrium_import import (  # noqa: E402
     parse_equilibrium_bytes,
 )
 from polyfusion import eqdsk  # noqa: E402
+from polyfusion import auth as auth_mod  # noqa: E402
+from polyfusion.auth import AuthError  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", 8765))
+
+REQUIRE_AUTH = os.environ.get("REQUIRE_AUTH", "1") != "0"
+USE_HTTPS = os.environ.get("USE_HTTPS", "0") == "1"
+SESSION_COOKIE = "polyfusion_session"
+
+PROTECTED_PATHS = {
+    "/api/run",
+    "/api/scan",
+    "/api/tokamak/parse_eqdsk",
+}
+
+
+def _cookie_for_token(token: str) -> str:
+    flags = f"{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict"
+    if USE_HTTPS:
+        flags += "; Secure"
+    return flags
+
+
+def _clear_cookie() -> str:
+    flags = f"{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"
+    if USE_HTTPS:
+        flags += "; Secure"
+    return flags
 
 
 def _floatify(d: dict) -> dict:
@@ -110,14 +137,23 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    # ---- response helpers -------------------------------------------------
+
     def _send(
-        self, code, body, ctype="application/json", cache_control="no-store, max-age=0"
+        self,
+        code,
+        body,
+        ctype="application/json",
+        cache_control="no-store, max-age=0",
+        set_cookie=None,
     ):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", cache_control)
+        if set_cookie:
+            self.send_header("Set-Cookie", set_cookie)
         self.end_headers()
         self.wfile.write(data)
 
@@ -133,6 +169,27 @@ class Handler(BaseHTTPRequestHandler):
             cache_control=cache_control,
         )
 
+    # ---- auth helpers -----------------------------------------------------
+
+    def _current_user(self) -> Optional[str]:
+        if not REQUIRE_AUTH:
+            return "__anon__"
+        token = auth_mod.parse_session_cookie(self.headers.get("Cookie"))
+        return auth_mod.get_store().validate_session(token)
+
+    def _require_auth(self):
+        """Return the authenticated username, or send 401 and return None."""
+        user = self._current_user()
+        if not user:
+            self._send(
+                401,
+                json.dumps({"error": "unauthorized", "auth_required": True}),
+            )
+            return None
+        return user
+
+    # ---- GET --------------------------------------------------------------
+
     def do_GET(self):
         if self.path in ("/", "/index.html"):
             return self._send_file(
@@ -147,7 +204,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_file(fpath)
             return self._send(404, json.dumps({"error": "vendor asset not found"}))
         if self.path == "/api/meta":
-            return self._send(200, json.dumps({"configs": list_configs()}))
+            return self._send(
+                200,
+                json.dumps(
+                    {
+                        "configs": list_configs(),
+                        "auth_required": REQUIRE_AUTH,
+                    }
+                ),
+            )
+        if self.path == "/api/auth/me":
+            user = self._current_user()
+            return self._send(200, json.dumps({"user": user}))
         if self.path == "/api/equilibria":
             # manifest of bundled real equilibrium files, keyed by config+preset
             mpath = os.path.join(HERE, "equilibria", "manifest.json")
@@ -155,22 +223,42 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_file(mpath, cache_control="no-cache")
             return self._send(200, json.dumps({}))
         if self.path.startswith("/equilibria/"):
-            # serve a bundled equilibrium file (binary). Restrict to the two
-            # known config subdirs + a plain basename to block path traversal.
-            parts = unquote(self.path).strip("/").split("/")
-            if len(parts) == 3 and parts[1] in ("tokamak", "stellarator"):
-                name = os.path.basename(parts[2])
-                fpath = os.path.join(HERE, "equilibria", parts[1], name)
-                if os.path.isfile(fpath) and os.path.commonpath(
-                    [os.path.realpath(fpath), os.path.join(HERE, "equilibria")]
-                ) == os.path.realpath(os.path.join(HERE, "equilibria")):
-                    return self._send_file(fpath, "application/octet-stream")
+            if not REQUIRE_AUTH or self._current_user():
+                # serve a bundled equilibrium file (binary). Restrict to the two
+                # known config subdirs + a plain basename to block path traversal.
+                parts = unquote(self.path).strip("/").split("/")
+                if len(parts) == 3 and parts[1] in ("tokamak", "stellarator"):
+                    name = os.path.basename(parts[2])
+                    fpath = os.path.join(HERE, "equilibria", parts[1], name)
+                    if os.path.isfile(fpath) and os.path.commonpath(
+                        [os.path.realpath(fpath), os.path.join(HERE, "equilibria")]
+                    ) == os.path.realpath(os.path.join(HERE, "equilibria")):
+                        return self._send_file(fpath, "application/octet-stream")
             return self._send(404, json.dumps({"error": "equilibrium not found"}))
         return self._send(404, json.dumps({"error": "not found"}))
 
+    # ---- POST -------------------------------------------------------------
+
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
+
+        # --- auth routes (always public) ---
+        if self.path == "/api/auth/register":
+            return self._handle_auth_register(n)
+        if self.path == "/api/auth/login":
+            return self._handle_auth_login(n)
+        if self.path == "/api/auth/logout":
+            token = auth_mod.parse_session_cookie(self.headers.get("Cookie"))
+            auth_mod.get_store().delete_session(token)
+            return self._send(
+                200,
+                json.dumps({"ok": True}),
+                set_cookie=_clear_cookie(),
+            )
+
         if self.path == "/api/stellarator/equilibrium/preview":
+            if not self._require_auth():
+                return None
             if n > MAX_FILE_BYTES:
                 limit_mib = MAX_FILE_BYTES // (1024 * 1024)
                 return self._send(
@@ -188,6 +276,12 @@ class Handler(BaseHTTPRequestHandler):
                     400, json.dumps({"error": f"{type(e).__name__}: {e}"})
                 )
             return self._send(200, body)
+
+        # --- protected compute routes ---
+        if self.path in PROTECTED_PATHS:
+            if not self._require_auth():
+                return None
+
         try:
             req = json.loads(self.rfile.read(n) or b"{}")
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
@@ -213,6 +307,38 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             return self._send(400, json.dumps({"error": f"{type(e).__name__}: {e}"}))
         return self._send(200, body)
+
+    # ---- auth handlers ----------------------------------------------------
+
+    def _handle_auth_register(self, n: int):
+        try:
+            req = json.loads(self.rfile.read(n) or b"{}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+        try:
+            username = auth_mod.get_store().register(
+                req.get("username", ""), req.get("password", "")
+            )
+        except AuthError as e:
+            return self._send(400, json.dumps({"error": str(e)}))
+        return self._send(200, json.dumps({"user": username}))
+
+    def _handle_auth_login(self, n: int):
+        try:
+            req = json.loads(self.rfile.read(n) or b"{}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+        try:
+            token = auth_mod.get_store().login(
+                req.get("username", ""), req.get("password", "")
+            )
+        except AuthError as e:
+            return self._send(401, json.dumps({"error": str(e)}))
+        return self._send(
+            200,
+            json.dumps({"ok": True}),
+            set_cookie=_cookie_for_token(token),
+        )
 
 
 def main():

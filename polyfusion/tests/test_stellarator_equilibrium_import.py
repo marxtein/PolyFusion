@@ -203,7 +203,12 @@ def test_parse_bytes_preserves_original_filename_and_hash():
     assert len(out["source"]["sha256"]) == 64
 
 
-def test_equilibrium_preview_http_endpoint_accepts_raw_binary():
+def test_equilibrium_preview_http_endpoint_accepts_raw_binary(monkeypatch):
+    # this test exercises the equilibrium-parsing path, not auth; disable the
+    # login gate so we don't have to run a full register/login dance here.
+    import app.server as srv
+
+    monkeypatch.setattr(srv, "REQUIRE_AUTH", False)
     with tempfile.TemporaryDirectory() as td:
         path = os.path.join(td, "wout_test.nc")
         _vmec_fixture(path)
