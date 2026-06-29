@@ -182,6 +182,33 @@
   .userbox .uname{color:var(--fg);font-weight:600}
   .userbox button{border:0;background:transparent;color:var(--mut);cursor:pointer;font-size:11px;padding:0}
   .userbox button:hover{color:var(--red)}
+  /* ---- phase 2: live status strip + collapsible sections ---- */
+  .livebar{display:flex;align-items:center;gap:0;padding:0 18px;height:34px;
+    border-bottom:1px solid var(--line);background:var(--panel2);
+    font-size:11.5px;color:var(--mut);overflow-x:auto;white-space:nowrap}
+  .livebar .lb-label{color:var(--dim);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+    margin-right:6px;padding-right:10px;border-right:1px solid var(--line2)}
+  .livebar .lb{display:inline-flex;align-items:baseline;gap:5px;padding:0 12px;border-right:1px solid var(--line2)}
+  .livebar .lb:last-child{border-right:0}
+  .livebar .lb .k{font-size:10.5px;color:var(--dim);font-family:"JetBrains Mono",monospace}
+  .livebar .lb .v{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--fg);font-weight:600}
+  .livebar .lb .u{font-size:9px;color:var(--dim)}
+  .livebar .lb.hot .v{color:var(--amber)}
+  .livebar .lb.cool .v{color:var(--teal)}
+  .livebar .lb.warn .v{color:var(--red)}
+  .livebar .lb.empty .v{color:var(--dim)}
+  .livebar .lb .sym{font-family:Georgia,serif;font-style:italic;font-size:12px;color:var(--mut)}
+  /* quick-nav chips above the left column sections */
+  .quicknav{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed var(--line2)}
+  .quicknav a{font-size:10.5px;color:var(--mut);border:1px solid var(--line2);border-radius:14px;
+    padding:2px 9px;cursor:pointer;text-decoration:none;background:var(--ink2);transition:.12s;letter-spacing:.02em}
+  .quicknav a:hover{color:var(--fg);border-color:var(--teal)}
+  /* collapsible section headers */
+  .sec{position:relative}
+  .sec-t{cursor:pointer;user-select:none;padding-right:18px}
+  .sec-t::after{content:"▾";position:absolute;right:0;top:0;color:var(--dim);font-size:10px;transition:transform .15s}
+  .sec.collapsed .sec-t::after{transform:rotate(-90deg)}
+  .sec.collapsed>:not(.sec-t){display:none}
 </style>
 </head>
 <body>
@@ -211,16 +238,34 @@
     <button class="hbtn" id="langTog" title="语言 / Language">EN</button>
   </div>
 </header>
+<div class="livebar" id="livebar">
+  <span class="lb-label">LIVE</span>
+  <span class="lb empty" id="lbPfus"><span class="sym">P<sub>fus</sub></span><span class="v">—</span><span class="u">MW</span></span>
+  <span class="lb empty" id="lbQ"><span class="sym">Q<sub>fus</sub></span><span class="v">—</span></span>
+  <span class="lb empty" id="lbH98"><span class="sym">H<sub>98</sub></span><span class="v">—</span></span>
+  <span class="lb empty" id="lbBetaN"><span class="sym">β<sub>N</sub></span><span class="v">—</span></span>
+  <span class="lb empty" id="lbPwall"><span class="sym">P<sub>wall</sub></span><span class="v">—</span><span class="u">MW/m²</span></span>
+  <span class="lb empty" id="lbTauE"><span class="sym">τ<sub>E</sub></span><span class="v">—</span><span class="u">s</span></span>
+</div>
 <div class="wrap">
   <div class="col left">
-    <div class="sec"><p class="sec-t" data-t="config">位形 Configuration <span class="n" id="cfgN"></span></p><div id="configPick" class="configs"></div></div>
-    <div class="sec"><p class="sec-t" data-t="preset">机型预设 Preset</p><select id="preset"></select>
+    <div class="quicknav" id="quicknav">
+      <a data-jump="config">① 位形</a>
+      <a data-jump="preset">② 预设</a>
+      <a data-jump="params">③ 参数</a>
+      <a data-jump="window">④ 判据</a>
+      <a data-jump="contours">⑤ 等值线</a>
+      <a data-jump="scan">⑥ 扫描</a>
+      <a data-jump="results">⑦ 结果</a>
+    </div>
+    <div class="sec" data-sec="config"><p class="sec-t" data-t="config">位形 Configuration <span class="n" id="cfgN"></span></p><div id="configPick" class="configs"></div></div>
+    <div class="sec" data-sec="preset"><p class="sec-t" data-t="preset">机型预设 Preset</p><select id="preset"></select>
       <div class="exports" style="margin-top:6px"><button id="saveAsP">★ 另存为预设</button><button id="delP" disabled>✕ 删除预设</button></div>
       <div id="eqQuick"></div></div>
-    <div class="sec"><p class="sec-t" data-t="params">参数 Parameters <span class="n" data-t="liveN">编辑即重算</span></p><div id="params"></div></div>
-    <div class="sec"><p class="sec-t" data-t="window">最佳区判据 Operating Window</p><div id="thresh" class="scanbox"></div></div>
-    <div class="sec"><p class="sec-t" data-t="contours">显示等值线 Contours</p><div id="plotOpts" class="opts"></div></div>
-    <div class="sec"><p class="sec-t" data-t="scan">POPCON 扫描轴 Scan Axes</p>
+    <div class="sec" data-sec="params"><p class="sec-t" data-t="params">参数 Parameters <span class="n" data-t="liveN">编辑即重算</span></p><div id="params"></div></div>
+    <div class="sec" data-sec="window"><p class="sec-t" data-t="window">最佳区判据 Operating Window</p><div id="thresh" class="scanbox"></div></div>
+    <div class="sec" data-sec="contours"><p class="sec-t" data-t="contours">显示等值线 Contours</p><div id="plotOpts" class="opts"></div></div>
+    <div class="sec" data-sec="scan"><p class="sec-t" data-t="scan">POPCON 扫描轴 Scan Axes</p>
       <div class="scanbox">
         <div class="axis"><div class="hd"><span class="tag">X</span><span data-t="xax">横轴</span></div><select id="xkey"></select>
           <div class="row3"><div class="fld"><label>min</label><input id="xmin" type="number" step="any"></div>
@@ -245,7 +290,7 @@
     <div id="plot"></div>
   </div>
   <div class="col right">
-    <div class="sec"><p class="sec-t" data-t="opPoint">工作点 Operating Point <span class="badge" id="caseBadge"></span></p>
+    <div class="sec" data-sec="results"><p class="sec-t" data-t="opPoint">工作点 Operating Point <span class="badge" id="caseBadge"></span></p>
       <div id="results"></div>
       <div class="exports">
         <button id="saveP" data-t="saveP">⬇ 保存参数</button><button id="loadP" data-t="loadP">⬆ 加载参数</button>
@@ -756,6 +801,12 @@ async function initAfterAuth(){
   buildConfigPick();
   document.getElementById('cfgN').textContent=Object.keys(CONFIGS).length+' '+L('种','cfgs');
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setView(t.dataset.v));
+  // phase 2: collapsible sections + quick-nav jumps
+  document.querySelectorAll('.sec-t').forEach(t=>t.addEventListener('click',e=>{
+    if(e.target.closest('a,button,input,select'))return;
+    const sec=t.closest('.sec');if(sec)toggleSec(sec);
+  }));
+  document.querySelectorAll('.quicknav a').forEach(a=>a.addEventListener('click',()=>jumpToSec(a.dataset.jump)));
   try{const sl=localStorage.getItem('polyfusion_lang');if(sl==='zh'||sl==='en')LANG=sl;}catch(e){}
   applyTheme();
   document.getElementById('themeTog').onclick=()=>setTheme(THEME==='light'?'dark':'light');
@@ -1192,9 +1243,27 @@ function cleanStellOverrides(o){
 }
 function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='sep_model'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='tauE_scaling'){if(typeof v==='string'&&v)o[k]=v;}else if(OPAQUE_PARAMS.has(k)&&isPlainObject(v))o[k]=v;else if(Array.isArray(v)){const a=v.filter(x=>typeof x==='number'&&isFinite(x));if(a.length)o[k]=a;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return cleanStellOverrides(o);}
 async function recompute(){const r=await jpost('/api/run',{config:CUR,overrides:clean()});const ok=applyRun(r);if(ok&&VIEW!=='popcon')setView(VIEW);}
+const LIVEBAR_FIELDS=[['lbPfus','Pfus','hot'],['lbQ','Qfus','hot'],['lbH98','H98','cool'],['lbBetaN','betaN',''],['lbPwall','Pwall','warn'],['lbTauE','tau_E','cool']];
+function updateLiveBar(o){
+  for(const[id,key,cls]of LIVEBAR_FIELDS){
+    const el=document.getElementById(id);if(!el)continue;
+    const vEl=el.querySelector('.v');
+    const val=o&&typeof o[key]==='number'&&isFinite(o[key])?o[key]:null;
+    if(val==null){el.classList.add('empty');el.classList.remove('hot','cool','warn');vEl.textContent='—';}
+    else{el.classList.remove('empty');el.className='lb '+(HOT.has(key)?'hot':COOL.has(key)?'cool':WARN.has(key)?'warn':cls);vEl.textContent=fmt(val);}
+  }
+}
+function toggleSec(sec){sec.classList.toggle('collapsed');}
+function jumpToSec(name){
+  const sec=document.querySelector(`.sec[data-sec="${name}"]`);
+  if(!sec)return;
+  sec.classList.remove('collapsed');
+  const secTitle=sec.querySelector('.sec-t');
+  if(secTitle)secTitle.scrollIntoView({behavior:'smooth',block:'start'});
+}
 function applyRun(r){
   r._geom_mode=CUR==='stellarator'?stellGeomMode():null;LASTRUN=r;const box=document.getElementById('results');
-  if(r.errors){box.innerHTML=`<div class="err">${r.errors.join('\n')}</div>`;caseBadge.textContent='';return false;}
+  if(r.errors){box.innerHTML=`<div class="err">${r.errors.join('\n')}</div>`;caseBadge.textContent='';updateLiveBar(null);return false;}
   const o=r.outputs;caseBadge.textContent=(o.strcase||CUR)+(o.cyclotron_model?' · '+o.cyclotron_model:'');document.getElementById('stRx').textContent=o.strcase||'—';
   let html='';for(const[g,keys]of RGRP){const rows=keys.filter(k=>k in o&&typeof o[k]==='number').map(k=>{
     const cls=HOT.has(k)?'hot':COOL.has(k)?'cool':WARN.has(k)?'warn':'';
@@ -1211,6 +1280,7 @@ function applyRun(r){
     if(rows)html+=`<div class="grp"><div class="grp-t">${g}</div>${rows}</div>`;}
   box.innerHTML=html;
   updateA0();
+  updateLiveBar(o);
   if(VIEW==='popcon')document.getElementById('plotMeta').innerHTML=`<span>P_fus <b>${fmt(o.Pfus)}</b> MW</span><span>Q <b>${fmt(o.Qfus)}</b></span>`;
   return true;
 }
