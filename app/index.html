@@ -209,6 +209,31 @@
   .sec-t::after{content:"▾";position:absolute;right:0;top:0;color:var(--dim);font-size:10px;transition:transform .15s}
   .sec.collapsed .sec-t::after{transform:rotate(-90deg)}
   .sec.collapsed>:not(.sec-t){display:none}
+  /* ---- phase 3: slide-out manual panel ---- */
+  #manualPanel{position:fixed;top:0;right:0;width:min(440px,92vw);height:100vh;z-index:60;
+    background:var(--panel);border-left:1px solid var(--line2);box-shadow:-20px 0 60px -20px #000;
+    transform:translateX(110%);transition:transform .25s;display:flex;flex-direction:column}
+  #manualPanel.on{transform:translateX(0)}
+  #manualPanel .mp-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line2)}
+  #manualPanel .mp-head h3{margin:0;font-size:14px;color:var(--amber);letter-spacing:.04em;flex:1}
+  #manualPanel .mp-head .x{cursor:pointer;color:var(--mut);font-size:20px;line-height:1}
+  #manualPanel .mp-head .x:hover{color:var(--fg)}
+  #manualPanel .mp-body{flex:1;overflow-y:auto;padding:14px 18px}
+  #manualPanel .mp-sec{margin-bottom:18px}
+  #manualPanel .mp-sec h4{margin:0 0 6px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--teal)}
+  #manualPanel .mp-sec p{margin:0 0 4px;font-size:12.5px;line-height:1.65;color:var(--fg)}
+  #manualPanel .mp-sec ol{margin:4px 0 0 18px;padding:0;font-size:12.5px;line-height:1.7;color:var(--fg)}
+  #manualPanel .mp-sec li{margin-bottom:3px}
+  #manualPanel table{width:100%;border-collapse:collapse;font-size:12px}
+  #manualPanel td{padding:3px 6px;border-bottom:1px solid rgba(125,141,166,.18);vertical-align:top}
+  #manualPanel td.k{font-family:"JetBrains Mono",monospace;color:var(--mut);white-space:nowrap;width:34%}
+  #manualPanel td.u{color:var(--dim);font-size:10.5px;white-space:nowrap;width:14%}
+  #manualPanel .mp-foot{padding:10px 18px;border-top:1px solid var(--line2);display:flex;gap:8px}
+  #manualPanel .mp-foot button{flex:1;padding:8px;font-size:11px;border:1px solid var(--line2);border-radius:6px;
+    background:var(--panel2);color:var(--mut);cursor:pointer}
+  #manualPanel .mp-foot button:hover{color:var(--fg);border-color:var(--teal)}
+  #manualPanel .mp-empty{color:var(--dim);font-size:12px;padding:20px 0;text-align:center}
+  .hbtn.book::before{content:"📖 ";font-size:11px}
 </style>
 </head>
 <body>
@@ -233,6 +258,7 @@
     <span id="stRxL">反应</span> <span class="val" id="stRx">—</span>
     <span><span class="dot"></span> <span class="val">CORE ONLINE</span></span>
     <span class="userbox" id="userBox" style="display:none"><span class="uname" id="userName">—</span><button id="logoutBtn">退出</button></span>
+    <button class="hbtn book" id="manualBtn" title="使用说明书 / Manual">说明书</button>
     <button class="hbtn" id="helpBtn">?</button>
     <button class="hbtn" id="themeTog" title="主题 / Theme">☾ Dark</button>
     <button class="hbtn" id="langTog" title="语言 / Language">EN</button>
@@ -303,6 +329,14 @@
   </div>
 </div>
 <div class="modal" id="help"><div class="box"><span class="x" id="helpX">×</span><div id="helpBody"></div></div></div>
+<aside id="manualPanel">
+  <div class="mp-head"><h3 id="mpTitle">说明书 Manual</h3><span class="x" id="mpX">×</span></div>
+  <div class="mp-body" id="mpBody"><div class="mp-empty">加载中…</div></div>
+  <div class="mp-foot">
+    <button id="mpRefresh">刷新 Refresh</button>
+    <button id="mpExport">导出 HTML Export</button>
+  </div>
+</aside>
 <script>
 const COLORS=['#ffb02e','#36e2c4','#ff5d73','#7aa2ff','#c792ff','#9be564','#ffd166','#5ad1ff'];
 const RX={1:'D-T',2:'D-D',3:'D-³He',4:'p-¹¹B(Nevins)',5:'p-¹¹B(Sikora)',6:'cat-D-D'};
@@ -1754,6 +1788,55 @@ function dl(name,text){const b=new Blob([text],{type:'text/plain'});const a=docu
 function scanCsv(s){const F=Object.keys(s.fields);let out='# '+s.xkey+','+s.ykey+','+F.join(',')+'\n';
   for(let j=0;j<s.y.length;j++)for(let i=0;i<s.x.length;i++)out+=s.x[i]+','+s.y[j]+','+F.map(f=>s.fields[f][j][i]).join(',')+'\n';return out;}
 // bind auth-wall UI once (independent of init gating)
+// ---- phase 3: slide-out manual panel ----
+let MANUAL_CACHE=null,MANUAL_CONFIG=null,MANUAL_LANG=null;
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function renderManualBody(m){
+  let html='';
+  for(const sec of (m.sections||[])){
+    html+=`<div class="mp-sec"><h4>${esc(sec.title)}</h4>`;
+    if(sec.paragraph)html+=`<p>${esc(sec.paragraph)}</p>`;
+    if(sec.steps){html+='<ol>';for(const s of sec.steps)html+=`<li>${esc(s)}</li>`;html+='</ol>';}
+    if(sec.items){html+='<table>';for(const it of sec.items)html+=`<tr><td class="k">${esc(it.k)}</td><td>${esc(it.desc)}</td><td class="u">${esc(it.unit)}</td></tr>`;html+='</table>';}
+    if(sec.groups){for(const g of sec.groups){html+=`<div style="margin-top:8px"><div style="font-size:10.5px;color:var(--dim);margin-bottom:3px">${esc(g.title)}</div><table>`;for(const it of g.items)html+=`<tr><td class="k">${esc(it.k)}</td><td>${esc(it.desc)}</td><td class="u">${esc(it.unit)}</td></tr>`;html+='</table></div>';}}
+    html+='</div>';
+  }
+  return html||'<div class="mp-empty">无内容</div>';
+}
+async function loadManual(force){
+  const cfg=CUR||'tokamak',lang=LANG||'zh';
+  if(!force&&MANUAL_CACHE&&MANUAL_CONFIG===cfg&&MANUAL_LANG===lang)return;
+  const body=document.getElementById('mpBody');
+  body.innerHTML='<div class="mp-empty">加载中…</div>';
+  try{
+    const m=await jget(`/api/manual?config=${encodeURIComponent(cfg)}&lang=${encodeURIComponent(lang)}`);
+    MANUAL_CACHE=m;MANUAL_CONFIG=cfg;MANUAL_LANG=lang;
+    document.getElementById('mpTitle').textContent=m.title||'说明书 Manual';
+    body.innerHTML=renderManualBody(m);
+  }catch(e){body.innerHTML=`<div class="mp-empty">${esc(e.message||e)}</div>`;}
+}
+function openManual(){document.getElementById('manualPanel').classList.add('on');loadManual(false);}
+function closeManual(){document.getElementById('manualPanel').classList.remove('on');}
+function exportManualHtml(){
+  if(!MANUAL_CACHE)return;
+  const m=MANUAL_CACHE;
+  const sectionsHtml=(m.sections||[]).map(sec=>{
+    let inner='';
+    if(sec.paragraph)inner+=`<p>${esc(sec.paragraph)}</p>`;
+    if(sec.steps){inner+='<ol>'+sec.steps.map(s=>`<li>${esc(s)}</li>`).join('')+'</ol>';}
+    if(sec.items)inner+='<table><tr><th>key</th><th>desc</th><th>unit</th></tr>'+sec.items.map(it=>`<tr><td>${esc(it.k)}</td><td>${esc(it.desc)}</td><td>${esc(it.unit)}</td></tr>`).join('')+'</table>';
+    if(sec.groups)inner+=sec.groups.map(g=>`<h4>${esc(g.title)}</h4><table>`+g.items.map(it=>`<tr><td>${esc(it.k)}</td><td>${esc(it.desc)}</td><td>${esc(it.unit)}</td></tr>`).join('')+'</table>').join('');
+    return `<section><h3>${esc(sec.title)}</h3>${inner}</section>`;
+  }).join('');
+  const html=`<!DOCTYPE html><html lang="${m.lang||'zh'}"><head><meta charset="utf-8"><title>${esc(m.title)}</title>
+<style>body{font-family:system-ui,"Microsoft YaHei",sans-serif;max-width:820px;margin:32px auto;padding:0 20px;color:#1a2332;line-height:1.6}
+h1{color:#a35f00}h3{color:#0c8678;border-bottom:1px solid #c3cddc;padding-bottom:4px;margin-top:24px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}td,th{padding:4px 8px;border-bottom:1px solid #e0e5ee;text-align:left}
+td:first-child,th:first-child{font-family:monospace;color:#49586f;white-space:nowrap}ol{line-height:1.8}</style></head>
+<body><h1>${esc(m.title)}</h1>${sectionsHtml}</body></html>`;
+  const w=window.open('','_blank');if(!w)return;w.document.open();w.document.write(html);w.document.close();
+}
+
 (function bindAuthUI(){
   const el=id=>document.getElementById(id);
   el('atabLogin').onclick=()=>setAuthMode('login');
@@ -1762,6 +1845,10 @@ function scanCsv(s){const F=Object.keys(s.fields);let out='# '+s.xkey+','+s.ykey
   el('logoutBtn').onclick=doLogout;
   el('authPass').addEventListener('keydown',e=>{if(e.key==='Enter')doAuth();});
   el('authUser').addEventListener('keydown',e=>{if(e.key==='Enter')el('authPass').focus();});
+  el('manualBtn').onclick=openManual;
+  el('mpX').onclick=closeManual;
+  el('mpRefresh').onclick=()=>loadManual(true);
+  el('mpExport').onclick=exportManualHtml;
 })();
 init();
 </script>

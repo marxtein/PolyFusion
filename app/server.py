@@ -43,6 +43,7 @@ from polyfusion.equilibrium_import import (  # noqa: E402
 from polyfusion import eqdsk  # noqa: E402
 from polyfusion import auth as auth_mod  # noqa: E402
 from polyfusion.auth import AuthError  # noqa: E402
+from polyfusion.docs_generator import generate_manual  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOST = "0.0.0.0"
@@ -216,6 +217,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/auth/me":
             user = self._current_user()
             return self._send(200, json.dumps({"user": user}))
+        if self.path.startswith("/api/manual"):
+            return self._handle_manual()
         if self.path == "/api/equilibria":
             # manifest of bundled real equilibrium files, keyed by config+preset
             mpath = os.path.join(HERE, "equilibria", "manifest.json")
@@ -339,6 +342,19 @@ class Handler(BaseHTTPRequestHandler):
             json.dumps({"ok": True}),
             set_cookie=_cookie_for_token(token),
         )
+
+    def _handle_manual(self):
+        # /api/manual?config=tokamak&lang=zh  — public so docs render pre-login
+        from urllib.parse import parse_qs, urlparse
+
+        qs = parse_qs(urlparse(self.path).query)
+        config = (qs.get("config") or ["tokamak"])[0]
+        lang = (qs.get("lang") or ["zh"])[0]
+        try:
+            out = generate_manual(config, lang)
+        except KeyError:
+            return self._send(404, json.dumps({"error": f"unknown config: {config}"}))
+        return self._send(200, json.dumps(out, ensure_ascii=False))
 
 
 def main():
