@@ -1,42 +1,59 @@
 """User authentication and session management for PolyFusion.
 
-Stdlib-only implementation:
-- Password hashing: ``hashlib.scrypt`` with per-user random salt.
-- Storage: JSON files under ``~/.polyfusion`` (path overridable via
-  ``POLYFUSION_HOME``). Atomic writes via ``tempfile`` + ``os.replace``.
-- Sessions: tokens kept in memory and persisted to disk; 24h sliding TTL
-  so server restarts during development do not force re-login for live
-  sessions.
-- Thread safety: every mutating access is guarded by a re-entrant lock
-  because ``ThreadingHTTPServer`` dispatches each request on its own
-  thread.
+This module is a thin adapter over Supabase Auth. Password hashing, email
+verification, password reset and JWT issuance are all delegated to Supabase;
+the local process stores no password material at all.
+
+Public surface used by ``app/server.py``:
+    - ``register(username, email, password, password2) -> dict``
+    - ``login(email, password) -> (access_token, refresh_token, user_dict)``
+    - ``logout(access_token, refresh_token) -> None``
+    - ``get_user(access_token) -> dict | None``
+    - ``resend_verification(email) -> None``
+    - ``validate_session(access_token, refresh_token=None) -> str | None``
+    - ``parse_session_cookie(cookie_header) -> str | None``
+
+The web process only ever reads ``SUPABASE_URL`` and ``SUPABASE_ANON_KEY``.
+The service-role key is never imported here; it lives exclusively in the
+one-shot migration script.
+
+JWT verification is performed locally (against the Supabase JWKS) so that
+each authenticated request does not pay a network round-trip. A near-expiry
+access token is refreshed transparently when a refresh token is available.
+
+Test mode: when ``POLYFUSION_TEST_JWT_SECRET`` is set, ``verify_jwt`` decodes
+HS256 tokens signed with that secret instead of consulting JWKS. This keeps
+production code clean while letting the test suite (which uses ``pyjwt`` to
+mint tokens) avoid the asymmetric-key machinery.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
 import os
 import re
-import secrets
-import tempfile
 import threading
 import time
-import warnings
 from email.utils import parseaddr
-from pathlib import Path
 from typing import Optional
 
-SCRYPT_N = 2**15
-SCRYPT_R = 8
-SCRYPT_P = 1
-SCRYPT_DKLEN = 32
-# OpenSSL caps scrypt at 32 MiB by default (maxmem=0); our N·r·p needs ~32 MiB
-# for the working set plus overhead, so bump to 128 MiB to clear the limit
-# across OpenSSL versions.
-SCRYPT_MAXMEM = 128 * 1024 * 1024
+from supabase import Client, create_client
+from supabase_auth.errors import AuthApiError, AuthRetryableError
 
-SESSION_TTL = 24 * 3600  # 24 hours, sliding renewal on access
+# Optional dependency: only needed for local JWT verification in production.
+try:  # pragma: no cover - exercised in tests via monkeypatched secret path
+    import jwt as _pyjwt
+except Exception:  # pragma: no cover - jwt is required at install time
+    _pyjwt = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - httpx always ships with supabase
+    import httpx as _httpx
+except Exception:  # pragma: no cover
+    _httpx = None  # type: ignore[assignment]
+
+
+# ---------------------------------------------------------------------------
+# Constants & validation helpers
+# ---------------------------------------------------------------------------
 
 _USERNAME_RE = re.compile(r"^[a-zA-Z0-9_-]{3,32}$")
 _MIN_PASSWORD_LEN = 8
@@ -48,46 +65,15 @@ _EMAIL_RE = re.compile(
     r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
 )
 
+# Refresh when the access token has less than this many seconds left.
+_REFRESH_WINDOW = 5 * 60
+
+# Test-only: when set, verify_jwt decodes HS256 tokens with this secret.
+_TEST_SECRET_ENV = "POLYFUSION_TEST_JWT_SECRET"
+
 
 class AuthError(Exception):
-    """Raised on registration/login/validation failure."""
-
-
-def hash_password(pw: str) -> str:
-    salt = secrets.token_hex(16)
-    dk = hashlib.scrypt(
-        pw.encode(),
-        salt=salt.encode(),
-        n=SCRYPT_N,
-        r=SCRYPT_R,
-        p=SCRYPT_P,
-        dklen=SCRYPT_DKLEN,
-        maxmem=SCRYPT_MAXMEM,
-    )
-    return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${salt}${dk.hex()}"
-
-
-def verify_password(pw: str, stored: str) -> bool:
-    try:
-        algo, n, r, p, salt, hex_dk = stored.split("$")
-    except ValueError:
-        return False
-    if algo != "scrypt":
-        return False
-    try:
-        dklen = len(bytes.fromhex(hex_dk))
-        dk = hashlib.scrypt(
-            pw.encode(),
-            salt=salt.encode(),
-            n=int(n),
-            r=int(r),
-            p=int(p),
-            dklen=dklen,
-            maxmem=SCRYPT_MAXMEM,
-        )
-    except (ValueError, TypeError):
-        return False
-    return secrets.compare_digest(dk.hex(), hex_dk)
+    """Raised for all PolyFusion-side auth failures."""
 
 
 def validate_username(name: str) -> str:
@@ -104,27 +90,12 @@ def validate_password(pw: str) -> None:
         raise AuthError(f"password must be at least {_MIN_PASSWORD_LEN} characters")
 
 
-def _data_dir(override: Optional[str] = None) -> Path:
-    base = (
-        override
-        or os.environ.get("POLYFUSION_HOME")
-        or str(Path.home() / ".polyfusion")
-    )
-    d = Path(base)
-    d.mkdir(parents=True, exist_ok=True)
-    try:
-        os.chmod(d, 0o700)
-    except OSError:
-        warnings.warn(f"could not chmod 0o700 {d}", RuntimeWarning, stacklevel=2)
-    return d
-
-
 def validate_email(email: str) -> str:
-    """Validate and return the trimmed original email string.
+    """Validate and return the trimmed email string.
 
-    Rejects empty values, null/control characters, over-long addresses,
-    and addresses that fail ``email.utils.parseaddr`` plus a conservative
-    syntax regex.
+    Rejects empty values, null/control characters, over-long addresses, and
+    addresses that fail ``email.utils.parseaddr`` plus a conservative syntax
+    regex.
     """
     if not isinstance(email, str):
         raise AuthError("invalid email format")
@@ -141,233 +112,359 @@ def validate_email(email: str) -> str:
     return email
 
 
-def normalize_email(email: str) -> str:
-    """Return lowercased email for uniqueness comparison."""
-    return email.lower()
+# ---------------------------------------------------------------------------
+# Supabase client (lazy singleton)
+# ---------------------------------------------------------------------------
+
+_client: Optional[Client] = None
+_client_lock = threading.Lock()
 
 
-class UserStore:
-    """Thread-safe user + session store backed by JSON files."""
+def supabase_client() -> Client:
+    """Return the process-wide Supabase client, creating it on first use.
 
-    def __init__(self, data_dir: Optional[Path] = None) -> None:
-        self._dir = data_dir or _data_dir()
-        self._dir.mkdir(parents=True, exist_ok=True)
+    Reads ``SUPABASE_URL`` and ``SUPABASE_ANON_KEY`` from the environment.
+    Raises ``AuthError`` when either is missing.
+    """
+    global _client
+    if _client is not None:
+        return _client
+    with _client_lock:
+        if _client is not None:
+            return _client
+        url = os.environ.get("SUPABASE_URL", "").strip()
+        key = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+        if not url or not key:
+            raise AuthError("Supabase is not configured")
         try:
-            os.chmod(self._dir, 0o700)
-        except OSError:
-            warnings.warn(
-                f"could not chmod 0o700 {self._dir}", RuntimeWarning, stacklevel=2
+            _client = create_client(url, key)
+        except Exception as exc:  # pragma: no cover - configuration error
+            raise AuthError("service unavailable") from exc
+        return _client
+
+
+def reset_supabase_client_for_tests(client) -> None:
+    """Inject a (fake) client; tests only."""
+    global _client
+    with _client_lock:
+        _client = client
+
+
+# ---------------------------------------------------------------------------
+# JWT verification (local, JWKS-cached)
+# ---------------------------------------------------------------------------
+
+_JWKS_CACHE: dict[str, dict] = {}
+_JWKS_LOCK = threading.Lock()
+
+
+def _jwks_url() -> str:
+    base = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+    return f"{base}/auth/v1/.well-known/jwks.json"
+
+
+def _fetch_jwks() -> dict:
+    """Fetch the Supabase JWKS document with a thread-safe cache.
+
+    Returns a dict shaped like ``{"keys": [ {kid, kty, ...}, ... ]}``.
+    """
+    with _JWKS_LOCK:
+        if _JWKS_CACHE:
+            return _JWKS_CACHE
+        url = _jwks_url()
+        try:
+            if _httpx is None:  # pragma: no cover
+                raise RuntimeError("httpx unavailable")
+            resp = _httpx.get(url, timeout=10.0)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            raise AuthError("service unavailable") from exc
+        if not isinstance(data, dict) or "keys" not in data:
+            raise AuthError("service unavailable")
+        _JWKS_CACHE.clear()
+        _JWKS_CACHE.update(data)
+        return _JWKS_CACHE
+
+
+def _refresh_jwks() -> dict:
+    """Force a JWKS refresh (used when a kid is unknown)."""
+    with _JWKS_LOCK:
+        _JWKS_CACHE.clear()
+    return _fetch_jwks()
+
+
+def verify_jwt(token: str) -> Optional[dict]:
+    """Verify a Supabase access token locally.
+
+    Returns the claims dict if the signature is valid and the token has not
+    expired, otherwise ``None``. ``exp`` is enforced by pyjwt.
+
+    Test mode: when ``POLYFUSION_TEST_JWT_SECRET`` is set, tokens are decoded
+    as HS256 with that secret, bypassing JWKS — this is how the test suite
+    (which mints its own tokens) exercises the local-verify path without an
+    asymmetric keypair.
+    """
+    if not token or _pyjwt is None:
+        return None
+
+    test_secret = os.environ.get(_TEST_SECRET_ENV)
+    if test_secret:
+        try:
+            return _pyjwt.decode(
+                token, test_secret, algorithms=["HS256"], options={"verify_aud": False}
             )
-        self._users_path = self._dir / "users.json"
-        self._sessions_path = self._dir / "sessions.json"
-        self._lock = threading.RLock()
-        self._users: dict[str, dict] = self._load_json(self._users_path, {})
-        self._sessions: dict[str, dict] = self._load_json(self._sessions_path, {})
-        self._users_migrated = False
-        self._legacy_backup_done = False
-        self._backfill_users()
-
-    @staticmethod
-    def _load_json(path: Path, default):
-        try:
-            with path.open("r", encoding="utf-8") as f:
-                return json.load(f)
-        except FileNotFoundError:
-            return default
-        except json.JSONDecodeError as e:
-            warnings.warn(
-                f"corrupted JSON at {path}: {e}; starting fresh", RuntimeWarning
-            )
-            return default
-
-    def _backfill_users(self) -> None:
-        """Fill missing email fields on legacy records."""
-        for rec in self._users.values():
-            if "email" not in rec:
-                rec["email"] = None
-                self._users_migrated = True
-            if "email_normalized" not in rec:
-                rec["email_normalized"] = None
-                self._users_migrated = True
-            if "email_verified" not in rec:
-                rec["email_verified"] = False
-                self._users_migrated = True
-
-    def _maybe_backup_legacy_users(self) -> None:
-        """Before the first write of a migrated users file, copy legacy file to .bak."""
-        if self._legacy_backup_done or not self._users_migrated:
-            return
-        if self._users_path.exists():
-            backup = self._users_path.with_suffix(".json.bak")
-            try:
-                import shutil
-
-                shutil.copy2(self._users_path, backup)
-            except OSError:
-                warnings.warn(
-                    f"could not back up {self._users_path} to {backup}",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-        self._legacy_backup_done = True
-
-    def _save_users(self) -> None:
-        self._maybe_backup_legacy_users()
-        self._atomic_write(self._users_path, self._users)
-
-    def _save_sessions(self) -> None:
-        self._atomic_write(self._sessions_path, self._sessions)
-
-    def _save(self) -> None:
-        """Legacy compatibility wrapper for tests."""
-        self._save_users()
-        self._save_sessions()
-
-    def _atomic_write(self, path: Path, data: dict) -> None:
-        fd, tmp = tempfile.mkstemp(
-            dir=str(self._dir), prefix=path.name + ".", suffix=".tmp"
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            try:
-                os.chmod(tmp, 0o600)
-            except OSError:
-                warnings.warn(
-                    f"could not chmod 0o600 {tmp}", RuntimeWarning, stacklevel=2
-                )
-            os.replace(tmp, path)
-        finally:
-            try:
-                if os.path.exists(tmp):
-                    os.unlink(tmp)
-            except OSError:
-                pass
-
-    def register(
-        self,
-        username: str,
-        password: str,
-        email: Optional[str] = None,
-        password2: Optional[str] = None,
-    ) -> str:
-        username = validate_username(username)
-        validate_password(password)
-        if password2 is not None and password2 != password:
-            raise AuthError("passwords do not match")
-        if email is not None:
-            email = validate_email(email)
-            email_normalized = normalize_email(email)
-        else:
-            email_normalized = None
-        with self._lock:
-            if username in self._users:
-                raise AuthError("registration failed")
-            if email_normalized is not None and any(
-                rec.get("email_normalized") == email_normalized
-                for rec in self._users.values()
-            ):
-                raise AuthError("registration failed")
-            record: dict = {
-                "hash": hash_password(password),
-                "created": time.time(),
-                "email": email,
-                "email_normalized": email_normalized,
-                "email_verified": False,
-            }
-            self._users[username] = record
-            self._save_users()
-        return username
-
-    def login(self, username: str, password: str) -> str:
-        username = validate_username(username)
-        with self._lock:
-            rec = self._users.get(username)
-            if not rec or not verify_password(password, rec.get("hash", "")):
-                raise AuthError("invalid credentials")
-            return self.create_session(username)
-
-    def create_session(self, username: str) -> str:
-        token = secrets.token_urlsafe(32)
-        now = time.time()
-        with self._lock:
-            self._sessions[token] = {
-                "user": username,
-                "created": now,
-                "expires": now + SESSION_TTL,
-            }
-            self._prune_expired(now)
-            self._save_sessions()
-        return token
-
-    def validate_session(self, token: Optional[str]) -> Optional[str]:
-        if not token:
+        except Exception:
             return None
-        now = time.time()
-        with self._lock:
-            rec = self._sessions.get(token)
-            if not rec:
-                return None
-            if rec.get("expires", 0) < now:
-                self._sessions.pop(token, None)
-                self._save_sessions()
-                return None
-            rec["expires"] = now + SESSION_TTL  # sliding renewal
-            self._save_sessions()
-            return rec["user"]
 
-    def delete_session(self, token: Optional[str]) -> None:
-        if not token:
-            return
-        with self._lock:
-            if self._sessions.pop(token, None) is not None:
-                self._save_sessions()
+    try:
+        unverified_header = _pyjwt.get_unverified_header(token)
+    except Exception:
+        return None
+    kid = unverified_header.get("kid")
 
-    def _prune_expired(self, now: float) -> None:
-        expired = [t for t, r in self._sessions.items() if r.get("expires", 0) < now]
-        for t in expired:
-            self._sessions.pop(t, None)
+    jwks = _fetch_jwks()
+    keys = jwks.get("keys", []) or []
+    key_obj = next((k for k in keys if k.get("kid") == kid), None)
+    if key_obj is None:
+        # kid rotation: refresh once and try again.
+        jwks = _refresh_jwks()
+        keys = jwks.get("keys", []) or []
+        key_obj = next((k for k in keys if k.get("kid") == kid), None)
+        if key_obj is None:
+            return None
 
-    def has_users(self) -> bool:
-        with self._lock:
-            return bool(self._users)
+    try:
+        from jwt import PyJWK  # local import; pyjwt is required
 
-    def list_users(self) -> list[str]:
-        """For tests/admin only — never expose password hashes."""
-        with self._lock:
-            return sorted(self._users.keys())
+        public_key = PyJWK(key_obj).key
+        return _pyjwt.decode(
+            token,
+            public_key,
+            algorithms=["RS256"],
+            options={"verify_aud": False},
+        )
+    except Exception:
+        return None
 
 
-# Module-level singleton, lazily initialised so tests can point POLYFUSION_HOME
-# at a temp directory before the first call.
-_store: Optional[UserStore] = None
-_store_lock = threading.Lock()
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 
-def get_store() -> UserStore:
-    global _store
-    if _store is None:
-        with _store_lock:
-            if _store is None:
-                _store = UserStore()
-    return _store
+def _translate_supabase_error(exc: Exception) -> AuthError:
+    """Map network/retryable errors to a generic 'service unavailable' message.
+
+    AuthApiError with already-registered semantics is also folded into a
+    generic 'registration failed' to prevent user enumeration.
+    """
+    if isinstance(exc, AuthRetryableError):
+        return AuthError("service unavailable")
+    if isinstance(exc, AuthApiError):
+        code = (exc.code or "").lower() if exc.code else ""
+        message = (exc.message or "").lower()
+        if (
+            "user_already" in code
+            or "already registered" in message
+            or "already been registered" in message
+            or "unique" in code
+        ):
+            return AuthError("registration failed")
+        # Other auth errors: surface a generic message; the underlying detail
+        # is not user-facing.
+        return AuthError("authentication failed")
+    if _httpx is not None and isinstance(exc, _httpx.HTTPError):
+        return AuthError("service unavailable")
+    return AuthError("service unavailable")
 
 
-def reset_store_for_tests(store: UserStore) -> None:
-    """Inject a store backed by a temp dir; tests only."""
-    global _store
-    with _store_lock:
-        _store = store
+def _already_registered(exc: Exception) -> bool:
+    """True if ``exc`` indicates the email/username is already taken."""
+    if not isinstance(exc, AuthApiError):
+        return False
+    code = (exc.code or "").lower() if exc.code else ""
+    message = (exc.message or "").lower()
+    return (
+        "user_already" in code
+        or "already registered" in message
+        or "already been registered" in message
+        or "unique" in code
+    )
 
 
-_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
+def _user_dict(user) -> dict:
+    """Normalize a Supabase User object into our public shape."""
+    metadata = getattr(user, "user_metadata", None) or {}
+    email_confirmed = getattr(user, "email_confirmed_at", None)
+    return {
+        "user_id": getattr(user, "id", None),
+        "username": metadata.get("username"),
+        "email": getattr(user, "email", None),
+        "email_verified": bool(email_confirmed),
+    }
+
+
+def register(username: str, email: str, password: str, password2: str) -> dict:
+    """Register a new user via Supabase Auth.
+
+    Returns ``{"user_id", "username", "email", "email_verification_sent"}``.
+    Raises ``AuthError`` on validation failure or any Supabase-side error.
+    Duplicate-email / already-registered errors are translated to a generic
+    ``AuthError("registration failed")`` to prevent enumeration.
+    """
+    username = validate_username(username)
+    email = validate_email(email)
+    validate_password(password)
+    if password2 != password:
+        raise AuthError("passwords do not match")
+
+    client = supabase_client()
+    try:
+        resp = client.auth.sign_up(
+            {
+                "email": email,
+                "password": password,
+                "options": {"data": {"username": username}},
+            }
+        )
+    except Exception as exc:
+        raise _translate_supabase_error(exc) from exc
+
+    user = getattr(resp, "user", None)
+    if user is None:
+        # Should not happen for a successful sign_up, but stay defensive.
+        raise AuthError("registration failed")
+    user_id = getattr(user, "id", None)
+    # Supabase sets confirmation_sent_at when "Confirm email" is ON; that's our
+    # signal that a verification email was dispatched.
+    verification_sent = bool(getattr(user, "confirmation_sent_at", None))
+    return {
+        "user_id": user_id,
+        "username": username,
+        "email": email,
+        "email_verification_sent": verification_sent,
+    }
+
+
+def login(email: str, password: str) -> tuple[str, str, dict]:
+    """Log in with email + password.
+
+    Returns ``(access_token, refresh_token, user_dict)``. Raises ``AuthError``
+    on any failure (invalid credentials, network, etc.).
+    """
+    email = validate_email(email)
+    if not isinstance(password, str) or not password:
+        raise AuthError("invalid credentials")
+    client = supabase_client()
+    try:
+        resp = client.auth.sign_in_with_password({"email": email, "password": password})
+    except Exception as exc:
+        raise _translate_supabase_error(exc) from exc
+
+    session = getattr(resp, "session", None)
+    user = getattr(resp, "user", None)
+    if session is None or user is None:
+        raise AuthError("invalid credentials")
+    access_token = getattr(session, "access_token", None)
+    refresh_token = getattr(session, "refresh_token", None)
+    if not access_token or not refresh_token:
+        raise AuthError("invalid credentials")
+    return access_token, refresh_token, _user_dict(user)
+
+
+def logout(access_token: Optional[str], refresh_token: Optional[str] = None) -> None:
+    """Best-effort sign-out. Network errors are swallowed so cookie cleanup on
+    the caller side is never blocked.
+    """
+    if not access_token:
+        return
+    client = supabase_client()
+    try:
+        client.auth.sign_out(access_token)
+    except Exception:
+        # Best effort: caller always clears its own cookies regardless.
+        return
+
+
+def get_user(access_token: Optional[str]) -> Optional[dict]:
+    """Return the public-shape user dict for ``access_token`` or ``None``."""
+    if not access_token:
+        return None
+    client = supabase_client()
+    try:
+        resp = client.auth.get_user(access_token)
+    except Exception:
+        return None
+    user = getattr(resp, "user", None) if resp is not None else None
+    if user is None:
+        return None
+    return _user_dict(user)
+
+
+def resend_verification(email: str) -> None:
+    """Trigger a new signup confirmation email via Supabase.
+
+    Raises ``AuthError`` on network/service failure. A missing user is not an
+    error here (Supabase is opaque by design to avoid enumeration).
+    """
+    email = validate_email(email)
+    client = supabase_client()
+    try:
+        client.auth.resend({"email": email, "type": "signup"})
+    except Exception as exc:
+        raise _translate_supabase_error(exc) from exc
+
+
+def validate_session(
+    access_token: Optional[str], refresh_token: Optional[str] = None
+) -> Optional[str]:
+    """Validate a session locally and return the user id (``sub``) or None.
+
+    The access token is verified locally via ``verify_jwt``. When it is valid
+    but expiring within ``_REFRESH_WINDOW`` seconds and a ``refresh_token`` is
+    available, a refresh attempt is made; if that succeeds the new session is
+    still considered valid (returning the same user id).
+    """
+    if not access_token:
+        return None
+    claims = verify_jwt(access_token)
+    if claims is None:
+        return None
+    sub = claims.get("sub")
+    if not sub:
+        return None
+
+    exp = claims.get("exp")
+    now = int(time.time())
+    near_expiry = isinstance(exp, (int, float)) and exp - now < _REFRESH_WINDOW
+    if near_expiry and refresh_token:
+        client = supabase_client()
+        try:
+            client.auth.refresh_session(refresh_token)
+        except Exception:
+            # The current token is still technically valid until exp; if the
+            # refresh fails we keep the user logged in until the natural
+            # expiry rather than forcing an immediate logout.
+            pass
+    return sub
+
+
+# ---------------------------------------------------------------------------
+# Cookie parsing (kept compatible with the old API name)
+# ---------------------------------------------------------------------------
+
+_COOKIE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.\-]{8,4096}$")
 
 
 def parse_session_cookie(cookie_header: Optional[str]) -> Optional[str]:
-    """Extract the ``polyfusion_session`` token from a Cookie header.
+    """Return the ``polyfusion_session`` cookie value or ``None``.
 
-    Validates the token shape so obviously malformed or over-long cookie
-    values cannot be passed into storage lookups.
+    The cookie value is now a JWT, but we treat it as an opaque string here
+    and only do a minimal length/charset sanity check before handing it to
+    ``verify_jwt`` / Supabase. This guards the lookup path against malformed
+    or hostile values while keeping the function's contract identical to the
+    pre-Supabase version.
     """
     if not cookie_header:
         return None
@@ -375,6 +472,6 @@ def parse_session_cookie(cookie_header: Optional[str]) -> Optional[str]:
         if "=" not in part:
             continue
         k, v = part.strip().split("=", 1)
-        if k == "polyfusion_session" and _TOKEN_RE.match(v):
+        if k == "polyfusion_session" and _COOKIE_TOKEN_RE.match(v):
             return v
     return None

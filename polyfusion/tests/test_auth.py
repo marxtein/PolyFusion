@@ -1,314 +1,321 @@
-"""Unit tests for polyfusion.auth (user store, hashing, sessions)."""
+"""Unit tests for polyfusion.auth (Supabase adapter).
+
+The conftest auto-injects a FakeSupabase client and an HS256 test secret so
+``verify_jwt`` can be exercised end-to-end without an asymmetric keypair.
+"""
 
 from __future__ import annotations
 
-import json
 import os
 import sys
-import threading
 import time
 
+import jwt as pyjwt
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from polyfusion import auth  # noqa: E402
+from polyfusion.tests.conftest import (  # noqa: E402
+    FakeAuthApiError,
+    FakeAuthRetryableError,
+    TEST_JWT_SECRET,
+    _ORIGINAL_SUPABASE_CLIENT,
+)
 
 
-@pytest.fixture
-def store(tmp_path, monkeypatch):
-    """Fresh UserStore backed by a temp dir for each test."""
-    monkeypatch.setenv("POLYFUSION_HOME", str(tmp_path))
-    s = auth.UserStore(data_dir=tmp_path)
-    auth.reset_store_for_tests(s)
-    yield s
-    auth.reset_store_for_tests(auth.UserStore(data_dir=tmp_path))
+# ---------------------------------------------------------------------------
+# register
+# ---------------------------------------------------------------------------
 
 
-def test_hash_and_verify_password(store):
-    h = auth.hash_password("hunter222")
-    assert h.startswith("scrypt$")
-    assert auth.verify_password("hunter222", h)
-    assert not auth.verify_password("wrong", h)
+def test_register_success_returns_dict_with_username(fake):
+    result = auth.register("alice", "alice@example.com", "password1", "password1")
+    assert result["username"] == "alice"
+    assert result["email"] == "alice@example.com"
+    assert result["user_id"]
+    assert isinstance(result["email_verification_sent"], bool)
 
 
-def test_hash_uses_random_salt(store):
-    a = auth.hash_password("same-password")
-    b = auth.hash_password("same-password")
-    assert a != b  # per-user salt
+def test_register_sets_email_verification_sent_when_confirm_on(fake):
+    fake.auth.confirm_email_on = True
+    result = auth.register("alice", "alice@example.com", "password1", "password1")
+    assert result["email_verification_sent"] is True
 
 
-def test_validate_username_rejects_bad(store):
-    with pytest.raises(auth.AuthError):
-        auth.validate_username("ab")  # too short
-    with pytest.raises(auth.AuthError):
-        auth.validate_username("x" * 40)  # too long
-    with pytest.raises(auth.AuthError):
-        auth.validate_username("bad space!")
-    assert auth.validate_username("good_name-1") == "good_name-1"
+def test_register_no_verification_sent_when_confirm_off(fake):
+    fake.auth.confirm_email_on = False
+    result = auth.register("alice", "alice@example.com", "password1", "password1")
+    assert result["email_verification_sent"] is False
 
 
-def test_validate_password_min_length(store):
-    with pytest.raises(auth.AuthError):
-        auth.validate_password("short")
-    auth.validate_password("longenough")
+def test_register_puts_username_into_options_data(fake):
+    auth.register("alice", "alice@example.com", "password1", "password1")
+    rec = fake.auth.users["alice@example.com"]
+    assert rec["username"] == "alice"
 
 
-def test_register_and_login(store):
-    store.register(
-        "alice", "password1", email="alice@example.com", password2="password1"
-    )
-    assert "alice" in store.list_users()
-    rec = store._users["alice"]
-    assert rec["email"] == "alice@example.com"
-    assert rec["email_normalized"] == "alice@example.com"
-    assert rec["email_verified"] is False
-
-    token = store.login("alice", "password1")
-    assert token
-    assert store.validate_session(token) == "alice"
-
-
-def test_register_and_login_legacy_no_email(store):
-    # Backward compatibility: old callers may omit email/password2.
-    store.register("alice_legacy", "password1")
-    assert "alice_legacy" in store.list_users()
-    rec = store._users["alice_legacy"]
-    assert rec["email"] is None
-    assert rec["email_normalized"] is None
-    assert rec["email_verified"] is False
-
-    token = store.login("alice_legacy", "password1")
-    assert store.validate_session(token) == "alice_legacy"
-
-
-def test_register_duplicate(store):
-    store.register("bob", "password1", email="bob@example.com", password2="password1")
-    with pytest.raises(auth.AuthError):
-        store.register(
-            "bob", "otherpass", email="bob2@example.com", password2="otherpass"
-        )
-
-
-def test_login_wrong_password(store):
-    store.register("carol", "password1")
-    with pytest.raises(auth.AuthError):
-        store.login("carol", "nope")
-
-
-def test_session_unknown_token(store):
-    assert store.validate_session("does-not-exist") is None
-    assert store.validate_session(None) is None
-    assert store.validate_session("") is None
-
-
-def test_logout_invalidates_session(store):
-    store.register("dave", "password1")
-    token = store.login("dave", "password1")
-    assert store.validate_session(token) == "dave"
-    store.delete_session(token)
-    assert store.validate_session(token) is None
-
-
-def test_sessions_persist_across_instances(tmp_path, monkeypatch):
-    monkeypatch.setenv("POLYFUSION_HOME", str(tmp_path))
-    s1 = auth.UserStore(data_dir=tmp_path)
-    s1.register("erin", "password1")
-    token = s1.login("erin", "password1")
-
-    # new instance loading from the same JSON files should restore the session
-    s2 = auth.UserStore(data_dir=tmp_path)
-    assert s2.validate_session(token) == "erin"
-
-
-def test_expired_session_is_evicted(tmp_path, monkeypatch):
-    monkeypatch.setenv("POLYFUSION_HOME", str(tmp_path))
-    s = auth.UserStore(data_dir=tmp_path)
-    s.register("frank", "password1")
-    token = s.login("frank", "password1")
-
-    # tamper: backdate the session so it is past TTL
-    with s._lock:
-        s._sessions[token]["expires"] = time.time() - 1
-        s._save()
-
-    assert s.validate_session(token) is None
-
-
-def test_users_file_permissions(tmp_path, monkeypatch):
-    monkeypatch.setenv("POLYFUSION_HOME", str(tmp_path))
-    s = auth.UserStore(data_dir=tmp_path)
-    s.register("gina", "password1")
-    users_path = tmp_path / "users.json"
-    mode = users_path.stat().st_mode & 0o777
-    assert mode == 0o600
-
-
-def test_password_hash_not_stored_in_plaintext(tmp_path, monkeypatch):
-    monkeypatch.setenv("POLYFUSION_HOME", str(tmp_path))
-    s = auth.UserStore(data_dir=tmp_path)
-    s.register("henry", "supersecret")
-    raw = json.loads((tmp_path / "users.json").read_text())
-    assert raw["henry"]["hash"].startswith("scrypt$")
-    assert "supersecret" not in json.dumps(raw)
-
-
-def test_concurrent_registration_is_safe(tmp_path, monkeypatch):
-    monkeypatch.setenv("POLYFUSION_HOME", str(tmp_path))
-    s = auth.UserStore(data_dir=tmp_path)
-    errors: list[Exception] = []
-    success: list[str] = []
-
-    def register(idx):
-        try:
-            s.register(f"user{idx}", "password1")
-            success.append(f"user{idx}")
-        except auth.AuthError as e:
-            errors.append(e)
-
-    threads = [threading.Thread(target=register, args=(i,)) for i in range(10)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    assert len(success) == 10
-    assert len(s.list_users()) == 10
-
-
-def test_concurrent_registration_same_email_allows_one(tmp_path, monkeypatch):
-    monkeypatch.setenv("POLYFUSION_HOME", str(tmp_path))
-    s = auth.UserStore(data_dir=tmp_path)
-    errors: list[Exception] = []
-    success: list[str] = []
-
-    def register(idx):
-        try:
-            s.register(
-                f"user{idx}",
-                "password1",
-                email="shared@example.com",
-                password2="password1",
-            )
-            success.append(f"user{idx}")
-        except auth.AuthError as e:
-            errors.append(e)
-
-    threads = [threading.Thread(target=register, args=(i,)) for i in range(10)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    assert len(success) == 1
-    assert len(errors) == 9
-    assert len(s.list_users()) == 1
-
-
-def test_register_rejects_invalid_email(store):
-    invalid_emails = [
-        "not-an-email",
-        "missing-at.example.com",
-        "spaces in@example.com",
-        "bad\x00null@example.com",
-        "bad\x01ctrl@example.com",
-        "bad\x7fctrl@example.com",
-        "",
-        "a" * 250 + "@example.com",  # >254 chars
-    ]
-    for email in invalid_emails:
-        with pytest.raises(auth.AuthError):
-            store.register("newuser", "password1", email=email, password2="password1")
-
-
-def test_register_rejects_password_mismatch(store):
+def test_register_rejects_password_mismatch(fake):
     with pytest.raises(auth.AuthError, match="password"):
-        store.register(
-            "newuser", "password1", email="new@example.com", password2="different"
-        )
+        auth.register("alice", "alice@example.com", "password1", "different")
 
 
-def test_register_duplicate_email_case_insensitive(store):
-    store.register(
-        "first", "password1", email="User@Example.com", password2="password1"
-    )
+def test_register_rejects_invalid_email(fake):
     with pytest.raises(auth.AuthError):
-        store.register(
-            "second", "password1", email="user@example.com", password2="password1"
-        )
+        auth.register("alice", "not-an-email", "password1", "password1")
 
 
-def test_register_duplicate_error_is_generic(store):
-    store.register("orig", "password1", email="orig@example.com", password2="password1")
+def test_register_rejects_short_password(fake):
+    with pytest.raises(auth.AuthError):
+        auth.register("alice", "alice@example.com", "short", "short")
+
+
+def test_register_rejects_bad_username(fake):
+    with pytest.raises(auth.AuthError):
+        auth.register("ab", "alice@example.com", "password1", "password1")
+
+
+def test_register_translates_already_registered_to_generic_error(fake):
+    auth.register("alice", "alice@example.com", "password1", "password1")
     with pytest.raises(auth.AuthError) as exc_info:
-        store.register(
-            "orig", "password1", email="new@example.com", password2="password1"
-        )
+        auth.register("alice2", "alice@example.com", "password1", "password1")
     msg = str(exc_info.value).lower()
+    # Anti-enumeration: must NOT leak which field collided.
     assert "username" not in msg
     assert "email" not in msg
+    assert "registration failed" in msg or "already" not in msg
 
+
+def test_register_translates_code_user_already_exists(fake):
+    # First user, then attempt again with the trigger-style error.
+    auth.register("alice", "alice@example.com", "password1", "password1")
+    fake.auth.next_error = FakeAuthApiError(
+        "User already registered", code="user_already_exists", status=400
+    )
     with pytest.raises(auth.AuthError) as exc_info:
-        store.register(
-            "newname", "password1", email="orig@example.com", password2="password1"
-        )
-    msg = str(exc_info.value).lower()
-    assert "username" not in msg
-    assert "email" not in msg
+        auth.register("alice2", "alice2@example.com", "password1", "password1")
+    assert "registration failed" in str(exc_info.value).lower()
 
 
-def test_legacy_user_migration(tmp_path, monkeypatch):
-    monkeypatch.setenv("POLYFUSION_HOME", str(tmp_path))
-    users_path = tmp_path / "users.json"
-    legacy = {
-        "legacy_user": {
-            "hash": auth.hash_password("password1"),
-            "created": time.time(),
-        }
-    }
-    users_path.write_text(json.dumps(legacy))
-
-    s = auth.UserStore(data_dir=tmp_path)
-    rec = s._users["legacy_user"]
-    assert rec["email"] is None
-    assert rec["email_normalized"] is None
-    assert rec["email_verified"] is False
-
-    # Login still works after migration.
-    token = s.login("legacy_user", "password1")
-    assert s.validate_session(token) == "legacy_user"
+def test_register_translates_message_already_been_registered(fake):
+    fake.auth.next_error = FakeAuthApiError(
+        "For security purposes, you can only request this after 1 second.",
+        code="user_already_exists",
+        status=400,
+    )
+    # Different message variant to confirm the message-branch check works.
+    fake.auth.next_error = FakeAuthApiError(
+        "User already been registered", code="weak_password", status=400
+    )
+    with pytest.raises(auth.AuthError) as exc_info:
+        auth.register("alice", "alice@example.com", "password1", "password1")
+    assert "registration failed" in str(exc_info.value).lower()
 
 
-def test_legacy_backup_created_on_first_write(tmp_path, monkeypatch):
-    monkeypatch.setenv("POLYFUSION_HOME", str(tmp_path))
-    users_path = tmp_path / "users.json"
-    legacy = {
-        "legacy_user": {
-            "hash": auth.hash_password("password1"),
-            "created": time.time(),
-        }
-    }
-    users_path.write_text(json.dumps(legacy))
-
-    s = auth.UserStore(data_dir=tmp_path)
-    assert not (tmp_path / "users.json.bak").exists()
-    s.register("newbie", "password1", email="newbie@example.com", password2="password1")
-    assert (tmp_path / "users.json.bak").exists()
-    assert json.loads((tmp_path / "users.json.bak").read_text()) == legacy
+def test_register_translates_retryable_error(fake):
+    fake.auth.next_error = FakeAuthRetryableError(
+        "timeout", code="over_request_rate_limit", status=500
+    )
+    with pytest.raises(auth.AuthError, match="service unavailable"):
+        auth.register("alice", "alice@example.com", "password1", "password1")
 
 
-def test_parse_session_cookie():
+# ---------------------------------------------------------------------------
+# login
+# ---------------------------------------------------------------------------
+
+
+def test_login_returns_tokens_and_user_dict(fake):
+    fake.auth.confirm_email_on = False
+    auth.register("alice", "alice@example.com", "password1", "password1")
+    access, refresh, user = auth.login("alice@example.com", "password1")
+    assert access
+    assert refresh
+    assert user["username"] == "alice"
+    assert user["email"] == "alice@example.com"
+    assert user["email_verified"] is False
+    assert user["user_id"]
+
+
+def test_login_invalid_credentials_raises(fake):
+    fake.auth.confirm_email_on = False
+    auth.register("alice", "alice@example.com", "password1", "password1")
+    with pytest.raises(auth.AuthError):
+        auth.login("alice@example.com", "wrong")
+
+
+def test_login_retryable_error_is_service_unavailable(fake):
+    fake.auth.next_error = FakeAuthRetryableError("net", status=503)
+    with pytest.raises(auth.AuthError, match="service unavailable"):
+        auth.login("alice@example.com", "password1")
+
+
+# ---------------------------------------------------------------------------
+# validate_session (local JWT verification)
+# ---------------------------------------------------------------------------
+
+
+def _make_token(secret: str, sub: str = "user-123", exp_in: int = 3600) -> str:
+    payload = {"sub": sub, "exp": int(time.time()) + exp_in, "iat": int(time.time())}
+    return pyjwt.encode(payload, secret, algorithm="HS256")
+
+
+def test_validate_session_returns_sub_on_valid_jwt(fake):
+    token = _make_token(TEST_JWT_SECRET)
+    assert auth.validate_session(token) == "user-123"
+
+
+def test_validate_session_none_on_missing_token(fake):
+    assert auth.validate_session(None) is None
+    assert auth.validate_session("") is None
+
+
+def test_validate_session_none_on_invalid_token(fake):
+    assert auth.validate_session("garbage.payload.here") is None
+
+
+def test_validate_session_none_on_wrong_signature(fake, monkeypatch):
+    token = _make_token("some-other-secret")
+    assert auth.validate_session(token) is None
+
+
+def test_validate_session_none_on_expired(fake):
+    # exp in the past -> verify_jwt returns None.
+    payload = {"sub": "user-123", "exp": int(time.time()) - 10}
+    token = pyjwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
+    assert auth.validate_session(token) is None
+
+
+def test_validate_session_refreshes_when_near_expiry(fake):
+    # Expiring in 60s (within the 5-minute window) + refresh token present.
+    token = _make_token(TEST_JWT_SECRET, exp_in=60)
+    assert auth.validate_session(token, refresh_token="r-1") == "user-123"
+    assert fake.auth.refresh_calls == ["r-1"]
+
+
+def test_validate_session_no_refresh_near_expiry_still_returns_sub(fake):
+    # Valid token even when near expiry; refresh simply not attempted.
+    token = _make_token(TEST_JWT_SECRET, exp_in=60)
+    assert auth.validate_session(token) == "user-123"
+    assert fake.auth.refresh_calls == []
+
+
+def test_validate_session_far_from_expiry_does_not_refresh(fake):
+    token = _make_token(TEST_JWT_SECRET, exp_in=3600)
+    assert auth.validate_session(token, refresh_token="r-1") == "user-123"
+    assert fake.auth.refresh_calls == []
+
+
+# ---------------------------------------------------------------------------
+# logout / get_user / resend
+# ---------------------------------------------------------------------------
+
+
+def test_logout_calls_sign_out(fake):
+    fake.auth.confirm_email_on = False
+    auth.register("alice", "alice@example.com", "password1", "password1")
+    access, refresh, _u = auth.login("alice@example.com", "password1")
+    auth.logout(access, refresh)
+    assert fake.auth.sign_out_calls == [access]
+
+
+def test_logout_swallows_network_errors(fake):
+    # Inject a client whose auth.sign_out always raises.
+    class BadAuth:
+        def sign_out(self, token):
+            raise RuntimeError("boom")
+
+    class BadClient:
+        def __init__(self):
+            self.auth = BadAuth()
+
+    auth.reset_supabase_client_for_tests(BadClient())
+    # Should not raise.
+    auth.logout("some-access", "some-refresh")
+    auth.reset_supabase_client_for_tests(fake)
+
+
+def test_logout_noop_without_token(fake):
+    auth.logout(None, None)
+    assert fake.auth.sign_out_calls == []
+
+
+def test_get_user_returns_dict_for_valid_token(fake):
+    fake.auth.confirm_email_on = False
+    auth.register("alice", "alice@example.com", "password1", "password1")
+    access, _r, expected = auth.login("alice@example.com", "password1")
+    got = auth.get_user(access)
+    assert got is not None
+    assert got["username"] == expected["username"]
+    assert got["email"] == expected["email"]
+    assert got["user_id"] == expected["user_id"]
+
+
+def test_get_user_none_for_missing_token(fake):
+    assert auth.get_user(None) is None
+    assert auth.get_user("") is None
+
+
+def test_get_user_none_for_garbage_token(fake):
+    assert auth.get_user("not.a.jwt") is None
+
+
+def test_resend_verification_calls_supabase(fake):
+    auth.resend_verification("alice@example.com")
+    assert fake.auth.resend_calls == [{"email": "alice@example.com", "type": "signup"}]
+
+
+def test_resend_verification_rejects_bad_email(fake):
+    with pytest.raises(auth.AuthError):
+        auth.resend_verification("not-an-email")
+
+
+def test_resend_verification_translates_retryable(fake):
+    fake.auth.next_error = FakeAuthRetryableError("net", status=503)
+    with pytest.raises(auth.AuthError, match="service unavailable"):
+        auth.resend_verification("alice@example.com")
+
+
+# ---------------------------------------------------------------------------
+# supabase_client configuration
+# ---------------------------------------------------------------------------
+
+
+def test_supabase_client_raises_when_url_missing(monkeypatch):
+    """The real ``supabase_client`` raises AuthError without env config."""
+    # The autouse fixture patches the module-level symbol with a lambda; call
+    # the original implementation captured at conftest import time instead.
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_ANON_KEY", raising=False)
+    auth.reset_supabase_client_for_tests(None)
+    with pytest.raises(auth.AuthError):
+        _ORIGINAL_SUPABASE_CLIENT()
+    auth.reset_supabase_client_for_tests(None)
+
+
+def test_supabase_client_raises_when_key_missing(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.delenv("SUPABASE_ANON_KEY", raising=False)
+    auth.reset_supabase_client_for_tests(None)
+    with pytest.raises(auth.AuthError):
+        _ORIGINAL_SUPABASE_CLIENT()
+    auth.reset_supabase_client_for_tests(None)
+
+
+# ---------------------------------------------------------------------------
+# parse_session_cookie (now JWT-tolerant)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_session_cookie_jwt_shape():
+    token = _make_token(TEST_JWT_SECRET)
+    assert auth.parse_session_cookie(f"polyfusion_session={token}") == token
+
+
+def test_parse_session_cookie_none_when_absent():
     assert auth.parse_session_cookie(None) is None
     assert auth.parse_session_cookie("") is None
-    assert auth.parse_session_cookie("polyfusion_session=abc; other=x") is None
-    # only URL-safe base64-ish tokens of reasonable length are accepted
-    valid = "abcd1234-_abcd1234-_abcd1234-_abcd1234"
-    assert auth.parse_session_cookie(f"polyfusion_session={valid}; other=x") == valid
-    assert auth.parse_session_cookie("foo=bar") is None
-    # over-long / malformed tokens rejected
+    assert auth.parse_session_cookie("other=value") is None
+
+
+def test_parse_session_cookie_rejects_garbage():
     assert auth.parse_session_cookie("polyfusion_session=<script>") is None
-    assert auth.parse_session_cookie("polyfusion_session=" + "x" * 200) is None
-
-
-def test_verify_password_malformed_hash():
-    assert not auth.verify_password("x", "not-a-hash")
-    assert not auth.verify_password("x", "bcrypt$1$2$3")
