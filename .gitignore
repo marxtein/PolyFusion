@@ -22,5 +22,10 @@ tmp/
 docs/
 *.log
 
+# Real env files (only .env.example is tracked)
+.env
+.env.*
+!.env.example
+
 # Worktrees
 .worktrees/

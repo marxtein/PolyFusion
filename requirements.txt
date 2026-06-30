@@ -1,3 +1,8 @@
 numpy>=1.26.0
 netCDF4>=1.7.2
 h5py>=3.11.0
+# Auth (Supabase migration, Option C). Exception to the project's stdlib-only
+# rule for app/server.py — see CLAUDE.md "Supabase auth exception".
+supabase>=2.0.0
+pyjwt>=2.8.0
+cryptography>=42.0.0
