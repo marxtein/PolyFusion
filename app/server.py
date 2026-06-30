@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import re
 import sys
 import threading
 import time
@@ -54,7 +55,16 @@ PORT = int(os.environ.get("PORT", 8765))
 
 REQUIRE_AUTH = os.environ.get("REQUIRE_AUTH", "1") != "0"
 USE_HTTPS = os.environ.get("USE_HTTPS", "0") == "1"
-SESSION_COOKIE = "polyfusion_session"
+
+# Two-cookie session design:
+#   - ACCESS_COOKIE  is sent on every request (Path=/) and validated locally
+#                    via JWT; Max-Age matches Supabase's default 1h access TTL.
+#   - REFRESH_COOKIE is scoped to Path=/api/auth so it only travels on auth
+#                    endpoints, where ``validate_session`` may use it to mint
+#                    a new access token near expiry.
+ACCESS_COOKIE = "polyfusion_session"
+REFRESH_COOKIE = "polyfusion_refresh"
+ACCESS_COOKIE_MAX_AGE = 3600
 
 # Simple in-memory rate limiting for auth endpoints.
 _RATE_LIMIT_MAX = 10
@@ -72,22 +82,84 @@ PROTECTED_PATHS = {
     "/api/tokamak/parse_eqdsk",
 }
 
+# Refresh cookie has the same charset contract as the access cookie (both are
+# opaque token strings supplied by Supabase).
+_COOKIE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.\-]{8,4096}$")
 
-def _cookie_for_token(token: str) -> str:
-    flags = (
-        f"{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Strict; "
-        f"Max-Age={24 * 3600}"
+
+def _cookie_for_tokens(access: str, refresh: str) -> tuple[str, str]:
+    """Build the two Set-Cookie headers for a freshly issued session."""
+    access_flags = (
+        f"{ACCESS_COOKIE}={access}; Path=/; HttpOnly; SameSite=Lax; "
+        f"Max-Age={ACCESS_COOKIE_MAX_AGE}"
+    )
+    refresh_flags = (
+        f"{REFRESH_COOKIE}={refresh}; Path=/api/auth; HttpOnly; SameSite=Strict; "
+        f"Max-Age={7 * 24 * 3600}"
     )
     if USE_HTTPS:
-        flags += "; Secure"
-    return flags
+        access_flags += "; Secure"
+        refresh_flags += "; Secure"
+    return access_flags, refresh_flags
 
 
-def _clear_cookie() -> str:
-    flags = f"{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"
+def _clear_auth_cookies() -> list[str]:
+    """Set-Cookie headers that wipe both auth cookies from the browser."""
+    access_flags = f"{ACCESS_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"
+    refresh_flags = (
+        f"{REFRESH_COOKIE}=; Path=/api/auth; HttpOnly; SameSite=Strict; Max-Age=0"
+    )
     if USE_HTTPS:
-        flags += "; Secure"
-    return flags
+        access_flags += "; Secure"
+        refresh_flags += "; Secure"
+    return [access_flags, refresh_flags]
+
+
+def _parse_refresh_cookie(cookie_header: Optional[str]) -> Optional[str]:
+    """Return the ``polyfusion_refresh`` cookie value or ``None``."""
+    if not cookie_header:
+        return None
+    for part in cookie_header.split(";"):
+        if "=" not in part:
+            continue
+        k, v = part.strip().split("=", 1)
+        if k == REFRESH_COOKIE and _COOKIE_TOKEN_RE.match(v):
+            return v
+    return None
+
+
+def _check_origin(headers) -> bool:
+    """Same-host CSRF gate for POST requests.
+
+    Returns True when the request is same-site (or has no Origin/Referer at
+    all, which is the case for non-browser clients and direct HTTP calls).
+    Returns False only when an explicit cross-site Origin or Referer header
+    is present and does not match the request's Host.
+    """
+    host = headers.get("Host")
+    if not host:
+        return True
+    for name in ("Origin", "Referer"):
+        val = headers.get(name)
+        if not val:
+            continue
+        # Strip scheme; tolerate leading "://" if scheme is missing.
+        rest = val
+        if "://" in rest:
+            rest = rest.split("://", 1)[1]
+        # Everything up to the first '/' or '?' or '#' is host[:port].
+        host_part = rest
+        for ch in ("/", "?", "#"):
+            idx = host_part.find(ch)
+            if idx != -1:
+                host_part = host_part[:idx]
+        # userinfo '@' would precede host; drop it.
+        if "@" in host_part:
+            host_part = host_part.rsplit("@", 1)[1]
+        if host_part == host:
+            continue
+        return False
+    return True
 
 
 def _check_rate_limit(client_ip: str) -> bool:
@@ -196,7 +268,13 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", cache_control)
         if set_cookie:
-            self.send_header("Set-Cookie", set_cookie)
+            # ``set_cookie`` may be a single string or a list of strings; emit
+            # one Set-Cookie header per entry so both auth cookies can be
+            # written in a single response.
+            cookies = [set_cookie] if isinstance(set_cookie, str) else set_cookie
+            for c in cookies:
+                if c:
+                    self.send_header("Set-Cookie", c)
         self.end_headers()
         self.wfile.write(data)
 
@@ -215,10 +293,23 @@ class Handler(BaseHTTPRequestHandler):
     # ---- auth helpers -----------------------------------------------------
 
     def _current_user(self) -> Optional[str]:
+        """Return the authenticated user id (``__anon__`` when auth is off).
+
+        When the session is valid, both tokens are cached on the handler
+        instance so ``/api/auth/logout`` can revoke them without re-parsing
+        the cookie jar.
+        """
         if not REQUIRE_AUTH:
             return "__anon__"
-        token = auth_mod.parse_session_cookie(self.headers.get("Cookie"))
-        return auth_mod.get_store().validate_session(token)
+        cookie = self.headers.get("Cookie")
+        access = auth_mod.parse_session_cookie(cookie)
+        refresh = _parse_refresh_cookie(cookie)
+        user_id = auth_mod.validate_session(access, refresh)
+        if user_id:
+            self._access_token = access
+            self._refresh_token = refresh
+            return user_id
+        return None
 
     def _require_auth(self):
         """Return the authenticated username, or send 401 and return None."""
@@ -257,8 +348,7 @@ class Handler(BaseHTTPRequestHandler):
                 ),
             )
         if self.path == "/api/auth/me":
-            user = self._current_user()
-            if user == "__anon__":
+            if not REQUIRE_AUTH:
                 return self._send(
                     200,
                     json.dumps(
@@ -269,15 +359,18 @@ class Handler(BaseHTTPRequestHandler):
                         }
                     ),
                 )
-            store = auth_mod.get_store()
-            rec = store._users.get(user, {})
+            cookie = self.headers.get("Cookie")
+            access = auth_mod.parse_session_cookie(cookie)
+            info = auth_mod.get_user(access)
+            if info is None:
+                return self._send(401, json.dumps({"error": "unauthorized"}))
             return self._send(
                 200,
                 json.dumps(
                     {
-                        "user": user,
-                        "email": rec.get("email"),
-                        "email_verified": bool(rec.get("email_verified", False)),
+                        "user": info.get("username"),
+                        "email": info.get("email"),
+                        "email_verified": bool(info.get("email_verified")),
                     }
                 ),
             )
@@ -307,6 +400,11 @@ class Handler(BaseHTTPRequestHandler):
     # ---- POST -------------------------------------------------------------
 
     def do_POST(self):
+        # CSRF gate: every POST must come from the same host (or carry no
+        # Origin/Referer at all, which is the case for non-browser clients).
+        if not _check_origin(self.headers):
+            return self._send(403, json.dumps({"error": "cross-site blocked"}))
+
         n = int(self.headers.get("Content-Length", 0))
 
         # --- auth routes (always public) ---
@@ -315,13 +413,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/auth/login":
             return self._handle_auth_login(n)
         if self.path == "/api/auth/logout":
-            token = auth_mod.parse_session_cookie(self.headers.get("Cookie"))
-            auth_mod.get_store().delete_session(token)
-            return self._send(
-                200,
-                json.dumps({"ok": True}),
-                set_cookie=_clear_cookie(),
-            )
+            return self._handle_auth_logout()
+        if self.path == "/api/auth/resend":
+            return self._handle_auth_resend(n)
 
         if self.path == "/api/stellarator/equilibrium/preview":
             if not self._require_auth():
@@ -419,28 +513,31 @@ class Handler(BaseHTTPRequestHandler):
         password2 = req.get("password2", "")
         email = (req.get("email") or "").strip()
 
-        # Preserve backward compatibility for clients that only send username+password.
-        if not email and not password2:
-            password2 = password
-            email = f"{username}@placeholder.invalid"
-
-        # Specific, non-enumerating format errors first.
-        if not isinstance(password, str) or len(password) < auth_mod._MIN_PASSWORD_LEN:
-            return self._send(400, json.dumps({"error": "password too short"}))
-        if password != password2:
-            return self._send(400, json.dumps({"error": "passwords do not match"}))
-        try:
-            auth_mod.validate_email(email)
-        except auth_mod.AuthError:
-            return self._send(400, json.dumps({"error": "invalid email format"}))
-
-        try:
-            username = auth_mod.get_store().register(
-                username, password, email=email, password2=password2
+        # Require all four fields explicitly — Supabase auth is email-based, so
+        # the legacy "username-only" fallback no longer applies.
+        if not username or not email or not password or not password2:
+            return self._send(
+                400,
+                json.dumps(
+                    {"error": "username, email, password and password2 are required"}
+                ),
             )
-        except auth_mod.AuthError:
-            return self._send(400, json.dumps({"error": "registration failed"}))
-        return self._send(200, json.dumps({"user": username}))
+
+        try:
+            result = auth_mod.register(username, email, password, password2)
+        except AuthError as e:
+            return self._send(400, json.dumps({"error": str(e)}))
+        return self._send(
+            200,
+            json.dumps(
+                {
+                    "user": result.get("username"),
+                    "email_verification_sent": bool(
+                        result.get("email_verification_sent")
+                    ),
+                }
+            ),
+        )
 
     def _handle_auth_login(self, n: int):
         client_ip = _client_ip(self.headers)
@@ -450,17 +547,54 @@ class Handler(BaseHTTPRequestHandler):
             req = json.loads(self.rfile.read(n) or b"{}")
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+        email = (req.get("email") or "").strip()
+        password = req.get("password", "")
         try:
-            token = auth_mod.get_store().login(
-                req.get("username", ""), req.get("password", "")
-            )
+            access, refresh, user = auth_mod.login(email, password)
         except AuthError as e:
             return self._send(401, json.dumps({"error": str(e)}))
+        access_cookie, refresh_cookie = _cookie_for_tokens(access, refresh)
+        return self._send(
+            200,
+            json.dumps({"ok": True, "user": user.get("username")}),
+            set_cookie=[access_cookie, refresh_cookie],
+        )
+
+    def _handle_auth_logout(self):
+        client_ip = _client_ip(self.headers)
+        if not _check_rate_limit(client_ip):
+            return self._send(429, json.dumps({"error": "rate limit exceeded"}))
+        access = getattr(self, "_access_token", None) or auth_mod.parse_session_cookie(
+            self.headers.get("Cookie")
+        )
+        refresh = getattr(self, "_refresh_token", None) or _parse_refresh_cookie(
+            self.headers.get("Cookie")
+        )
+        # Best-effort: never block cookie cleanup on a Supabase outage.
+        try:
+            auth_mod.logout(access, refresh)
+        except Exception:
+            pass
         return self._send(
             200,
             json.dumps({"ok": True}),
-            set_cookie=_cookie_for_token(token),
+            set_cookie=_clear_auth_cookies(),
         )
+
+    def _handle_auth_resend(self, n: int):
+        client_ip = _client_ip(self.headers)
+        if not _check_rate_limit(client_ip):
+            return self._send(429, json.dumps({"error": "rate limit exceeded"}))
+        try:
+            req = json.loads(self.rfile.read(n) or b"{}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+        email = (req.get("email") or "").strip()
+        try:
+            auth_mod.resend_verification(email)
+        except AuthError as e:
+            return self._send(400, json.dumps({"error": str(e)}))
+        return self._send(200, json.dumps({"ok": True}))
 
     def _handle_manual(self):
         # /api/manual?config=tokamak&lang=zh  — public so docs render pre-login

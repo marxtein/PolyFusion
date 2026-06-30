@@ -271,14 +271,6 @@ def test_frontend_exposes_report_buttons_and_handlers():
     assert "function stripLargeArrays" in html
 
 
-@pytest.mark.skip(
-    reason=(
-        "Phase 2 rewrote polyfusion/auth.py as a Supabase adapter and removed "
-        "auth.get_store(); app/server.py still calls it. This live-server "
-        "auth-401 test will be restored in Phase 3 alongside the server route "
-        "rewrite (see test_server_auth.py)."
-    )
-)
 def test_report_endpoint_requires_auth_when_enabled(monkeypatch):
     """When REQUIRE_AUTH is on, /api/report must 401 without a session."""
     import app.server as srv

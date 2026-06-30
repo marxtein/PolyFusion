@@ -174,7 +174,7 @@ def test_validate_session_none_on_invalid_token(fake):
 
 
 def test_validate_session_none_on_wrong_signature(fake, monkeypatch):
-    token = _make_token("some-other-secret")
+    token = _make_token("some-other-secret-at-least-32-bytes-long")
     assert auth.validate_session(token) is None
 
 
