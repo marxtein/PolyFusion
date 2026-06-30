@@ -54,18 +54,39 @@ def test_validate_password_min_length(store):
 
 
 def test_register_and_login(store):
-    store.register("alice", "password1")
+    store.register(
+        "alice", "password1", email="alice@example.com", password2="password1"
+    )
     assert "alice" in store.list_users()
+    rec = store._users["alice"]
+    assert rec["email"] == "alice@example.com"
+    assert rec["email_normalized"] == "alice@example.com"
+    assert rec["email_verified"] is False
 
     token = store.login("alice", "password1")
     assert token
     assert store.validate_session(token) == "alice"
 
 
+def test_register_and_login_legacy_no_email(store):
+    # Backward compatibility: old callers may omit email/password2.
+    store.register("alice_legacy", "password1")
+    assert "alice_legacy" in store.list_users()
+    rec = store._users["alice_legacy"]
+    assert rec["email"] is None
+    assert rec["email_normalized"] is None
+    assert rec["email_verified"] is False
+
+    token = store.login("alice_legacy", "password1")
+    assert store.validate_session(token) == "alice_legacy"
+
+
 def test_register_duplicate(store):
-    store.register("bob", "password1")
+    store.register("bob", "password1", email="bob@example.com", password2="password1")
     with pytest.raises(auth.AuthError):
-        store.register("bob", "otherpass")
+        store.register(
+            "bob", "otherpass", email="bob2@example.com", password2="otherpass"
+        )
 
 
 def test_login_wrong_password(store):
@@ -152,6 +173,127 @@ def test_concurrent_registration_is_safe(tmp_path, monkeypatch):
 
     assert len(success) == 10
     assert len(s.list_users()) == 10
+
+
+def test_concurrent_registration_same_email_allows_one(tmp_path, monkeypatch):
+    monkeypatch.setenv("POLYFUSION_HOME", str(tmp_path))
+    s = auth.UserStore(data_dir=tmp_path)
+    errors: list[Exception] = []
+    success: list[str] = []
+
+    def register(idx):
+        try:
+            s.register(
+                f"user{idx}",
+                "password1",
+                email="shared@example.com",
+                password2="password1",
+            )
+            success.append(f"user{idx}")
+        except auth.AuthError as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=register, args=(i,)) for i in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(success) == 1
+    assert len(errors) == 9
+    assert len(s.list_users()) == 1
+
+
+def test_register_rejects_invalid_email(store):
+    invalid_emails = [
+        "not-an-email",
+        "missing-at.example.com",
+        "spaces in@example.com",
+        "bad\x00null@example.com",
+        "bad\x01ctrl@example.com",
+        "bad\x7fctrl@example.com",
+        "",
+        "a" * 250 + "@example.com",  # >254 chars
+    ]
+    for email in invalid_emails:
+        with pytest.raises(auth.AuthError):
+            store.register("newuser", "password1", email=email, password2="password1")
+
+
+def test_register_rejects_password_mismatch(store):
+    with pytest.raises(auth.AuthError, match="password"):
+        store.register(
+            "newuser", "password1", email="new@example.com", password2="different"
+        )
+
+
+def test_register_duplicate_email_case_insensitive(store):
+    store.register(
+        "first", "password1", email="User@Example.com", password2="password1"
+    )
+    with pytest.raises(auth.AuthError):
+        store.register(
+            "second", "password1", email="user@example.com", password2="password1"
+        )
+
+
+def test_register_duplicate_error_is_generic(store):
+    store.register("orig", "password1", email="orig@example.com", password2="password1")
+    with pytest.raises(auth.AuthError) as exc_info:
+        store.register(
+            "orig", "password1", email="new@example.com", password2="password1"
+        )
+    msg = str(exc_info.value).lower()
+    assert "username" not in msg
+    assert "email" not in msg
+
+    with pytest.raises(auth.AuthError) as exc_info:
+        store.register(
+            "newname", "password1", email="orig@example.com", password2="password1"
+        )
+    msg = str(exc_info.value).lower()
+    assert "username" not in msg
+    assert "email" not in msg
+
+
+def test_legacy_user_migration(tmp_path, monkeypatch):
+    monkeypatch.setenv("POLYFUSION_HOME", str(tmp_path))
+    users_path = tmp_path / "users.json"
+    legacy = {
+        "legacy_user": {
+            "hash": auth.hash_password("password1"),
+            "created": time.time(),
+        }
+    }
+    users_path.write_text(json.dumps(legacy))
+
+    s = auth.UserStore(data_dir=tmp_path)
+    rec = s._users["legacy_user"]
+    assert rec["email"] is None
+    assert rec["email_normalized"] is None
+    assert rec["email_verified"] is False
+
+    # Login still works after migration.
+    token = s.login("legacy_user", "password1")
+    assert s.validate_session(token) == "legacy_user"
+
+
+def test_legacy_backup_created_on_first_write(tmp_path, monkeypatch):
+    monkeypatch.setenv("POLYFUSION_HOME", str(tmp_path))
+    users_path = tmp_path / "users.json"
+    legacy = {
+        "legacy_user": {
+            "hash": auth.hash_password("password1"),
+            "created": time.time(),
+        }
+    }
+    users_path.write_text(json.dumps(legacy))
+
+    s = auth.UserStore(data_dir=tmp_path)
+    assert not (tmp_path / "users.json.bak").exists()
+    s.register("newbie", "password1", email="newbie@example.com", password2="password1")
+    assert (tmp_path / "users.json.bak").exists()
+    assert json.loads((tmp_path / "users.json.bak").read_text()) == legacy
 
 
 def test_parse_session_cookie():

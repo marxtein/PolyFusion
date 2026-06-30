@@ -23,6 +23,7 @@ import tempfile
 import threading
 import time
 import warnings
+from email.utils import parseaddr
 from pathlib import Path
 from typing import Optional
 
@@ -38,7 +39,14 @@ SCRYPT_MAXMEM = 128 * 1024 * 1024
 SESSION_TTL = 24 * 3600  # 24 hours, sliding renewal on access
 
 _USERNAME_RE = re.compile(r"^[a-zA-Z0-9_-]{3,32}$")
-MIN_PASSWORD_LEN = 8
+_MIN_PASSWORD_LEN = 8
+MAX_EMAIL_LEN = 254
+# Conservative regex: local-part + @ + domain with at least one dot in domain.
+_EMAIL_RE = re.compile(
+    r"^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@"
+    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
+)
 
 
 class AuthError(Exception):
@@ -92,8 +100,8 @@ def validate_username(name: str) -> str:
 
 
 def validate_password(pw: str) -> None:
-    if not isinstance(pw, str) or len(pw) < MIN_PASSWORD_LEN:
-        raise AuthError(f"password must be at least {MIN_PASSWORD_LEN} characters")
+    if not isinstance(pw, str) or len(pw) < _MIN_PASSWORD_LEN:
+        raise AuthError(f"password must be at least {_MIN_PASSWORD_LEN} characters")
 
 
 def _data_dir(override: Optional[str] = None) -> Path:
@@ -111,16 +119,53 @@ def _data_dir(override: Optional[str] = None) -> Path:
     return d
 
 
+def validate_email(email: str) -> str:
+    """Validate and return the trimmed original email string.
+
+    Rejects empty values, null/control characters, over-long addresses,
+    and addresses that fail ``email.utils.parseaddr`` plus a conservative
+    syntax regex.
+    """
+    if not isinstance(email, str):
+        raise AuthError("invalid email format")
+    email = email.strip()
+    if not email or len(email) > MAX_EMAIL_LEN:
+        raise AuthError("invalid email format")
+    if "\x00" in email or any(ord(ch) < 32 or ord(ch) == 127 for ch in email):
+        raise AuthError("invalid email format")
+    real_name, addr = parseaddr(email)
+    if not addr or "@" not in addr:
+        raise AuthError("invalid email format")
+    if not _EMAIL_RE.match(addr):
+        raise AuthError("invalid email format")
+    return email
+
+
+def normalize_email(email: str) -> str:
+    """Return lowercased email for uniqueness comparison."""
+    return email.lower()
+
+
 class UserStore:
     """Thread-safe user + session store backed by JSON files."""
 
     def __init__(self, data_dir: Optional[Path] = None) -> None:
         self._dir = data_dir or _data_dir()
+        self._dir.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(self._dir, 0o700)
+        except OSError:
+            warnings.warn(
+                f"could not chmod 0o700 {self._dir}", RuntimeWarning, stacklevel=2
+            )
         self._users_path = self._dir / "users.json"
         self._sessions_path = self._dir / "sessions.json"
         self._lock = threading.RLock()
         self._users: dict[str, dict] = self._load_json(self._users_path, {})
         self._sessions: dict[str, dict] = self._load_json(self._sessions_path, {})
+        self._users_migrated = False
+        self._legacy_backup_done = False
+        self._backfill_users()
 
     @staticmethod
     def _load_json(path: Path, default):
@@ -135,9 +180,48 @@ class UserStore:
             )
             return default
 
-    def _save(self) -> None:
+    def _backfill_users(self) -> None:
+        """Fill missing email fields on legacy records."""
+        for rec in self._users.values():
+            if "email" not in rec:
+                rec["email"] = None
+                self._users_migrated = True
+            if "email_normalized" not in rec:
+                rec["email_normalized"] = None
+                self._users_migrated = True
+            if "email_verified" not in rec:
+                rec["email_verified"] = False
+                self._users_migrated = True
+
+    def _maybe_backup_legacy_users(self) -> None:
+        """Before the first write of a migrated users file, copy legacy file to .bak."""
+        if self._legacy_backup_done or not self._users_migrated:
+            return
+        if self._users_path.exists():
+            backup = self._users_path.with_suffix(".json.bak")
+            try:
+                import shutil
+
+                shutil.copy2(self._users_path, backup)
+            except OSError:
+                warnings.warn(
+                    f"could not back up {self._users_path} to {backup}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+        self._legacy_backup_done = True
+
+    def _save_users(self) -> None:
+        self._maybe_backup_legacy_users()
         self._atomic_write(self._users_path, self._users)
+
+    def _save_sessions(self) -> None:
         self._atomic_write(self._sessions_path, self._sessions)
+
+    def _save(self) -> None:
+        """Legacy compatibility wrapper for tests."""
+        self._save_users()
+        self._save_sessions()
 
     def _atomic_write(self, path: Path, data: dict) -> None:
         fd, tmp = tempfile.mkstemp(
@@ -160,17 +244,39 @@ class UserStore:
             except OSError:
                 pass
 
-    def register(self, username: str, password: str) -> str:
+    def register(
+        self,
+        username: str,
+        password: str,
+        email: Optional[str] = None,
+        password2: Optional[str] = None,
+    ) -> str:
         username = validate_username(username)
         validate_password(password)
+        if password2 is not None and password2 != password:
+            raise AuthError("passwords do not match")
+        if email is not None:
+            email = validate_email(email)
+            email_normalized = normalize_email(email)
+        else:
+            email_normalized = None
         with self._lock:
             if username in self._users:
-                raise AuthError("username already exists")
-            self._users[username] = {
+                raise AuthError("registration failed")
+            if email_normalized is not None and any(
+                rec.get("email_normalized") == email_normalized
+                for rec in self._users.values()
+            ):
+                raise AuthError("registration failed")
+            record: dict = {
                 "hash": hash_password(password),
                 "created": time.time(),
+                "email": email,
+                "email_normalized": email_normalized,
+                "email_verified": False,
             }
-            self._save()
+            self._users[username] = record
+            self._save_users()
         return username
 
     def login(self, username: str, password: str) -> str:
@@ -191,7 +297,7 @@ class UserStore:
                 "expires": now + SESSION_TTL,
             }
             self._prune_expired(now)
-            self._save()
+            self._save_sessions()
         return token
 
     def validate_session(self, token: Optional[str]) -> Optional[str]:
@@ -204,10 +310,10 @@ class UserStore:
                 return None
             if rec.get("expires", 0) < now:
                 self._sessions.pop(token, None)
-                self._save()
+                self._save_sessions()
                 return None
             rec["expires"] = now + SESSION_TTL  # sliding renewal
-            self._save()
+            self._save_sessions()
             return rec["user"]
 
     def delete_session(self, token: Optional[str]) -> None:
@@ -215,7 +321,7 @@ class UserStore:
             return
         with self._lock:
             if self._sessions.pop(token, None) is not None:
-                self._save()
+                self._save_sessions()
 
     def _prune_expired(self, now: float) -> None:
         expired = [t for t, r in self._sessions.items() if r.get("expires", 0) < now]

@@ -13,6 +13,8 @@ import json
 import mimetypes
 import os
 import sys
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
 from urllib.parse import unquote
@@ -54,6 +56,12 @@ REQUIRE_AUTH = os.environ.get("REQUIRE_AUTH", "1") != "0"
 USE_HTTPS = os.environ.get("USE_HTTPS", "0") == "1"
 SESSION_COOKIE = "polyfusion_session"
 
+# Simple in-memory rate limiting for auth endpoints.
+_RATE_LIMIT_MAX = 10
+_RATE_LIMIT_WINDOW = 60  # seconds
+_RATE_LIMIT: dict[str, tuple[int, float]] = {}
+_RATE_LIMIT_LOCK = threading.Lock()
+
 # Report bodies carry 1-3 base64 PNGs; cap at 20 MiB to keep the service
 # responsive (matches the equilibrium import ceiling's order of magnitude).
 MAX_REPORT_BYTES = 20 * 1024 * 1024
@@ -80,6 +88,32 @@ def _clear_cookie() -> str:
     if USE_HTTPS:
         flags += "; Secure"
     return flags
+
+
+def _check_rate_limit(client_ip: str) -> bool:
+    """Return True if the client is allowed to proceed, False if rate limited."""
+    now = time.time()
+    with _RATE_LIMIT_LOCK:
+        # Lazy cleanup of expired entries.
+        expired = [ip for ip, (count, reset) in _RATE_LIMIT.items() if now > reset]
+        for ip in expired:
+            del _RATE_LIMIT[ip]
+        count, reset = _RATE_LIMIT.get(client_ip, (0, now + _RATE_LIMIT_WINDOW))
+        if now > reset:
+            count = 0
+            reset = now + _RATE_LIMIT_WINDOW
+        if count >= _RATE_LIMIT_MAX:
+            return False
+        _RATE_LIMIT[client_ip] = (count + 1, reset)
+    return True
+
+
+def _client_ip(headers) -> str:
+    """Best-effort client IP for rate limiting."""
+    forwarded = headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return headers.get("X-Real-Ip") or "unknown"
 
 
 def _floatify(d: dict) -> dict:
@@ -224,7 +258,29 @@ class Handler(BaseHTTPRequestHandler):
             )
         if self.path == "/api/auth/me":
             user = self._current_user()
-            return self._send(200, json.dumps({"user": user}))
+            if user == "__anon__":
+                return self._send(
+                    200,
+                    json.dumps(
+                        {
+                            "user": "__anon__",
+                            "email": None,
+                            "email_verified": False,
+                        }
+                    ),
+                )
+            store = auth_mod.get_store()
+            rec = store._users.get(user, {})
+            return self._send(
+                200,
+                json.dumps(
+                    {
+                        "user": user,
+                        "email": rec.get("email"),
+                        "email_verified": bool(rec.get("email_verified", False)),
+                    }
+                ),
+            )
         if self.path.startswith("/api/manual"):
             return self._handle_manual()
         if self.path == "/api/equilibria":
@@ -350,19 +406,46 @@ class Handler(BaseHTTPRequestHandler):
     # ---- auth handlers ----------------------------------------------------
 
     def _handle_auth_register(self, n: int):
+        client_ip = _client_ip(self.headers)
+        if not _check_rate_limit(client_ip):
+            return self._send(429, json.dumps({"error": "rate limit exceeded"}))
         try:
             req = json.loads(self.rfile.read(n) or b"{}")
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+
+        username = req.get("username", "")
+        password = req.get("password", "")
+        password2 = req.get("password2", "")
+        email = (req.get("email") or "").strip()
+
+        # Preserve backward compatibility for clients that only send username+password.
+        if not email and not password2:
+            password2 = password
+            email = f"{username}@placeholder.invalid"
+
+        # Specific, non-enumerating format errors first.
+        if not isinstance(password, str) or len(password) < auth_mod._MIN_PASSWORD_LEN:
+            return self._send(400, json.dumps({"error": "password too short"}))
+        if password != password2:
+            return self._send(400, json.dumps({"error": "passwords do not match"}))
+        try:
+            auth_mod.validate_email(email)
+        except auth_mod.AuthError:
+            return self._send(400, json.dumps({"error": "invalid email format"}))
+
         try:
             username = auth_mod.get_store().register(
-                req.get("username", ""), req.get("password", "")
+                username, password, email=email, password2=password2
             )
-        except AuthError as e:
-            return self._send(400, json.dumps({"error": str(e)}))
+        except auth_mod.AuthError:
+            return self._send(400, json.dumps({"error": "registration failed"}))
         return self._send(200, json.dumps({"user": username}))
 
     def _handle_auth_login(self, n: int):
+        client_ip = _client_ip(self.headers)
+        if not _check_rate_limit(client_ip):
+            return self._send(429, json.dumps({"error": "rate limit exceeded"}))
         try:
             req = json.loads(self.rfile.read(n) or b"{}")
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
