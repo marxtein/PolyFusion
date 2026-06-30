@@ -74,12 +74,18 @@ PolyFusion/
 │   │   └── stellarator.py  # Stellarator / near-axis solver
 │   ├── geometry/           # Boundary/section outline helpers
 │   ├── tests/              # pytest suite + golden JSON references
+│   │   └── conftest.py     # Shared FakeSupabase fixture (auth + server tests)
 │   └── ...                 # physics modules (cyclotron, reactivity, etc.)
 ├── app/                    # Web GUI
 │   ├── server.py           # Stdlib-only HTTP server (no Flask)
 │   ├── index.html          # Plotly.js front-end
 │   └── equilibria/         # Bundled real-equilibrium files
-├── docs/                   # Design/audit reports (Chinese)
+├── supabase/               # Auth schema + operational docs
+│   ├── schema.sql          # profiles table + RLS + handle_new_user trigger
+│   └── README.md           # setup / local dev / Huawei deploy / migration / verification
+├── scripts/                # Standalone CLIs (not imported by the web process)
+│   └── migrate_users_to_supabase.py  # one-shot legacy-user migration (service-role key)
+├── docs/                   # Design/audit reports (Chinese) — gitignored, local only
 └── requirements.txt        # Runtime dependencies
 ```
 
@@ -113,6 +119,8 @@ pytest -k "tokamak" polyfusion/tests # filter by keyword
 ## What NOT to Do
 
 - Don't add heavy framework dependencies to `app/server.py` — keep it stdlib-only unless explicitly agreed.
+
+  **Supabase auth exception**: `polyfusion/auth.py` and `app/server.py` import `supabase` and `pyjwt` for the email-based auth migration (see `supabase/schema.sql` and `supabase/README.md`). This is the only agreed-upon exception. The service-role key is NEVER loaded by the web process — only by `scripts/migrate_users_to_supabase.py`.
 - Don't import numpy at module top-level before capping BLAS threads in entry-point files.
 - Don't put business logic in `app/server.py` — route through `polyfusion.io.run_case` and `polyfusion.scan.scan2d`.
 - Don't silently swallow solver errors in the public API; return `"errors": [...]` via `run_case` instead.
