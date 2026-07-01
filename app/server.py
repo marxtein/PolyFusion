@@ -25,7 +25,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Optional
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 
 # Cap BLAS threads BEFORE numpy loads.  On this Windows numpy build the OpenBLAS
 # threaded path is pathologically slow for medium matrices — a 121x121
@@ -55,6 +55,9 @@ from polyfusion import auth as auth_mod  # noqa: E402
 from polyfusion.auth import AuthError  # noqa: E402
 from polyfusion.docs_generator import generate_manual  # noqa: E402
 from polyfusion.report_generator import generate_report  # noqa: E402
+from polyfusion import history as history_mod  # noqa: E402
+from polyfusion.history import HistoryError  # noqa: E402
+from polyfusion.postgrest import PostgrestError  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOST = "0.0.0.0"
@@ -427,6 +430,15 @@ class Handler(BaseHTTPRequestHandler):
                     }
                 ),
             )
+        # Strip the query string before matching — GET /api/history?limit=...
+        # arrives here as a single ``self.path`` and would otherwise miss an
+        # equality check against the bare path.
+        _path_only = urlparse(self.path).path
+        if (
+            _path_only == "/api/history"
+            or _path_only.startswith("/api/history/")
+        ):
+            return self._handle_history_get()
         if self.path.startswith("/api/manual"):
             return self._handle_manual()
         if self.path == "/api/equilibria":
@@ -520,6 +532,9 @@ class Handler(BaseHTTPRequestHandler):
                 cache_control="no-store, max-age=0",
             )
 
+        if self.path == "/api/history":
+            return self._handle_history_post(n)
+
         # --- protected compute routes ---
         if self.path in PROTECTED_PATHS:
             if not self._require_auth():
@@ -565,6 +580,135 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             return self._send(400, json.dumps({"error": f"{type(e).__name__}: {e}"}))
         return self._send(200, body)
+
+    # ---- DELETE -----------------------------------------------------------
+
+    def do_DELETE(self):
+        self._begin_request()
+        # CSRF gate: DELETE mutates server state, same origin policy as POST.
+        if not _check_origin(self.headers):
+            return self._send(403, json.dumps({"error": "cross-site blocked"}))
+
+        if self.path.startswith("/api/history/"):
+            return self._handle_history_delete()
+        return self._send(404, json.dumps({"error": "not found"}))
+
+    # ---- history handlers -------------------------------------------------
+
+    def _history_access_token(self):
+        """Return ``(access_token, user_id)`` after enforcing auth.
+
+        Sets a 401/500 response on the wire and returns ``None`` on failure so
+        handlers can early-return.
+        """
+        user = self._require_auth()
+        if not user:
+            return None
+        token = getattr(self, "_access_token", None)
+        if not token:
+            return self._send(500, json.dumps({"error": "session token missing"}))
+        return token, user
+
+    def _handle_history_get(self):
+        """GET /api/history (list) or /api/history/{id} (single row)."""
+        creds = self._history_access_token()
+        if creds is None:
+            return None
+        token, _user = creds
+
+        from urllib.parse import urlparse, parse_qs
+
+        parsed = urlparse(self.path)
+        qs = parse_qs(parsed.query)
+        # Strip the leading "/api/history/" prefix to extract the id, if any.
+        suffix = parsed.path[len("/api/history/"):] if parsed.path != "/api/history" else ""
+        if suffix:
+            try:
+                row = history_mod.get_history(token, suffix)
+            except (HistoryError, PostgrestError) as e:
+                return self._send(
+                    500 if isinstance(e, PostgrestError) else 400,
+                    json.dumps({"error": str(e)}),
+                )
+            if row is None:
+                return self._send(404, json.dumps({"error": "not found"}))
+            return self._send(200, json.dumps(row, default=str))
+
+        try:
+            limit = int(qs.get("limit", ["20"])[0])
+        except ValueError:
+            limit = history_mod.DEFAULT_LIMIT
+        try:
+            offset = int(qs.get("offset", ["0"])[0])
+        except ValueError:
+            offset = 0
+        kind = qs.get("kind", [None])[0]
+
+        try:
+            total, rows = history_mod.list_history(
+                token, limit=limit, offset=offset, kind=kind
+            )
+        except (HistoryError, PostgrestError) as e:
+            return self._send(
+                500 if isinstance(e, PostgrestError) else 400,
+                json.dumps({"error": str(e)}),
+            )
+        return self._send(
+            200,
+            json.dumps({"total": total, "limit": limit, "offset": offset, "rows": rows}, default=str),
+        )
+
+    def _handle_history_post(self, n: int):
+        """POST /api/history — save a run/scan computation."""
+        creds = self._history_access_token()
+        if creds is None:
+            return None
+        token, _user = creds
+        try:
+            req = json.loads(self.rfile.read(n) or b"{}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+
+        try:
+            row = history_mod.save_history(
+                token,
+                kind=req.get("kind"),
+                config=req.get("config"),
+                inputs=req.get("inputs") or {},
+                preset=req.get("preset"),
+                label=req.get("label"),
+                summary=req.get("summary"),
+                user_id=_user if isinstance(_user, str) and _user != "__anon__" else None,
+            )
+        except (HistoryError, PostgrestError) as e:
+            return self._send(
+                500 if isinstance(e, PostgrestError) else 400,
+                json.dumps({"error": str(e)}),
+            )
+        return self._send(201, json.dumps(row, default=str))
+
+    def _handle_history_delete(self):
+        """DELETE /api/history/{id}."""
+        creds = self._history_access_token()
+        if creds is None:
+            return None
+        token, _user = creds
+        from urllib.parse import urlparse
+
+        path = urlparse(self.path).path
+        comp_id = path[len("/api/history/"):]
+        if not comp_id:
+            return self._send(400, json.dumps({"error": "computation id required"}))
+        try:
+            deleted = history_mod.delete_history(token, comp_id)
+        except (HistoryError, PostgrestError) as e:
+            return self._send(
+                500 if isinstance(e, PostgrestError) else 400,
+                json.dumps({"error": str(e)}),
+            )
+        if not deleted:
+            return self._send(404, json.dumps({"error": "not found"}))
+        return self._send(200, json.dumps({"ok": True}))
 
     # ---- auth handlers ----------------------------------------------------
 
