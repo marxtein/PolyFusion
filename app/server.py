@@ -5,6 +5,13 @@ config-agnostic compute core over a narrow JSON API.  Works for every
 configuration in ``polyfusion.configs.REGISTRY`` (tokamak, mirror, …).
 
     python app/server.py            # then open http://127.0.0.1:8765
+
+Optional request logging for AI/automated testing, controlled by env var
+``POLYFUSION_LOG``: unset/``0``/``off`` (default, quiet), ``1``/``stdout``,
+``stderr``, or any other string treated as a file path to append JSONL.
+Each line is one JSON record with ``ts``, ``event``, ``method``, ``path``,
+``status``, ``duration_ms`` and (for /api/run, /api/scan) semantic fields
+like ``config``, ``preset``, ``valid``, ``Qfus``, ``n_invalid``.
 """
 
 from __future__ import annotations
@@ -75,6 +82,35 @@ _RATE_LIMIT_LOCK = threading.Lock()
 # Report bodies carry 1-3 base64 PNGs; cap at 20 MiB to keep the service
 # responsive (matches the equilibrium import ceiling's order of magnitude).
 MAX_REPORT_BYTES = 20 * 1024 * 1024
+
+# Optional JSONL request log for AI/automated testing.
+#   POLYFUSION_LOG=              -> silent (default)
+#   POLYFUSION_LOG=1|true|stdout -> stdout
+#   POLYFUSION_LOG=stderr        -> stderr
+#   POLYFUSION_LOG=<path>        -> append JSONL to that file
+_LOG_RAW = os.environ.get("POLYFUSION_LOG", "").strip()
+_LOG_DEST_LC = _LOG_RAW.lower()
+_LOG_OFF = _LOG_DEST_LC in ("", "0", "off", "false", "no")
+
+
+def _log(event, **fields):
+    """Emit one JSONL record when POLYFUSION_LOG is enabled; else no-op."""
+    if _LOG_OFF:
+        return
+    rec = {"ts": round(time.time(), 6), "event": event, **fields}
+    line = json.dumps(rec, default=str, ensure_ascii=False) + "\n"
+    try:
+        if _LOG_DEST_LC in ("1", "true", "yes", "stdout"):
+            sys.stdout.write(line)
+            sys.stdout.flush()
+        elif _LOG_DEST_LC == "stderr":
+            sys.stderr.write(line)
+            sys.stderr.flush()
+        else:
+            with open(_LOG_RAW, "a", encoding="utf-8") as fh:
+                fh.write(line)
+    except OSError:
+        pass
 
 PROTECTED_PATHS = {
     "/api/run",
@@ -254,6 +290,11 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- response helpers -------------------------------------------------
 
+    def _begin_request(self):
+        """Mark request start (for timing) and reset the API summary."""
+        self._t0 = time.time()
+        self._api_summary = {}
+
     def _send(
         self,
         code,
@@ -277,6 +318,17 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_header("Set-Cookie", c)
         self.end_headers()
         self.wfile.write(data)
+        _log(
+            "http",
+            method=getattr(self, "command", "?"),
+            path=self.path,
+            status=code,
+            bytes=len(data),
+            duration_ms=round(
+                (time.time() - getattr(self, "_t0", time.time())) * 1000, 3
+            ),
+            **getattr(self, "_api_summary", {}),
+        )
 
     def _send_file(
         self, fpath, ctype=None, cache_control="public, max-age=31536000, immutable"
@@ -325,6 +377,7 @@ class Handler(BaseHTTPRequestHandler):
     # ---- GET --------------------------------------------------------------
 
     def do_GET(self):
+        self._begin_request()
         if self.path in ("/", "/index.html"):
             return self._send_file(
                 os.path.join(HERE, "index.html"),
@@ -400,6 +453,7 @@ class Handler(BaseHTTPRequestHandler):
     # ---- POST -------------------------------------------------------------
 
     def do_POST(self):
+        self._begin_request()
         # CSRF gate: every POST must come from the same host (or carry no
         # Origin/Referer at all, which is the case for non-browser clients).
         if not _check_origin(self.headers):
@@ -479,14 +533,29 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/api/tokamak/parse_eqdsk":
                 g = eqdsk.parse_geqdsk(req.get("eqdsk") or "")
                 out = {"config": "tokamak", "eq": eqdsk.equilibrium_geometry(g)}
+                self._api_summary = {"config": "tokamak", "kind": "eqdsk"}
             elif self.path == "/api/run":
                 out = run_case(
                     _floatify(req.get("overrides")),
                     preset=req.get("preset"),
                     config=req.get("config", "tokamak"),
                 )
+                outs = out.get("outputs") or {}
+                self._api_summary = {
+                    "config": out.get("config"),
+                    "preset": req.get("preset"),
+                    "valid": outs.get("valid"),
+                    "Qfus": outs.get("Qfus"),
+                    "had_errors": bool(out.get("errors")),
+                }
             elif self.path == "/api/scan":
                 out = _do_scan(req)
+                self._api_summary = {
+                    "config": out.get("config"),
+                    "preset": req.get("preset"),
+                    "n_invalid": out.get("n_invalid"),
+                    "field_count": len(out.get("fields") or {}),
+                }
             else:
                 return self._send(404, json.dumps({"error": "not found"}))
             # numpy-safe: serialise inside the try so any encoding bug -> 400, not a crash
@@ -614,6 +683,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"PolyFusion serving at http://{HOST}:{PORT}  (Ctrl+C to stop)")
+    _log("start", host=HOST, port=PORT, auth_required=REQUIRE_AUTH)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
