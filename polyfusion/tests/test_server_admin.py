@@ -31,6 +31,7 @@ from app.server import Handler
 @pytest.fixture
 def inproc_server(monkeypatch):
     monkeypatch.setattr(srv, "REQUIRE_AUTH", True)
+    monkeypatch.setattr(srv, "GUEST_MODE", False)
     srv._RATE_LIMIT.clear()
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

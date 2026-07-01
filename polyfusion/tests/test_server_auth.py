@@ -44,9 +44,14 @@ def inproc_server(monkeypatch):
     FakeSupabase client into ``polyfusion.auth``, so handler threads see it
     via the lazy ``supabase_client()`` singleton. The rate-limit bucket is
     reset between tests so the global state doesn't leak.
+
+    GUEST_MODE is forced off here so this file's pre-guest-mode assertions
+    (e.g. ``/api/run`` 401s without a cookie) still hold; guest behaviour
+    lives in ``test_server_guest.py``.
     """
     # Force the auth gate on for these tests; individual tests opt back out.
     monkeypatch.setattr(srv, "REQUIRE_AUTH", True)
+    monkeypatch.setattr(srv, "GUEST_MODE", False)
     srv._RATE_LIMIT.clear()
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)

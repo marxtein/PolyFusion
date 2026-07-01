@@ -67,6 +67,11 @@ PORT = int(os.environ.get("PORT", 8765))
 
 REQUIRE_AUTH = os.environ.get("REQUIRE_AUTH", "1") != "0"
 USE_HTTPS = os.environ.get("USE_HTTPS", "0") == "1"
+# When True (default), unauthenticated callers are treated as "guests" on
+# compute routes and subject to a stricter per-IP quota. When False, those
+# routes 401 as before. Auth-only routes (/api/history, /api/admin) ignore
+# this and always require a real session.
+GUEST_MODE = os.environ.get("GUEST_MODE", "1") == "1"
 
 # Two-cookie session design:
 #   - ACCESS_COOKIE  is sent on every request (Path=/) and validated locally
@@ -78,9 +83,15 @@ ACCESS_COOKIE = "polyfusion_session"
 REFRESH_COOKIE = "polyfusion_refresh"
 ACCESS_COOKIE_MAX_AGE = 3600
 
-# Simple in-memory rate limiting for auth endpoints.
+# Simple in-memory rate limiting.
+#   - auth mutation endpoints (/api/auth/*): keyed by IP, _RATE_LIMIT_MAX / min
+#   - compute endpoints (/api/run, /api/scan, /api/tokamak/parse_eqdsk):
+#     tiered — authenticated users get USER_COMPUTE_LIMIT/min keyed by user_id,
+#     guests get GUEST_COMPUTE_LIMIT/min keyed by IP (stricter).
 _RATE_LIMIT_MAX = 10
 _RATE_LIMIT_WINDOW = 60  # seconds
+GUEST_COMPUTE_LIMIT = 20
+USER_COMPUTE_LIMIT = 60
 _RATE_LIMIT: dict[str, tuple[int, float]] = {}
 _RATE_LIMIT_LOCK = threading.Lock()
 
@@ -204,21 +215,31 @@ def _check_origin(headers) -> bool:
     return True
 
 
-def _check_rate_limit(client_ip: str) -> bool:
-    """Return True if the client is allowed to proceed, False if rate limited."""
+def _check_rate_limit(
+    key: str,
+    limit: int = _RATE_LIMIT_MAX,
+    window: int = _RATE_LIMIT_WINDOW,
+) -> bool:
+    """Return True if the caller (identified by ``key``) may proceed.
+
+    ``key`` is the rate-limit bucket — typically a client IP for unauthenticated
+    traffic or a user_id for authenticated traffic. ``limit`` / ``window``
+    default to the auth-mutation quota (10/min/IP); compute routes pass
+    explicit values for the tiered quotas.
+    """
     now = time.time()
     with _RATE_LIMIT_LOCK:
         # Lazy cleanup of expired entries.
-        expired = [ip for ip, (count, reset) in _RATE_LIMIT.items() if now > reset]
-        for ip in expired:
-            del _RATE_LIMIT[ip]
-        count, reset = _RATE_LIMIT.get(client_ip, (0, now + _RATE_LIMIT_WINDOW))
+        expired = [k for k, (count, reset) in _RATE_LIMIT.items() if now > reset]
+        for k in expired:
+            del _RATE_LIMIT[k]
+        count, reset = _RATE_LIMIT.get(key, (0, now + window))
         if now > reset:
             count = 0
-            reset = now + _RATE_LIMIT_WINDOW
-        if count >= _RATE_LIMIT_MAX:
+            reset = now + window
+        if count >= limit:
             return False
-        _RATE_LIMIT[client_ip] = (count + 1, reset)
+        _RATE_LIMIT[key] = (count + 1, reset)
     return True
 
 
@@ -380,6 +401,23 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return user
 
+    def _principal(self):
+        """Return ``(principal, role)`` for compute-route authorization.
+
+        - Authenticated caller → ``(user_id, "user")``
+        - Unauthenticated caller + GUEST_MODE → ``("__guest__", "guest")``
+        - Unauthenticated caller + no GUEST_MODE → ``(None, None)``
+
+        Always consults ``_current_user`` so a valid session's
+        ``_access_token`` is cached for downstream handlers.
+        """
+        user = self._current_user()
+        if user:
+            return user, "user"
+        if GUEST_MODE:
+            return "__guest__", "guest"
+        return None, None
+
     # ---- GET --------------------------------------------------------------
 
     def do_GET(self):
@@ -403,6 +441,7 @@ class Handler(BaseHTTPRequestHandler):
                     {
                         "configs": list_configs(),
                         "auth_required": REQUIRE_AUTH,
+                        "guest_mode": GUEST_MODE,
                     }
                 ),
             )
@@ -539,10 +578,32 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/history":
             return self._handle_history_post(n)
 
-        # --- protected compute routes ---
+        # --- protected compute routes (allow guest when GUEST_MODE is on) ---
         if self.path in PROTECTED_PATHS:
-            if not self._require_auth():
-                return None
+            principal, role = self._principal()
+            if principal is None:
+                return self._send(
+                    401,
+                    json.dumps({"error": "unauthorized", "auth_required": True}),
+                )
+            # Tiered rate limit: authenticated → user_id bucket; guest → IP bucket.
+            if role == "guest":
+                bucket = f"guest:{_client_ip(self.headers)}"
+                quota = GUEST_COMPUTE_LIMIT
+            else:
+                bucket = f"user:{principal}"
+                quota = USER_COMPUTE_LIMIT
+            if not _check_rate_limit(bucket, quota, _RATE_LIMIT_WINDOW):
+                return self._send(
+                    429,
+                    json.dumps(
+                        {
+                            "error": "rate limit exceeded",
+                            "role": role,
+                            "quota_per_min": quota,
+                        }
+                    ),
+                )
 
         try:
             req = json.loads(self.rfile.read(n) or b"{}")
@@ -782,7 +843,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_auth_register(self, n: int):
         client_ip = _client_ip(self.headers)
-        if not _check_rate_limit(client_ip):
+        if not _check_rate_limit(client_ip, _RATE_LIMIT_MAX, _RATE_LIMIT_WINDOW):
             return self._send(429, json.dumps({"error": "rate limit exceeded"}))
         try:
             req = json.loads(self.rfile.read(n) or b"{}")
@@ -822,7 +883,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_auth_login(self, n: int):
         client_ip = _client_ip(self.headers)
-        if not _check_rate_limit(client_ip):
+        if not _check_rate_limit(client_ip, _RATE_LIMIT_MAX, _RATE_LIMIT_WINDOW):
             return self._send(429, json.dumps({"error": "rate limit exceeded"}))
         try:
             req = json.loads(self.rfile.read(n) or b"{}")
@@ -843,7 +904,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_auth_logout(self):
         client_ip = _client_ip(self.headers)
-        if not _check_rate_limit(client_ip):
+        if not _check_rate_limit(client_ip, _RATE_LIMIT_MAX, _RATE_LIMIT_WINDOW):
             return self._send(429, json.dumps({"error": "rate limit exceeded"}))
         access = getattr(self, "_access_token", None) or auth_mod.parse_session_cookie(
             self.headers.get("Cookie")
@@ -864,7 +925,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_auth_resend(self, n: int):
         client_ip = _client_ip(self.headers)
-        if not _check_rate_limit(client_ip):
+        if not _check_rate_limit(client_ip, _RATE_LIMIT_MAX, _RATE_LIMIT_WINDOW):
             return self._send(429, json.dumps({"error": "rate limit exceeded"}))
         try:
             req = json.loads(self.rfile.read(n) or b"{}")
