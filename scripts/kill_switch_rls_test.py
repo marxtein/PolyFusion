@@ -244,15 +244,23 @@ def main() -> int:
             print("FAIL: user_b cannot see their own profile")
             ok = False
 
-        # Anonymous / no token should not see anything
+        # Anonymous / no token requests must not leak any rows. Supabase has two
+        # acceptable behaviours depending on the project's auth config:
+        #   * strict:  401/403 (anon role rejected at the API gateway), or
+        #   * lax:     200 with an empty array (anon role reaches Postgres, but
+        #              RLS policies `to authenticated` filter everything out).
+        # Both are safe as long as no rows are returned.
         status_noauth, body_noauth = _request(
             _pg_rest_url(f"/{TEST_TABLE}?select=id,username,email"), token=None
         )
-        if status_noauth not in (401, 403):
+        noauth_rows = body_noauth if isinstance(body_noauth, list) else None
+        if status_noauth in (401, 403):
+            print(f"       unauthenticated request rejected ({status_noauth})")
+        elif status_noauth == 200 and noauth_rows == []:
+            print("       unauthenticated request returned 200 with empty list (anon RLS filter)")
+        else:
             print(f"FAIL: unauthenticated request returned {status_noauth}: {body_noauth}")
             ok = False
-        else:
-            print(f"       unauthenticated request correctly rejected ({status_noauth})")
 
         print("[5/5] Checking service-role key bypasses RLS...")
         status_sr, body_sr = _request(

@@ -24,16 +24,37 @@ drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles
   for select to authenticated using (auth.uid() = id);
 
+-- SECURITY DEFINER helper that checks admin status without triggering infinite
+-- recursion in RLS policies. Inline subqueries on public.profiles inside a
+-- policy ON public.profiles recurse; this function bypasses RLS via the
+-- security definer escape hatch, so the policy body never re-enters RLS.
+create or replace function public.is_admin(uid uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (select 1 from public.profiles p where p.id = uid and p.is_admin);
+$$;
+
+grant execute on function public.is_admin(uuid) to authenticated, anon, service_role;
+
 -- Admins may read all profiles (for the admin dashboard).
 drop policy if exists "profiles_select_admin" on public.profiles;
 create policy "profiles_select_admin" on public.profiles
-  for select to authenticated
-  using (exists (select 1 from public.profiles p where p.id = auth.uid() and p.is_admin));
+  for select to authenticated using (public.is_admin(auth.uid()));
 
 -- Column-level GRANT: users can only update their own affiliation.
 -- Revoke any broader update permission first, then grant just the one column.
 revoke update on public.profiles from authenticated;
 grant update (affiliation) on public.profiles to authenticated;
+
+-- Explicit table privileges for the anon/authenticated/service_role roles.
+-- PostgREST never runs queries as `postgres`; every role that will appear in a
+-- Bearer token MUST have GRANTs on the tables it touches.
+grant select on public.profiles to anon, authenticated, service_role;
+grant select, insert, delete on public.computations to anon, authenticated, service_role;
 
 -- Auto-provision a profiles row when auth.users gains a row. The username and
 -- affiliation are pulled from raw_user_meta_data which the PolyFusion register
@@ -92,6 +113,4 @@ create policy "computations_delete_own" on public.computations
 -- Admins may read all computations (for the admin dashboard).
 drop policy if exists "computations_select_admin" on public.computations;
 create policy "computations_select_admin" on public.computations
-  for select to authenticated using (
-    exists (select 1 from public.profiles p where p.id = auth.uid() and p.is_admin)
-  );
+  for select to authenticated using (public.is_admin(auth.uid()));
