@@ -238,10 +238,16 @@ def verify_jwt(token: str) -> Optional[dict]:
         from jwt import PyJWK  # local import; pyjwt is required
 
         public_key = PyJWK(key_obj).key
+        # Supabase JWKS publish ES256 (EC P-256) keys for projects created
+        # after ~2023; older projects may still use RS256. Whitelist both so
+        # the project's actual key type is accepted. PyJWT still verifies the
+        # signature with the key's native algorithm — an EC key cannot verify
+        # an RSA signature (and vice versa), so the whitelist cannot weaken
+        # the check.
         return _pyjwt.decode(
             token,
             public_key,
-            algorithms=["RS256"],
+            algorithms=["RS256", "ES256"],
             options={"verify_aud": False},
         )
     except Exception:

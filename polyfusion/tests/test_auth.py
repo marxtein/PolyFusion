@@ -205,6 +205,54 @@ def test_validate_session_far_from_expiry_does_not_refresh(fake):
     assert fake.auth.refresh_calls == []
 
 
+def test_verify_jwt_accepts_es256_supabase_token(monkeypatch):
+    """Regression: real Supabase projects publish ES256 (EC P-256) JWKS keys,
+    not RS256. ``verify_jwt`` must accept ES256-signed tokens — the prior
+    RS256-only whitelist silently rejected every Supabase-issued access token,
+    which presented as "every protected API returns 401 / redirects to login".
+
+    The autouse fixture sets ``POLYFUSION_TEST_JWT_SECRET`` (HS256 path) and
+    patches ``_fetch_jwks`` to return no keys; this test undoes both so the
+    real JWKS+algorithm code path actually runs.
+    """
+    import time as _time
+    from base64 import urlsafe_b64encode
+
+    import jwt as _pyjwt
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    monkeypatch.delenv(auth._TEST_SECRET_ENV, raising=False)
+
+    priv = ec.generate_private_key(ec.SECP256R1())
+    pub_numbers = priv.public_key().public_numbers()
+
+    def _b64u(n: int) -> str:
+        b = n.to_bytes((n.bit_length() + 7) // 8, "big")
+        return urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
+
+    kid = "regression-es256-kid"
+    jwk = {
+        "kid": kid,
+        "kty": "EC",
+        "alg": "ES256",
+        "crv": "P-256",
+        "x": _b64u(pub_numbers.x),
+        "y": _b64u(pub_numbers.y),
+    }
+    monkeypatch.setattr(auth, "_fetch_jwks", lambda: {"keys": [jwk]})
+
+    token = _pyjwt.encode(
+        {"sub": "user-es256", "exp": int(_time.time()) + 3600},
+        priv,
+        algorithm="ES256",
+        headers={"kid": kid},
+    )
+
+    claims = auth.verify_jwt(token)
+    assert claims is not None, "ES256 token was rejected — algorithm whitelist?"
+    assert claims["sub"] == "user-es256"
+
+
 # ---------------------------------------------------------------------------
 # logout / get_user / resend
 # ---------------------------------------------------------------------------
