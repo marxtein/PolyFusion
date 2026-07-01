@@ -56,7 +56,9 @@ from polyfusion.auth import AuthError  # noqa: E402
 from polyfusion.docs_generator import generate_manual  # noqa: E402
 from polyfusion.report_generator import generate_report  # noqa: E402
 from polyfusion import history as history_mod  # noqa: E402
+from polyfusion import admin as admin_mod  # noqa: E402
 from polyfusion.history import HistoryError  # noqa: E402
+from polyfusion.admin import AdminError  # noqa: E402
 from polyfusion.postgrest import PostgrestError  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -114,6 +116,7 @@ def _log(event, **fields):
                 fh.write(line)
     except OSError:
         pass
+
 
 PROTECTED_PATHS = {
     "/api/run",
@@ -434,11 +437,12 @@ class Handler(BaseHTTPRequestHandler):
         # arrives here as a single ``self.path`` and would otherwise miss an
         # equality check against the bare path.
         _path_only = urlparse(self.path).path
-        if (
-            _path_only == "/api/history"
-            or _path_only.startswith("/api/history/")
-        ):
+        if _path_only == "/api/history" or _path_only.startswith("/api/history/"):
             return self._handle_history_get()
+        if _path_only == "/api/admin/stats":
+            return self._handle_admin_stats()
+        if _path_only == "/api/admin/users":
+            return self._handle_admin_users()
         if self.path.startswith("/api/manual"):
             return self._handle_manual()
         if self.path == "/api/equilibria":
@@ -621,7 +625,9 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         qs = parse_qs(parsed.query)
         # Strip the leading "/api/history/" prefix to extract the id, if any.
-        suffix = parsed.path[len("/api/history/"):] if parsed.path != "/api/history" else ""
+        suffix = (
+            parsed.path[len("/api/history/") :] if parsed.path != "/api/history" else ""
+        )
         if suffix:
             try:
                 row = history_mod.get_history(token, suffix)
@@ -655,7 +661,10 @@ class Handler(BaseHTTPRequestHandler):
             )
         return self._send(
             200,
-            json.dumps({"total": total, "limit": limit, "offset": offset, "rows": rows}, default=str),
+            json.dumps(
+                {"total": total, "limit": limit, "offset": offset, "rows": rows},
+                default=str,
+            ),
         )
 
     def _handle_history_post(self, n: int):
@@ -678,7 +687,9 @@ class Handler(BaseHTTPRequestHandler):
                 preset=req.get("preset"),
                 label=req.get("label"),
                 summary=req.get("summary"),
-                user_id=_user if isinstance(_user, str) and _user != "__anon__" else None,
+                user_id=_user
+                if isinstance(_user, str) and _user != "__anon__"
+                else None,
             )
         except (HistoryError, PostgrestError) as e:
             return self._send(
@@ -696,7 +707,7 @@ class Handler(BaseHTTPRequestHandler):
         from urllib.parse import urlparse
 
         path = urlparse(self.path).path
-        comp_id = path[len("/api/history/"):]
+        comp_id = path[len("/api/history/") :]
         if not comp_id:
             return self._send(400, json.dumps({"error": "computation id required"}))
         try:
@@ -709,6 +720,63 @@ class Handler(BaseHTTPRequestHandler):
         if not deleted:
             return self._send(404, json.dumps({"error": "not found"}))
         return self._send(200, json.dumps({"ok": True}))
+
+    # ---- admin handlers ---------------------------------------------------
+
+    def _handle_admin_stats(self):
+        """GET /api/admin/stats — aggregate counts visible to the caller.
+
+        RLS: admins see full counts; non-admins see only their own row
+        reflected (treated as noise). Python does NOT branch on admin-ness.
+        """
+        creds = self._history_access_token()
+        if creds is None:
+            return None
+        token, _user = creds
+        try:
+            out = admin_mod.stats(token)
+        except (AdminError, PostgrestError) as e:
+            return self._send(
+                500 if isinstance(e, PostgrestError) else 400,
+                json.dumps({"error": str(e)}),
+            )
+        return self._send(200, json.dumps(out, default=str))
+
+    def _handle_admin_users(self):
+        """GET /api/admin/users?limit=&offset= — paginated user list.
+
+        Same RLS posture as stats: admins get every profile; non-admins get
+        only their own (silently — no 403 to avoid existence leak).
+        """
+        creds = self._history_access_token()
+        if creds is None:
+            return None
+        token, _user = creds
+        from urllib.parse import parse_qs, urlparse
+
+        qs = parse_qs(urlparse(self.path).query)
+        try:
+            limit = int(qs.get("limit", [str(admin_mod.DEFAULT_LIMIT)])[0])
+        except ValueError:
+            limit = admin_mod.DEFAULT_LIMIT
+        try:
+            offset = int(qs.get("offset", ["0"])[0])
+        except ValueError:
+            offset = 0
+        try:
+            total, rows = admin_mod.list_users(token, limit=limit, offset=offset)
+        except (AdminError, PostgrestError) as e:
+            return self._send(
+                500 if isinstance(e, PostgrestError) else 400,
+                json.dumps({"error": str(e)}),
+            )
+        return self._send(
+            200,
+            json.dumps(
+                {"total": total, "limit": limit, "offset": offset, "rows": rows},
+                default=str,
+            ),
+        )
 
     # ---- auth handlers ----------------------------------------------------
 
