@@ -67,9 +67,12 @@
   /* light theme: lighten the (otherwise code-editor dark) textareas incl. the stellarator Fourier boxes */
   :root[data-theme=light] textarea{color:#1c2840;background:linear-gradient(180deg,#f5f8fd,#eaeff8);box-shadow:inset 0 0 0 1px rgba(28,40,64,.10)}
   :root[data-theme=light] textarea.fourierbox{border-color:#c3cddc;background-image:linear-gradient(180deg,#f5f8fd,#eaeff8)}
+  .param-grp{margin-bottom:10px}
   .grp-h{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal);margin:12px 0 6px;
-    padding-bottom:3px;border-bottom:1px dashed var(--line2);opacity:.85;display:flex;justify-content:space-between}
+    padding-bottom:3px;border-bottom:1px dashed var(--line2);opacity:.85;display:flex;justify-content:space-between;cursor:pointer;user-select:none;gap:8px}
+  .grp-h::before{content:'▾';color:var(--teal);font-size:10px}.param-grp.collapsed .grp-h::before{content:'▸'}
   .grp-h .a0{color:var(--amber);font-family:"JetBrains Mono";text-transform:none;font-size:11.5px}
+  .param-grp.collapsed>:not(.grp-h){display:none}
   .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px 9px}
   .fld{display:flex;flex-direction:column;min-width:0}
   .advfld{display:none}.show-adv .advfld{display:flex}
@@ -233,6 +236,7 @@
   .sec.collapsed>:not(.sec-t){display:none}
   .fld.missing input,.fld.missing textarea{border-color:var(--red)!important;box-shadow:0 0 0 1px var(--red)}
   .scan-run{margin:8px 0 10px}
+  .contour-sec{margin-top:22px}
   /* ---- phase 3: slide-out manual panel ---- */
   #manualPanel{position:fixed;top:0;right:0;width:min(440px,92vw);height:100vh;z-index:60;
     background:var(--panel);border-left:1px solid var(--line2);box-shadow:-20px 0 60px -20px #000;
@@ -337,8 +341,8 @@
       <a data-jump="preset">② 预设</a>
       <a data-jump="params">③ 参数</a>
       <a data-jump="window">④ 判据</a>
-      <a data-jump="contours">⑤ 等值线</a>
-      <a data-jump="scan">⑥ 扫描</a>
+      <a data-jump="scan">⑤ 扫描</a>
+      <a data-jump="contours">⑥ 等值线</a>
       <a data-jump="results">⑦ 结果</a>
     </div>
     <div class="sec" data-sec="config"><p class="sec-t" data-t="config">位形 Configuration <span class="n" id="cfgN"></span></p><div id="configPick" class="configs"></div></div>
@@ -347,7 +351,6 @@
       <div id="eqQuick"></div></div>
     <div class="sec collapsed" data-sec="params"><p class="sec-t" data-t="params">参数 Parameters <span class="n" data-t="liveN">编辑即重算</span></p><div id="params"></div></div>
     <div class="sec" data-sec="window"><p class="sec-t" data-t="window">最佳区判据 Operating Window</p><div id="thresh" class="scanbox"></div></div>
-    <div class="sec" data-sec="contours"><p class="sec-t" data-t="contours">显示等值线 Contours</p><div id="plotOpts" class="opts"></div></div>
     <div class="sec" data-sec="scan"><p class="sec-t" data-t="scan">POPCON 扫描轴 Scan Axes</p>
       <div class="scanbox">
         <div class="axis"><div class="hd"><span class="tag">X</span><span data-t="xax">横轴</span></div><select id="xkey"></select>
@@ -365,6 +368,7 @@
     </div>
     <button class="run scan-run" id="run" data-t="runBtn">▶ 运行 POPCON 扫描</button>
     <div id="err" class="err"></div>
+    <div class="sec contour-sec" data-sec="contours"><p class="sec-t" data-t="contours">显示等值线 Contours</p><div id="plotOpts" class="opts"></div></div>
   </div>
   <div class="center">
     <div class="tabs">
@@ -379,9 +383,9 @@
     <div class="sec" data-sec="results"><p class="sec-t" data-t="opPoint">工作点 Operating Point <span class="badge" id="caseBadge"></span></p>
       <div id="results"></div>
       <div class="exports">
-        <button id="expJson" data-t="expJson">⬇ 结果 JSON</button><button id="expCsv" data-t="expCsv">⬇ 扫描 CSV</button>
-        <button id="expPng" data-t="expPng">⬇ 当前图像 PNG</button>
-        <button id="saveHist" class="auth-only" title="登录后可保存到云端历史">存入历史</button><button id="openHist" class="auth-only" title="登录后查看云端历史">历史记录</button>
+        <button id="expScan" data-t="expScan">⬇ 保存扫描结果</button>
+        <button id="expPng" data-t="expPng">⬇ 保存扫描图像</button>
+        <button id="saveHist" class="auth-only" title="登录后可保存到云端扫描历史">存入扫描历史</button><button id="openHist" class="auth-only" title="登录后查看云端历史记录">查看历史记录</button>
         <button id="genReport" data-t="genReport" style="grid-column:1/-1;background:var(--amber);color:var(--btn-ink);border-color:var(--amber);font-weight:700">📋 生成完整报告</button>
       </div>
       <input id="fileIn" type="file" accept=".json" style="display:none">
@@ -495,7 +499,7 @@ const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 2
   stellarator:'<ellipse cx="32" cy="32" rx="22" ry="12"/><path d="M12 32Q22 20 32 32T52 32"/>'};
 const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'参数 Parameters',liveN:'编辑即重算',window:'最佳区判据 Operating Window',
   contours:'显示等值线 Contours',scan:'POPCON 扫描轴 Scan Axes',xax:'横轴',yax:'纵轴',runBtn:'▶ 运行 POPCON 扫描',
-  opPoint:'工作点 Operating Point',saveP:'⬇ 保存输入参数',loadP:'⬆ 加载历史参数',expJson:'⬇ 结果 JSON',expCsv:'⬇ 扫描 CSV',expPng:'⬇ 当前图像 PNG',
+  opPoint:'工作点 Operating Point',saveP:'⬇ 保存输入参数',loadP:'⬆ 加载历史参数',expScan:'⬇ 保存扫描结果',expPng:'⬇ 保存扫描图像',
   tabShape:'几何/磁面 Geometry',tabProf:'剖面 Profiles',sub:'多位形零维系统设计台',cfgL:'位形',rxL:'反应',
   emailInvalid:'请输入有效的邮箱地址',emailRequired:'请输入邮箱',confirmPassword:'确认密码 Confirm password',passwordMismatch:'两次输入的密码不一致',registerFailed:'注册失败，用户名或邮箱可能已被使用',
   verifyEmailPrompt:'请查收验证邮件',verifyEmailSub:'我们已向 {{email}} 发送一封验证邮件，请点击邮件中的链接完成验证后再登录。',
@@ -503,7 +507,7 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   help:'<h3>PolyFusion 使用说明</h3><p><b>1. 选位形</b>：顶部 5 选 1（托卡马克/磁镜/FRC/偶极/仿星器）。<br><b>2. 选预设</b>：加载真实/概念机型参数。<br><b>3. 改参数</b>：左栏字段可编辑，改完即时重算右栏工作点。<br><b>4. 最佳区判据</b>：编辑阈值（如 Q≥1、P_fus≥10MW、n̄/极限≤1）。<br><b>5. 选等值线</b>：勾选 POPCON 显示哪些量。<br><b>6. 扫描轴</b>：选 X/Y 两参数与范围 → 运行 POPCON。<br><b>7. 标签页</b>：POPCON / 截面 / 剖面。<br><b>8. 保存/加载参数</b>：JSON 存读；导出结果/扫描。</p><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
  en:{config:'Configuration',preset:'Preset',params:'Parameters',liveN:'live recompute',window:'Operating Window',
   contours:'Contours shown',scan:'POPCON Scan Axes',xax:'X axis',yax:'Y axis',runBtn:'▶ Run POPCON Scan',
-  opPoint:'Operating Point',saveP:'⬇ Save Input Params',loadP:'⬆ Load Historical Params',expJson:'⬇ Result JSON',expCsv:'⬇ Scan CSV',expPng:'⬇ Current Plot PNG',
+  opPoint:'Operating Point',saveP:'⬇ Save Input Params',loadP:'⬆ Load Historical Params',expScan:'⬇ Save Scan Results',expPng:'⬇ Save Scan Image',
   tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
   emailInvalid:'Please enter a valid email address',emailRequired:'Please enter your email',confirmPassword:'Confirm password',passwordMismatch:'Passwords do not match',registerFailed:'Registration failed. Username or email may already be in use.',
   verifyEmailPrompt:'Check your inbox',verifyEmailSub:'We sent a verification link to {{email}}. Click the link in the email to verify your address, then log in.',
@@ -1177,8 +1181,7 @@ async function initAfterAuth(){
   document.getElementById('histX').onclick=closeHistoryPanel;
   document.getElementById('histClose').onclick=closeHistoryPanel;
   document.getElementById('histRefresh').onclick=loadHistoryList;
-  expJson.onclick=()=>LASTRUN&&dl('polyfusion_'+CUR+'_point.json',JSON.stringify(LASTRUN,null,2));
-  expCsv.onclick=()=>LASTSCAN&&dl('polyfusion_'+CUR+'_popcon.csv',scanCsv(LASTSCAN));
+  document.getElementById('expScan').onclick=exportScanResults;
   expPng.onclick=exportPlotImage;
   applyLang();
   selectConfig(Object.keys(CONFIGS)[0]);
@@ -1209,8 +1212,8 @@ function applyLang(){
   run.textContent=T[LANG].runBtn;
   document.getElementById('saveAsP').textContent='★ '+L('另存为预设','Save preset');
   document.getElementById('delP').textContent='✕ '+L('删除预设','Delete preset');
-  document.getElementById('saveHist').textContent=L('存入历史','Save history');
-  document.getElementById('openHist').textContent=L('历史记录','History');
+  document.getElementById('saveHist').textContent=L('存入扫描历史','Save scan history');
+  document.getElementById('openHist').textContent=L('查看历史记录','View history');
   document.getElementById('histTitle').textContent=L('计算历史 History','History');
   document.getElementById('histRefresh').textContent=L('刷新 Refresh','Refresh');
   document.getElementById('histClose').textContent=L('关闭 Close','Close');
@@ -1369,7 +1372,7 @@ function buildParams(){
     let a0='';
     if(gk==='geo'&&CUR==='stellarator')a0=stellAHeaderHtml();
     else if(gk==='geo'&&'R0'in VALS&&'A'in VALS)a0=`<span class="a0"><i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m</span>`;
-    html+=`<div class="grp-h"><span>${L(gz,ge)}</span>${a0}</div>`;
+    html+=`<div class="param-grp collapsed" data-grp="${gk}"><div class="grp-h" role="button" tabindex="0" aria-expanded="false"><span>${L(gz,ge)}</span>${a0}</div>`;
     html+=`<div class="pgrid" data-grp="${gk}">`;
     if(CUR==='stellarator'&&gk==='geo')html+=stellGeomModeHtml();
     if(CUR==='tokamak'&&gk==='geo')html+=tokGeomModeHtml();
@@ -1408,8 +1411,14 @@ function buildParams(){
       else{const dn=DENS.has(p);const un=dn?'10²⁰ m⁻³':m[2];const u=un?`<span class="u">[${un}]</span>`:'';
         const tip=(m[1]+' · '+m[0]).replace(/<[^>]+>/g,'');
         html+=`<div class="fld"><label title="${tip}"><span class="sym">${m[4]||p}</span><span class="nm">${desc}</span>${u}</label><input type="number" step="any" data-p="${p}" ${dn?'data-sc="1e20"':''} value="${fmtIn(dn?VALS[p]*1e-20:VALS[p])}"></div>`;}
-    }html+='</div>';}
+    }html+='</div></div>';}
   const box=document.getElementById('params');box.innerHTML=html;
+  box.querySelectorAll('.grp-h').forEach(title=>{
+    const group=title.closest('.param-grp');
+    const sync=()=>title.setAttribute('aria-expanded',String(!group.classList.contains('collapsed')));
+    title.onclick=()=>{group.classList.toggle('collapsed');sync();};
+    title.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();title.click();}};
+  });
   enforceDipoleGeometryRange();
   // ADVANCED (expert) inputs: custom Fourier axis + measured Vp/Sw overrides.
   // Normal mode shows only R0/a/N_fp/delta_h/etabar/g and computes volume/area
@@ -1616,7 +1625,7 @@ function collectMissingInputs(includeScan){const missing=[];clearMissingInputs()
     document.querySelectorAll('#thresh [data-thr]').forEach(el=>{const cb=document.querySelector(`[data-thr-en="${el.dataset.thr}"]`);if(cb&&!cb.checked)return;if((el.value||'').trim()==='')missing.push(missingInput(sectionTitle('window'),'',`${el.dataset.thr} ${el.dataset.op==='ge'?'≥':'≤'}`,el));});}
   missing.forEach(markMissingInput);return missing;
 }
-function warnMissingInputs(missing){if(!missing.length)return true;const first=missing[0];const sec=first.el&&first.el.closest('.sec');if(sec)sec.classList.remove('collapsed');const e=document.getElementById('err');const path=[first.section,first.group,first.label].filter(Boolean).join(' / ');if(e){e.textContent=L(`输入项为空：${path}${missing.length>1?`（另有 ${missing.length-1} 项）`:''}`,`Empty input: ${path}${missing.length>1?` (${missing.length-1} more)`:''}`);e.scrollIntoView({block:'nearest'});}if(first.el&&first.el.focus)first.el.focus();return false;}
+function warnMissingInputs(missing){if(!missing.length)return true;const first=missing[0];const sec=first.el&&first.el.closest('.sec');if(sec)sec.classList.remove('collapsed');const pg=first.el&&first.el.closest('.param-grp');if(pg){pg.classList.remove('collapsed');const gh=pg.querySelector('.grp-h');if(gh)gh.setAttribute('aria-expanded','true');}const e=document.getElementById('err');const path=[first.section,first.group,first.label].filter(Boolean).join(' / ');if(e){e.textContent=L(`输入项为空：${path}${missing.length>1?`（另有 ${missing.length-1} 项）`:''}`,`Empty input: ${path}${missing.length>1?` (${missing.length-1} more)`:''}`);e.scrollIntoView({block:'nearest'});}if(first.el&&first.el.focus)first.el.focus();return false;}
 function validateRequiredInputs(includeScan){return warnMissingInputs(collectMissingInputs(!!includeScan));}
 function cleanStellOverrides(o){
   if(CUR!=='stellarator')return o;
@@ -1708,6 +1717,12 @@ const LAYOUT=(xt,yt)=>{const c=plotTheme();return{paper_bgcolor:c.paper,plot_bgc
   margin:{l:64,r:16,t:10,b:50},xaxis:{title:{text:xt,font:{family:'Chakra Petch',size:13,color:c.title}},gridcolor:c.grid,zeroline:false,linecolor:c.axis},
   yaxis:{title:{text:yt,font:{family:'Chakra Petch',size:13,color:c.title}},gridcolor:c.grid,zeroline:false,linecolor:c.axis},showlegend:true,legend:{orientation:'h',y:-0.18,font:{size:10,color:c.legend}}};};
 function plotlyReady(){return !!(window.Plotly&&Plotly.react&&Plotly.downloadImage);}
+function exportScanResults(){
+  const ee=document.getElementById('err');if(ee)ee.textContent='';
+  if(LASTSCAN){dl('polyfusion_'+CUR+'_popcon.csv',scanCsv(LASTSCAN));return;}
+  if(LASTRUN){dl('polyfusion_'+CUR+'_point.json',JSON.stringify(LASTRUN,null,2));if(ee)ee.textContent=L('当前尚无 POPCON 扫描，已保存工作点 JSON。','No POPCON scan yet; saved operating-point JSON.');return;}
+  if(ee)ee.textContent=L('当前没有可保存的扫描结果：请先运行 POPCON 扫描。','No scan results to save yet: run a POPCON scan first.');
+}
 function showPlotlyMissing(){
   const msg=L('Plotly 没有加载：请通过 app server 打开页面，并确认 /vendor/plotly-2.32.0.min.js 可访问。',
               'Plotly is not loaded: open the page through the app server and check /vendor/plotly-2.32.0.min.js.');
