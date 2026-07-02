@@ -64,6 +64,28 @@ from polyfusion.profile import ProfileError  # noqa: E402
 from polyfusion.postgrest import PostgrestError  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+
+
+def _load_env_file(path: str) -> None:
+    if not os.path.isfile(path):
+        return
+    with open(path, encoding="utf-8") as fh:
+        for raw_line in fh:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            if line.startswith("export "):
+                line = line[len("export ") :].strip()
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if key == "SUPABASE_SERVICE_ROLE_KEY":
+                continue
+            os.environ.setdefault(key, value.strip().strip('"').strip("'"))
+
+
+_load_env_file(os.path.join(ROOT, ".env"))
+
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", 8765))
 
