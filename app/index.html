@@ -47,7 +47,8 @@
   .col::-webkit-scrollbar{width:8px}.col::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
   .left{border-right:1px solid var(--line);padding:14px}.right{border-left:1px solid var(--line);padding:14px}
   .center{display:flex;flex-direction:column;min-width:0}
-  .col-title{margin:0 0 14px;padding:8px 10px;border:1px solid var(--line2);border-radius:8px;background:rgba(43,54,72,.18);color:var(--mut);font-size:12px;letter-spacing:.14em;text-transform:uppercase}
+  .col-title{margin:0 0 16px;padding:4px 0 10px;color:#75b8ad;font-size:12px;letter-spacing:.18em;text-transform:uppercase;text-align:center;font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px}
+  :root[data-theme=light] .col-title{color:#3f746e}.col-title::before,.col-title::after{content:"";width:34px;height:1px;background:var(--line2)}
   .sec{margin-bottom:14px}
   .sec-t{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--mut);margin:0 0 9px}
   .sec-t::before{content:"";width:13px;height:1px;background:var(--amber);box-shadow:0 0 8px var(--amber)}
@@ -1215,7 +1216,7 @@ function applyLang(){
   document.getElementById('delP').textContent='✕ '+L('删除预设','Delete preset');
   document.getElementById('saveHist').textContent=L('存入扫描历史','Save scan history');
   document.getElementById('openHist').textContent=L('查看历史记录','View history');
-  document.getElementById('histTitle').textContent=L('计算历史 History','History');
+  document.getElementById('histTitle').textContent=L('扫描历史 Scan History','Scan History');
   document.getElementById('histRefresh').textContent=L('刷新 Refresh','Refresh');
   document.getElementById('histClose').textContent=L('关闭 Close','Close');
   document.getElementById('helpBody').innerHTML=T[LANG].help;
@@ -1720,7 +1721,7 @@ const LAYOUT=(xt,yt)=>{const c=plotTheme();return{paper_bgcolor:c.paper,plot_bgc
 function plotlyReady(){return !!(window.Plotly&&Plotly.react&&Plotly.downloadImage);}
 function exportScanResults(){
   const ee=document.getElementById('err');if(ee)ee.textContent='';
-  if(LASTSCAN){dl('polyfusion_'+CUR+'_popcon.csv',scanCsv(LASTSCAN));return;}
+  if(LASTSCAN&&LASTSCAN_INPUTS&&sameJson(LASTSCAN_INPUTS,scanRequestBody())){dl('polyfusion_'+CUR+'_popcon.csv',scanCsv(LASTSCAN));return;}
   if(ee)ee.textContent=L('当前没有可保存的扫描结果：请先运行 POPCON 扫描。','No scan results to save yet: run a POPCON scan first.');
 }
 function showPlotlyMissing(){
