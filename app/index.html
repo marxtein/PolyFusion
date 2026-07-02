@@ -47,6 +47,7 @@
   .col::-webkit-scrollbar{width:8px}.col::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
   .left{border-right:1px solid var(--line);padding:14px}.right{border-left:1px solid var(--line);padding:14px}
   .center{display:flex;flex-direction:column;min-width:0}
+  .col-title{margin:0 0 14px;padding:8px 10px;border:1px solid var(--line2);border-radius:8px;background:rgba(43,54,72,.18);color:var(--mut);font-size:12px;letter-spacing:.14em;text-transform:uppercase}
   .sec{margin-bottom:14px}
   .sec-t{display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--mut);margin:0 0 9px}
   .sec-t::before{content:"";width:13px;height:1px;background:var(--amber);box-shadow:0 0 8px var(--amber)}
@@ -232,6 +233,7 @@
   .sec{position:relative}
   .sec-t{cursor:pointer;user-select:none;padding-right:18px}
   .sec-t::after{content:"▾";position:absolute;right:0;top:0;color:var(--dim);font-size:10px;transition:transform .15s}
+  .sec.no-collapse .sec-t{cursor:default}.sec.no-collapse .sec-t::after{display:none}
   .sec.collapsed .sec-t::after{transform:rotate(-90deg)}
   .sec.collapsed>:not(.sec-t){display:none}
   .fld.missing input,.fld.missing textarea{border-color:var(--red)!important;box-shadow:0 0 0 1px var(--red)}
@@ -336,6 +338,7 @@
 </div>
 <div class="wrap">
   <div class="col left">
+    <div class="col-title" data-t="inputTitle">输入参数</div>
     <div class="quicknav" id="quicknav">
       <a data-jump="config">① 位形</a>
       <a data-jump="preset">② 预设</a>
@@ -380,7 +383,8 @@
     <div id="plot"></div>
   </div>
   <div class="col right">
-    <div class="sec" data-sec="results"><p class="sec-t" data-t="opPoint">工作点 Operating Point <span class="badge" id="caseBadge"></span></p>
+    <div class="col-title" data-t="scanTitle">扫描结果</div>
+    <div class="sec no-collapse" data-sec="results"><p class="sec-t" data-t="opPoint">工作点 Operating Point <span class="badge" id="caseBadge"></span></p>
       <div id="results"></div>
       <div class="exports">
         <button id="expScan" data-t="expScan">⬇ 保存扫描结果</button>
@@ -499,20 +503,20 @@ const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 2
   stellarator:'<ellipse cx="32" cy="32" rx="22" ry="12"/><path d="M12 32Q22 20 32 32T52 32"/>'};
 const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'参数 Parameters',liveN:'编辑即重算',window:'最佳区判据 Operating Window',
   contours:'显示等值线 Contours',scan:'POPCON 扫描轴 Scan Axes',xax:'横轴',yax:'纵轴',runBtn:'▶ 运行 POPCON 扫描',
-  opPoint:'工作点 Operating Point',saveP:'⬇ 保存输入参数',loadP:'⬆ 加载历史参数',expScan:'⬇ 保存扫描结果',expPng:'⬇ 保存扫描图像',
+  opPoint:'工作点 Operating Point',inputTitle:'输入参数',scanTitle:'扫描结果',saveP:'⬇ 保存输入参数',loadP:'⬆ 加载历史参数',expScan:'⬇ 保存扫描结果',expPng:'⬇ 保存扫描图像',
   tabShape:'几何/磁面 Geometry',tabProf:'剖面 Profiles',sub:'多位形零维系统设计台',cfgL:'位形',rxL:'反应',
   emailInvalid:'请输入有效的邮箱地址',emailRequired:'请输入邮箱',confirmPassword:'确认密码 Confirm password',passwordMismatch:'两次输入的密码不一致',registerFailed:'注册失败，用户名或邮箱可能已被使用',
   verifyEmailPrompt:'请查收验证邮件',verifyEmailSub:'我们已向 {{email}} 发送一封验证邮件，请点击邮件中的链接完成验证后再登录。',
   emailNotVerified:'邮箱未验证',resendVerification:'重新发送验证邮件',resendSent:'验证邮件已重新发送，请查收。',rateLimited:'请求过于频繁，请稍后再试。',
-  help:'<h3>PolyFusion 使用说明</h3><p><b>1. 选位形</b>：顶部 5 选 1（托卡马克/磁镜/FRC/偶极/仿星器）。<br><b>2. 选预设</b>：加载真实/概念机型参数。<br><b>3. 改参数</b>：左栏字段可编辑，改完即时重算右栏工作点。<br><b>4. 最佳区判据</b>：编辑阈值（如 Q≥1、P_fus≥10MW、n̄/极限≤1）。<br><b>5. 选等值线</b>：勾选 POPCON 显示哪些量。<br><b>6. 扫描轴</b>：选 X/Y 两参数与范围 → 运行 POPCON。<br><b>7. 标签页</b>：POPCON / 截面 / 剖面。<br><b>8. 保存/加载参数</b>：JSON 存读；导出结果/扫描。</p><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
+  help:'<h3>PolyFusion 使用说明</h3><p><b>1. 选位形</b>：顶部 5 选 1（托卡马克/磁镜/FRC/偶极/仿星器）。<br><b>2. 选预设</b>：加载真实/概念机型参数。<br><b>3. 改参数</b>：左栏字段可编辑，改完即时重算右栏工作点。<br><b>4. 最佳区判据</b>：编辑阈值（如 Q≥1、P_fus≥10MW、n̄/极限≤1）。<br><b>5. 扫描轴</b>：选 X/Y 两参数与范围 → 运行 POPCON。<br><b>6. 选等值线</b>：在运行按钮下方勾选 POPCON 显示哪些量。<br><b>7. 标签页</b>：POPCON / 截面 / 剖面。<br><b>8. 保存/加载参数</b>：JSON 存读；保存扫描结果/图像。</p><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
  en:{config:'Configuration',preset:'Preset',params:'Parameters',liveN:'live recompute',window:'Operating Window',
   contours:'Contours shown',scan:'POPCON Scan Axes',xax:'X axis',yax:'Y axis',runBtn:'▶ Run POPCON Scan',
-  opPoint:'Operating Point',saveP:'⬇ Save Input Params',loadP:'⬆ Load Historical Params',expScan:'⬇ Save Scan Results',expPng:'⬇ Save Scan Image',
+  opPoint:'Operating Point',inputTitle:'Input Parameters',scanTitle:'Scan Results',saveP:'⬇ Save Input Params',loadP:'⬆ Load Historical Params',expScan:'⬇ Save Scan Results',expPng:'⬇ Save Scan Image',
   tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
   emailInvalid:'Please enter a valid email address',emailRequired:'Please enter your email',confirmPassword:'Confirm password',passwordMismatch:'Passwords do not match',registerFailed:'Registration failed. Username or email may already be in use.',
   verifyEmailPrompt:'Check your inbox',verifyEmailSub:'We sent a verification link to {{email}}. Click the link in the email to verify your address, then log in.',
   emailNotVerified:'Email unverified',resendVerification:'Resend verification email',resendSent:'Verification email resent. Please check your inbox.',rateLimited:'Too many requests. Please try again later.',
-  help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
+  help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>6. Contours</b>: choose which POPCON contours show below the run button.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; save scan results/images.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,LASTSCAN_INPUTS=null,VIEW='shape',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
 let THEME=((()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}}))();
 let AUTH_REQUIRED=false,GUEST_MODE=false,AUTH_MODE='login',AUTH_USER=null;
@@ -1019,7 +1023,7 @@ function sameJson(a,b){return JSON.stringify(a||{})===JSON.stringify(b||{});}
 function scanRequestBody(){const xk=xkey.value,yk=ykey.value;return{config:CUR,overrides:clean(),window:getWindow(),xkey:xk,ykey:yk,xmin:+xmin.value/dsc(xk),xmax:+xmax.value/dsc(xk),nx:+nx.value,ymin:+ymin.value/dsc(yk),ymax:+ymax.value/dsc(yk),ny:+ny.value};}
 function updateHistoryControls(){
   const allowed=historyAllowed();
-  ['saveHist','openHist'].forEach(id=>{const b=document.getElementById(id);if(!b)return;b.disabled=!allowed;b.title=allowed?L('保存和查看云端计算历史','Save and view cloud computation history'):L('请先登录以使用云端历史','Log in to use cloud history');});
+  ['saveHist','openHist'].forEach(id=>{const b=document.getElementById(id);if(!b)return;b.disabled=!allowed;b.title=allowed?L('保存和查看云端扫描历史','Save and view cloud scan history'):L('请先登录以使用云端历史','Log in to use cloud history');});
 }
 function historyStatus(msg,isErr){const e=document.getElementById('err');if(e)e.textContent=msg||'';if(isErr&&e)e.scrollIntoView({block:'nearest'});}
 function currentPresetName(){const pv=(document.getElementById('preset')||{}).value||'';return pv&&!(pv.startsWith(UMARK))?pv:null;}
@@ -1029,24 +1033,21 @@ function compactSummary(obj){
   return out;
 }
 function historySavePayload(){
-  const saveScan=VIEW==='popcon'&&LASTSCAN&&LASTSCAN_INPUTS&&sameJson(LASTSCAN_INPUTS,scanRequestBody());
-  if(saveScan){
-    const inputs=cloneJson(LASTSCAN_INPUTS);
-    return {kind:'scan',config:CUR,preset:currentPresetName(),inputs,summary:compactSummary(Object.assign({},LASTSCAN,{xkey:inputs.xkey,ykey:inputs.ykey}))};
-  }
-  if(!LASTRUN)return null;
-  return {kind:'run',config:CUR,preset:currentPresetName(),inputs:{config:CUR,overrides:clean()},summary:compactSummary(LASTRUN.outputs||{})};
+  const saveScan=LASTSCAN&&LASTSCAN_INPUTS&&sameJson(LASTSCAN_INPUTS,scanRequestBody());
+  if(!saveScan)return null;
+  const inputs=cloneJson(LASTSCAN_INPUTS);
+  return {kind:'scan',config:CUR,preset:currentPresetName(),inputs,summary:compactSummary(Object.assign({},LASTSCAN,{xkey:inputs.xkey,ykey:inputs.ykey}))};
 }
 async function saveCurrentHistory(){
   if(!historyAllowed()){showAuthWall();return;}
   const payload=historySavePayload();
-  if(!payload){historyStatus(L('请先运行一次计算再保存历史。','Run a calculation before saving history.'),true);return;}
+  if(!payload){historyStatus(L('请先运行一次 POPCON 扫描再保存扫描历史。','Run a POPCON scan before saving scan history.'),true);return;}
   const btn=document.getElementById('saveHist'),old=btn?btn.textContent:'';
   if(btn){btn.disabled=true;btn.textContent=L('保存中…','Saving…');}
   try{
     const row=await jpost('/api/history',payload);
     if(row&&row.error)throw new Error(row.error);
-    historyStatus(L('已保存到历史记录。','Saved to history.'));
+    historyStatus(L('已保存到扫描历史。','Saved to scan history.'));
     if(document.getElementById('historyPanel').classList.contains('on'))await loadHistoryList();
     return row;
   }catch(e){historyStatus((e&&e.message)||String(e),true);}
@@ -1161,7 +1162,7 @@ async function initAfterAuth(){
   // phase 2: collapsible sections + quick-nav jumps
   document.querySelectorAll('.sec-t').forEach(t=>t.addEventListener('click',e=>{
     if(e.target.closest('a,button,input,select'))return;
-    const sec=t.closest('.sec');if(sec)toggleSec(sec);
+    const sec=t.closest('.sec');if(sec&&!sec.classList.contains('no-collapse'))toggleSec(sec);
   }));
   document.querySelectorAll('.quicknav a').forEach(a=>a.addEventListener('click',()=>jumpToSec(a.dataset.jump)));
   try{const sl=localStorage.getItem('polyfusion_lang');if(sl==='zh'||sl==='en')LANG=sl;}catch(e){}
@@ -1720,7 +1721,6 @@ function plotlyReady(){return !!(window.Plotly&&Plotly.react&&Plotly.downloadIma
 function exportScanResults(){
   const ee=document.getElementById('err');if(ee)ee.textContent='';
   if(LASTSCAN){dl('polyfusion_'+CUR+'_popcon.csv',scanCsv(LASTSCAN));return;}
-  if(LASTRUN){dl('polyfusion_'+CUR+'_point.json',JSON.stringify(LASTRUN,null,2));if(ee)ee.textContent=L('当前尚无 POPCON 扫描，已保存工作点 JSON。','No POPCON scan yet; saved operating-point JSON.');return;}
   if(ee)ee.textContent=L('当前没有可保存的扫描结果：请先运行 POPCON 扫描。','No scan results to save yet: run a POPCON scan first.');
 }
 function showPlotlyMissing(){
