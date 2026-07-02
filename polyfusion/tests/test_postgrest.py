@@ -71,7 +71,9 @@ def test_get_sends_bearer_and_apikey(supabase_env):
         captured["timeout"] = timeout
         return _fake_response([], status=200)
 
-    with mock.patch.object(postgrest.urllib.request, "urlopen", side_effect=fake_urlopen):
+    with mock.patch.object(
+        postgrest.urllib.request, "urlopen", side_effect=fake_urlopen
+    ):
         status, payload = postgrest.pg_rest(
             "/profiles?select=id", access_token="user-jwt-123"
         )
@@ -96,7 +98,9 @@ def test_post_adds_prefer_representation(supabase_env):
         captured["req"] = req
         return _fake_response([{"id": "abc"}], status=201)
 
-    with mock.patch.object(postgrest.urllib.request, "urlopen", side_effect=fake_urlopen):
+    with mock.patch.object(
+        postgrest.urllib.request, "urlopen", side_effect=fake_urlopen
+    ):
         status, payload = postgrest.pg_rest(
             "/computations",
             access_token="t",
@@ -122,7 +126,9 @@ def test_prefer_override(supabase_env):
         captured["req"] = req
         return _fake_response(None, status=204)
 
-    with mock.patch.object(postgrest.urllib.request, "urlopen", side_effect=fake_urlopen):
+    with mock.patch.object(
+        postgrest.urllib.request, "urlopen", side_effect=fake_urlopen
+    ):
         postgrest.pg_rest(
             "/computations",
             access_token="t",
@@ -145,7 +151,9 @@ def test_query_dict_is_appended(supabase_env):
         captured["req"] = req
         return _fake_response([], status=200)
 
-    with mock.patch.object(postgrest.urllib.request, "urlopen", side_effect=fake_urlopen):
+    with mock.patch.object(
+        postgrest.urllib.request, "urlopen", side_effect=fake_urlopen
+    ):
         postgrest.pg_rest(
             "/computations",
             access_token="t",
@@ -165,7 +173,9 @@ def test_query_is_merged_with_existing_qs(supabase_env):
         captured["req"] = req
         return _fake_response([], status=200)
 
-    with mock.patch.object(postgrest.urllib.request, "urlopen", side_effect=fake_urlopen):
+    with mock.patch.object(
+        postgrest.urllib.request, "urlopen", side_effect=fake_urlopen
+    ):
         postgrest.pg_rest(
             "/computations?order=created_at.desc",
             access_token="t",
@@ -196,7 +206,9 @@ def test_http_error_returns_decoded_payload(supabase_env):
             fp=BytesIO(json.dumps(err_body).encode("utf-8")),
         )
 
-    with mock.patch.object(postgrest.urllib.request, "urlopen", side_effect=fake_urlopen):
+    with mock.patch.object(
+        postgrest.urllib.request, "urlopen", side_effect=fake_urlopen
+    ):
         status, payload = postgrest.pg_rest("/profiles", access_token="t")
 
     assert status == 403
@@ -207,7 +219,9 @@ def test_urlerror_wrapped_as_postgrest_error(supabase_env):
     def fake_urlopen(req, timeout):
         raise urllib.error.URLError("connection refused")
 
-    with mock.patch.object(postgrest.urllib.request, "urlopen", side_effect=fake_urlopen):
+    with mock.patch.object(
+        postgrest.urllib.request, "urlopen", side_effect=fake_urlopen
+    ):
         with pytest.raises(postgrest.PostgrestError, match="network error"):
             postgrest.pg_rest("/profiles", access_token="t")
 
@@ -229,7 +243,9 @@ def test_empty_body_returns_none_payload(supabase_env):
     resp = _fake_response(None, status=204)
     resp.read.return_value = b""
     with mock.patch.object(postgrest.urllib.request, "urlopen", return_value=resp):
-        status, payload = postgrest.pg_rest("/computations", access_token="t", method="DELETE")
+        status, payload = postgrest.pg_rest(
+            "/computations", access_token="t", method="DELETE"
+        )
     assert status == 204
     assert payload is None
 
@@ -247,7 +263,9 @@ def test_base_url_and_apikey_overrides(supabase_env):
         captured["req"] = req
         return _fake_response([], status=200)
 
-    with mock.patch.object(postgrest.urllib.request, "urlopen", side_effect=fake_urlopen):
+    with mock.patch.object(
+        postgrest.urllib.request, "urlopen", side_effect=fake_urlopen
+    ):
         postgrest.pg_rest(
             "/profiles",
             access_token="t",
@@ -256,5 +274,7 @@ def test_base_url_and_apikey_overrides(supabase_env):
         )
 
     assert captured["req"].full_url == "http://127.0.0.1:54321/rest/v1/profiles"
-    apikey = captured["req"].headers.get("apikey") or captured["req"].headers.get("Apikey")
+    apikey = captured["req"].headers.get("apikey") or captured["req"].headers.get(
+        "Apikey"
+    )
     assert apikey == "local-anon"

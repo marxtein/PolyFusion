@@ -65,7 +65,9 @@ ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
 if not SUPABASE_URL or not ANON_KEY or not SERVICE_ROLE_KEY:
-    print("FATAL: SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY required")
+    print(
+        "FATAL: SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY required"
+    )
     sys.exit(1)
 
 # Try to import supabase for admin/user-management helpers only.
@@ -108,9 +110,7 @@ def _request(
         req_headers.update(headers)
 
     data = json.dumps(body).encode("utf-8") if body else None
-    req = urllib.request.Request(
-        url, data=data, headers=req_headers, method=method
-    )
+    req = urllib.request.Request(url, data=data, headers=req_headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return resp.status, json.loads(resp.read().decode("utf-8") or "null")
@@ -257,9 +257,13 @@ def main() -> int:
         if status_noauth in (401, 403):
             print(f"       unauthenticated request rejected ({status_noauth})")
         elif status_noauth == 200 and noauth_rows == []:
-            print("       unauthenticated request returned 200 with empty list (anon RLS filter)")
+            print(
+                "       unauthenticated request returned 200 with empty list (anon RLS filter)"
+            )
         else:
-            print(f"FAIL: unauthenticated request returned {status_noauth}: {body_noauth}")
+            print(
+                f"FAIL: unauthenticated request returned {status_noauth}: {body_noauth}"
+            )
             ok = False
 
         print("[5/5] Checking service-role key bypasses RLS...")
@@ -272,7 +276,9 @@ def main() -> int:
             print("      (this is informational; service-role bypass is expected)")
         else:
             sr_rows = body_sr if isinstance(body_sr, list) else []
-            print(f"       service-role sees {len(sr_rows)} profile rows (expected: ≥2)")
+            print(
+                f"       service-role sees {len(sr_rows)} profile rows (expected: ≥2)"
+            )
 
         if ok:
             print("\nPASS: RLS isolation works with stdlib urllib + user JWT.")

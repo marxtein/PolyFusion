@@ -18,17 +18,29 @@ def pg(monkeypatch):
     """Patch ``pg_rest`` and return a recorder."""
     calls: list[dict] = []
 
-    def fake_pg_rest(path, *, access_token, method="GET", query=None, body=None,
-                     base_url=None, apikey=None, timeout=30.0, prefer=None):
-        calls.append({
-            "path": path,
-            "access_token": access_token,
-            "method": method,
-            "query": dict(query) if query else None,
-            "body": body,
-            "prefer": prefer,
-        # Return a deferred result so each test can specify its own response.
-        })
+    def fake_pg_rest(
+        path,
+        *,
+        access_token,
+        method="GET",
+        query=None,
+        body=None,
+        base_url=None,
+        apikey=None,
+        timeout=30.0,
+        prefer=None,
+    ):
+        calls.append(
+            {
+                "path": path,
+                "access_token": access_token,
+                "method": method,
+                "query": dict(query) if query else None,
+                "body": body,
+                "prefer": prefer,
+                # Return a deferred result so each test can specify its own response.
+            }
+        )
         return fake_pg_rest.next_response
 
     fake_pg_rest.next_response = (200, [])
