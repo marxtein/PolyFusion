@@ -121,7 +121,9 @@
   #plot{flex:1;min-height:0;width:100%}
   .badge{display:inline-flex;font-size:10px;letter-spacing:.08em;color:var(--teal);border:1px solid rgba(54,226,196,.35);border-radius:20px;padding:2px 8px;text-transform:uppercase}
   .grp{margin-bottom:12px}
-  .grp-t{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 5px;padding-bottom:3px;border-bottom:1px dashed var(--line2)}
+  .grp-t{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 5px;padding-bottom:3px;border-bottom:1px dashed var(--line2);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
+  .grp-t::before{content:'▾';color:var(--teal);font-size:10px}.grp.collapsed .grp-t::before{content:'▸'}
+  .grp.collapsed .kv{display:none}
   .kv{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid rgba(27,35,52,.5)}
   .kv .k{font-size:12.5px;color:var(--mut)}.kv .v{font-family:"JetBrains Mono";font-size:13px;color:var(--fg);font-weight:500}
   .kv .v .u{color:var(--dim);font-size:9.5px;margin-left:2px}
@@ -358,6 +360,9 @@
           <div class="fld"><label>N</label><input id="ny" type="number" value="21" min="3"></div></div></div>
       </div>
     </div>
+    <div class="exports" style="margin:8px 0 10px">
+      <button id="saveP" data-t="saveP">⬇ 保存输入参数</button><button id="loadP" data-t="loadP">⬆ 加载历史参数</button>
+    </div>
     <button class="run scan-run" id="run" data-t="runBtn">▶ 运行 POPCON 扫描</button>
     <div id="err" class="err"></div>
   </div>
@@ -374,7 +379,6 @@
     <div class="sec" data-sec="results"><p class="sec-t" data-t="opPoint">工作点 Operating Point <span class="badge" id="caseBadge"></span></p>
       <div id="results"></div>
       <div class="exports">
-        <button id="saveP" data-t="saveP">⬇ 保存参数</button><button id="loadP" data-t="loadP">⬆ 加载参数</button>
         <button id="expJson" data-t="expJson">⬇ 结果 JSON</button><button id="expCsv" data-t="expCsv">⬇ 扫描 CSV</button>
         <button id="expPng" data-t="expPng">⬇ 当前图像 PNG</button>
         <button id="saveHist" class="auth-only" title="登录后可保存到云端历史">存入历史</button><button id="openHist" class="auth-only" title="登录后查看云端历史">历史记录</button>
@@ -491,7 +495,7 @@ const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 2
   stellarator:'<ellipse cx="32" cy="32" rx="22" ry="12"/><path d="M12 32Q22 20 32 32T52 32"/>'};
 const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'参数 Parameters',liveN:'编辑即重算',window:'最佳区判据 Operating Window',
   contours:'显示等值线 Contours',scan:'POPCON 扫描轴 Scan Axes',xax:'横轴',yax:'纵轴',runBtn:'▶ 运行 POPCON 扫描',
-  opPoint:'工作点 Operating Point',saveP:'⬇ 保存参数',loadP:'⬆ 加载参数',expJson:'⬇ 结果 JSON',expCsv:'⬇ 扫描 CSV',expPng:'⬇ 当前图像 PNG',
+  opPoint:'工作点 Operating Point',saveP:'⬇ 保存输入参数',loadP:'⬆ 加载历史参数',expJson:'⬇ 结果 JSON',expCsv:'⬇ 扫描 CSV',expPng:'⬇ 当前图像 PNG',
   tabShape:'几何/磁面 Geometry',tabProf:'剖面 Profiles',sub:'多位形零维系统设计台',cfgL:'位形',rxL:'反应',
   emailInvalid:'请输入有效的邮箱地址',emailRequired:'请输入邮箱',confirmPassword:'确认密码 Confirm password',passwordMismatch:'两次输入的密码不一致',registerFailed:'注册失败，用户名或邮箱可能已被使用',
   verifyEmailPrompt:'请查收验证邮件',verifyEmailSub:'我们已向 {{email}} 发送一封验证邮件，请点击邮件中的链接完成验证后再登录。',
@@ -499,7 +503,7 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   help:'<h3>PolyFusion 使用说明</h3><p><b>1. 选位形</b>：顶部 5 选 1（托卡马克/磁镜/FRC/偶极/仿星器）。<br><b>2. 选预设</b>：加载真实/概念机型参数。<br><b>3. 改参数</b>：左栏字段可编辑，改完即时重算右栏工作点。<br><b>4. 最佳区判据</b>：编辑阈值（如 Q≥1、P_fus≥10MW、n̄/极限≤1）。<br><b>5. 选等值线</b>：勾选 POPCON 显示哪些量。<br><b>6. 扫描轴</b>：选 X/Y 两参数与范围 → 运行 POPCON。<br><b>7. 标签页</b>：POPCON / 截面 / 剖面。<br><b>8. 保存/加载参数</b>：JSON 存读；导出结果/扫描。</p><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
  en:{config:'Configuration',preset:'Preset',params:'Parameters',liveN:'live recompute',window:'Operating Window',
   contours:'Contours shown',scan:'POPCON Scan Axes',xax:'X axis',yax:'Y axis',runBtn:'▶ Run POPCON Scan',
-  opPoint:'Operating Point',saveP:'⬇ Save Params',loadP:'⬆ Load Params',expJson:'⬇ Result JSON',expCsv:'⬇ Scan CSV',expPng:'⬇ Current Plot PNG',
+  opPoint:'Operating Point',saveP:'⬇ Save Input Params',loadP:'⬆ Load Historical Params',expJson:'⬇ Result JSON',expCsv:'⬇ Scan CSV',expPng:'⬇ Current Plot PNG',
   tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
   emailInvalid:'Please enter a valid email address',emailRequired:'Please enter your email',confirmPassword:'Confirm password',passwordMismatch:'Passwords do not match',registerFailed:'Registration failed. Username or email may already be in use.',
   verifyEmailPrompt:'Check your inbox',verifyEmailSub:'We sent a verification link to {{email}}. Click the link in the email to verify your address, then log in.',
@@ -1665,8 +1669,14 @@ function applyRun(r){
     const estK=(CUR==='stellarator'&&o.geom_is_measured===1&&geomEst);
     const est=estK?` <span class="u" title="${L('近轴几何估计；真机几何由权威边界/实测 Vp/Sw 覆写决定','near-axis geometry estimate; real-machine geometry set by authoritative boundary / measured Vp/Sw override')}">~${L('近轴估','est')}</span>`:'';
     return `<div class="kv ${cls}"><span class="k">${pk(k)}</span><span class="v">${typeof val==='string'?val:fmt(val)}${u}${est}</span></div>`;}).join('');
-    if(rows)html+=`<div class="grp"><div class="grp-t">${g}</div>${rows}</div>`;}
+    if(rows)html+=`<div class="grp collapsed"><div class="grp-t" role="button" tabindex="0" aria-expanded="false">${g}</div>${rows}</div>`;}
   box.innerHTML=html;
+  box.querySelectorAll('.grp-t').forEach(title=>{
+    const group=title.closest('.grp');
+    const sync=()=>title.setAttribute('aria-expanded',String(!group.classList.contains('collapsed')));
+    title.onclick=()=>{group.classList.toggle('collapsed');sync();};
+    title.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();title.click();}};
+  });
   updateA0();
   updateLiveBar(o);
   if(VIEW==='popcon')document.getElementById('plotMeta').innerHTML=`<span>P_fus <b>${fmt(o.Pfus)}</b> MW</span><span>Q <b>${fmt(o.Qfus)}</b></span>`;
