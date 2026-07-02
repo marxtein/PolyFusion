@@ -229,6 +229,8 @@
   .sec-t::after{content:"▾";position:absolute;right:0;top:0;color:var(--dim);font-size:10px;transition:transform .15s}
   .sec.collapsed .sec-t::after{transform:rotate(-90deg)}
   .sec.collapsed>:not(.sec-t){display:none}
+  .fld.missing input,.fld.missing textarea{border-color:var(--red)!important;box-shadow:0 0 0 1px var(--red)}
+  .scan-run{margin:8px 0 10px}
   /* ---- phase 3: slide-out manual panel ---- */
   #manualPanel{position:fixed;top:0;right:0;width:min(440px,92vw);height:100vh;z-index:60;
     background:var(--panel);border-left:1px solid var(--line2);box-shadow:-20px 0 60px -20px #000;
@@ -341,7 +343,7 @@
     <div class="sec" data-sec="preset"><p class="sec-t" data-t="preset">机型预设 Preset</p><select id="preset"></select>
       <div class="exports" style="margin-top:6px"><button id="saveAsP">★ 另存为预设</button><button id="delP" disabled>✕ 删除预设</button></div>
       <div id="eqQuick"></div></div>
-    <div class="sec" data-sec="params"><p class="sec-t" data-t="params">参数 Parameters <span class="n" data-t="liveN">编辑即重算</span></p><div id="params"></div></div>
+    <div class="sec collapsed" data-sec="params"><p class="sec-t" data-t="params">参数 Parameters <span class="n" data-t="liveN">编辑即重算</span></p><div id="params"></div></div>
     <div class="sec" data-sec="window"><p class="sec-t" data-t="window">最佳区判据 Operating Window</p><div id="thresh" class="scanbox"></div></div>
     <div class="sec" data-sec="contours"><p class="sec-t" data-t="contours">显示等值线 Contours</p><div id="plotOpts" class="opts"></div></div>
     <div class="sec" data-sec="scan"><p class="sec-t" data-t="scan">POPCON 扫描轴 Scan Axes</p>
@@ -354,10 +356,10 @@
           <div class="row3"><div class="fld"><label>min</label><input id="ymin" type="number" step="any"></div>
           <div class="fld"><label>max</label><input id="ymax" type="number" step="any"></div>
           <div class="fld"><label>N</label><input id="ny" type="number" value="21" min="3"></div></div></div>
-        <button class="run" id="run" data-t="runBtn">▶ 运行 POPCON 扫描</button>
-        <div id="err" class="err"></div>
       </div>
     </div>
+    <button class="run scan-run" id="run" data-t="runBtn">▶ 运行 POPCON 扫描</button>
+    <div id="err" class="err"></div>
   </div>
   <div class="center">
     <div class="tabs">
@@ -1595,6 +1597,23 @@ function buildPlotOpts(){
   box.querySelectorAll('.opt').forEach(o=>o.onclick=()=>{const f=o.dataset.f;PLOTSEL.has(f)?PLOTSEL.delete(f):PLOTSEL.add(f);buildPlotOpts();if(VIEW==='popcon')drawPopcon();});
 }
 function fmtIn(v){if(typeof v!=='number'||!isFinite(v))return '';const a=Math.abs(v);if(a!==0&&(a<1e-3||a>=1e5))return v.toExponential(3);return +v.toFixed(6);}
+function plainLabel(el){return (el&&el.textContent||'').replace(/\s+/g,' ').trim();}
+function sectionTitle(name){const sec=document.querySelector(`.sec[data-sec="${name}"] .sec-t`);if(!sec)return name;const c=sec.cloneNode(true);c.querySelectorAll('.n,.badge').forEach(x=>x.remove());return plainLabel(c)||name;}
+function groupTitle(key){const g=GROUPS.find(x=>x[0]===key);return g?L(g[1],g[2]):key;}
+function missingInput(section,group,label,el){return{section,group,label,el};}
+function clearMissingInputs(){document.querySelectorAll('.fld.missing').forEach(f=>f.classList.remove('missing'));}
+function markMissingInput(m){const f=m.el&&m.el.closest('.fld');if(f)f.classList.add('missing');}
+function isModeHidden(el){const f=el.closest('.fld'),box=document.getElementById('params');return !f||f.style.display==='none'||(f.classList.contains('advfld')&&box&&!box.classList.contains('show-adv'))||el.disabled;}
+function paramRequiresValue(el){const p=el.dataset.p,m=META[p];if(!p||el.dataset.bool||el.tagName==='SELECT')return false;if(['rc','zs','f_alpha','Vp_override','Sw_override'].includes(p))return false;const txt=((m&&m.slice(0,2).join(' '))||'').toLowerCase();return !(txt.includes('留空')||txt.includes('blank'));
+}
+function collectMissingInputs(includeScan){const missing=[];clearMissingInputs();
+  document.querySelectorAll('#params [data-p]').forEach(el=>{if(isModeHidden(el)||!paramRequiresValue(el))return;if((el.value||'').trim()===''){const grid=el.closest('.pgrid'),lab=el.closest('.fld')&&el.closest('.fld').querySelector('label');missing.push(missingInput(sectionTitle('params'),groupTitle(grid&&grid.dataset.grp),plainLabel(lab)||el.dataset.p,el));}});
+  if(includeScan){[['xmin','X min'],['xmax','X max'],['nx','X N'],['ymin','Y min'],['ymax','Y max'],['ny','Y N']].forEach(([id,label])=>{const el=document.getElementById(id);if(el&&(el.value||'').trim()==='')missing.push(missingInput(sectionTitle('scan'),'',label,el));});
+    document.querySelectorAll('#thresh [data-thr]').forEach(el=>{const cb=document.querySelector(`[data-thr-en="${el.dataset.thr}"]`);if(cb&&!cb.checked)return;if((el.value||'').trim()==='')missing.push(missingInput(sectionTitle('window'),'',`${el.dataset.thr} ${el.dataset.op==='ge'?'≥':'≤'}`,el));});}
+  missing.forEach(markMissingInput);return missing;
+}
+function warnMissingInputs(missing){if(!missing.length)return true;const first=missing[0];const sec=first.el&&first.el.closest('.sec');if(sec)sec.classList.remove('collapsed');const e=document.getElementById('err');const path=[first.section,first.group,first.label].filter(Boolean).join(' / ');if(e){e.textContent=L(`输入项为空：${path}${missing.length>1?`（另有 ${missing.length-1} 项）`:''}`,`Empty input: ${path}${missing.length>1?` (${missing.length-1} more)`:''}`);e.scrollIntoView({block:'nearest'});}if(first.el&&first.el.focus)first.el.focus();return false;}
+function validateRequiredInputs(includeScan){return warnMissingInputs(collectMissingInputs(!!includeScan));}
 function cleanStellOverrides(o){
   if(CUR!=='stellarator')return o;
   const mode=stellGeomMode();
@@ -1611,7 +1630,7 @@ function cleanStellOverrides(o){
   return o;
 }
 function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='sep_model'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='tauE_scaling'){if(typeof v==='string'&&v)o[k]=v;}else if(OPAQUE_PARAMS.has(k)&&isPlainObject(v))o[k]=v;else if(Array.isArray(v)){const a=v.filter(x=>typeof x==='number'&&isFinite(x));if(a.length)o[k]=a;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return cleanStellOverrides(o);}
-async function recompute(){const r=await jpost('/api/run',{config:CUR,overrides:clean()});const ok=applyRun(r);if(ok&&VIEW!=='popcon')setView(VIEW);}
+async function recompute(){if(!validateRequiredInputs(false))return;const r=await jpost('/api/run',{config:CUR,overrides:clean()});const ok=applyRun(r);if(ok&&VIEW!=='popcon')setView(VIEW);}
 const LIVEBAR_FIELDS=[['lbPfus','Pfus','hot'],['lbQ','Qfus','hot'],['lbH98','H98','cool'],['lbBetaN','betaN',''],['lbPwall','Pwall','warn'],['lbTauE','tau_E','cool']];
 function updateLiveBar(o){
   for(const[id,key,cls]of LIVEBAR_FIELDS){
@@ -2106,6 +2125,7 @@ function drawProfiles(){
     {type:'scatter',mode:'lines',x:X,y:TT,name:'T/T<sub>0</sub>',line:{color:tCol,width:2.6}}],LAYOUT(xl,L('归一化值','normalized')),{responsive:true,displayModeBar:false});
 }
 async function runScan(){
+  if(!validateRequiredInputs(true))return;
   run.disabled=true;const t=run.textContent;run.textContent='⟳ '+L('计算中…','computing…');err.textContent='';
   try{
     const body=scanRequestBody();
