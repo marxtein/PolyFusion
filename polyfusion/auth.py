@@ -308,10 +308,19 @@ def _user_dict(user) -> dict:
         "username": metadata.get("username"),
         "email": getattr(user, "email", None),
         "email_verified": bool(email_confirmed),
+        "affiliation": metadata.get("affiliation"),
+        "is_admin": False,
     }
 
 
-def register(username: str, email: str, password: str, password2: str) -> dict:
+def register(
+    username: str,
+    email: str,
+    password: str,
+    password2: str,
+    *,
+    affiliation: str | None = None,
+) -> dict:
     """Register a new user via Supabase Auth.
 
     Returns ``{"user_id", "username", "email", "email_verification_sent"}``.
@@ -327,11 +336,14 @@ def register(username: str, email: str, password: str, password2: str) -> dict:
 
     client = supabase_client()
     try:
+        data = {"username": username}
+        if affiliation:
+            data["affiliation"] = affiliation.strip()
         resp = client.auth.sign_up(
             {
                 "email": email,
                 "password": password,
-                "options": {"data": {"username": username}},
+                "options": {"data": data},
             }
         )
     except Exception as exc:

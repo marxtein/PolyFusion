@@ -198,6 +198,8 @@
   .userbox{display:inline-flex;align-items:center;gap:8px;margin-left:6px;padding:3px 9px;border:1px solid var(--line2);
     border-radius:20px;background:var(--panel2);font-size:11px;color:var(--mut)}
   .userbox .uname{color:var(--fg);font-weight:600}
+  .userbox.guest .uname{color:var(--teal)}
+  .userbox .aff{font-size:10px;color:var(--dim);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .userbox button{border:0;background:transparent;color:var(--mut);cursor:pointer;font-size:11px;padding:0}
   .userbox button:hover{color:var(--red)}
   /* ---- phase 2: live status strip + collapsible sections ---- */
@@ -266,6 +268,7 @@
       </div>
       <div class="fld" id="authUserWrap" style="display:none"><label>用户名 Username</label><input id="authUser" type="text" autocomplete="username"></div>
       <div class="fld" id="authEmailWrap"><label>邮箱 Email</label><input id="authEmail" type="email" autocomplete="email" placeholder="邮箱 Email"></div>
+      <div class="fld" id="authAffWrap" style="display:none"><label>单位 Affiliation <span>(可选)</span></label><input id="authAff" list="affiliationOptions" type="text" autocomplete="organization" placeholder="ASIPP / 清华大学 / PPPL"><datalist id="affiliationOptions"><option value="ASIPP"><option value="SWIP"><option value="清华大学"><option value="北京大学"><option value="MIT"><option value="PPPL"></datalist></div>
       <div class="fld"><label>密码 Password</label><input id="authPass" type="password" autocomplete="current-password"></div>
       <div class="fld" id="authPass2Wrap" style="display:none"><label>确认密码 Confirm password</label><input id="authPass2" type="password" autocomplete="new-password" placeholder="确认密码 Confirm password"></div>
       <div class="authErr" id="authErr"></div>
@@ -286,7 +289,7 @@
     <span id="stCfgL">位形</span> <span class="val" id="stCfg">—</span>
     <span id="stRxL">反应</span> <span class="val" id="stRx">—</span>
     <span><span class="dot"></span> <span class="val">CORE ONLINE</span></span>
-    <span class="userbox" id="userBox" style="display:none"><span class="uname" id="userName">—</span><button class="unverified" id="unverifiedBadge" style="display:none" title="邮箱未验证 / Email unverified">邮箱未验证</button><button id="logoutBtn">退出</button></span>
+    <span class="userbox" id="userBox" style="display:none"><span class="uname" id="userName">—</span><span class="aff" id="userAff" style="display:none"></span><button class="unverified" id="unverifiedBadge" style="display:none" title="邮箱未验证 / Email unverified">邮箱未验证</button><button id="logoutBtn">退出</button></span>
     <button class="hbtn book" id="manualBtn" title="使用说明书 / Manual">说明书</button>
     <button class="hbtn report" id="reportBtn" title="一键生成模拟报告 / Generate simulation report">📋 报告</button>
     <button class="hbtn" id="helpBtn">?</button>
@@ -476,7 +479,8 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Contours</b>: choose which POPCON contours show.<br><b>6. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; export results/scan.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='shape',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
 let THEME=((()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}}))();
-let AUTH_REQUIRED=false,AUTH_MODE='login',AUTH_USER=null;
+let AUTH_REQUIRED=false,GUEST_MODE=false,AUTH_MODE='login',AUTH_USER=null;
+let AUTH_STATE={user_id:null,user:null,email:null,email_verified:true,affiliation:null,is_admin:false,is_guest:false};
 class AuthRequiredError extends Error{constructor(m){super(m);this.name='AuthRequiredError';}}
 let EQMAN={};  // bundled real-equilibrium manifest {config:{preset:{file,format,...}}}
 let STELL_STASH={};
@@ -806,20 +810,33 @@ function showAuthWall(){
   const e=document.getElementById('authEmail');if(e)setTimeout(()=>e.focus(),50);
 }
 function hideAuthWall(){document.getElementById('authWall').classList.remove('on');}
-function applyAuthUser(user,email,emailVerified){
-  AUTH_USER=user;
+function guestIdentity(){return{user_id:'__guest__',user:'__guest__',email:null,email_verified:false,affiliation:null,is_admin:false};}
+function applyAuthState(me){
+  const raw=me||{};
+  const isGuest=raw.user==='__guest__'||raw.user==='__anon__';
+  const user=raw.user||null;
+  AUTH_STATE={user_id:raw.user_id||null,user,email:raw.email||null,email_verified:raw.email_verified!==false,affiliation:raw.affiliation||null,is_admin:!!raw.is_admin,is_guest:isGuest};
+  AUTH_USER=isGuest?null:user;
   const box=document.getElementById('userBox');
+  const aff=document.getElementById('userAff');
   const badge=document.getElementById('unverifiedBadge');
-  if(!user){if(box)box.style.display='none';if(badge)badge.style.display='none';return;}
-  if(box){box.style.display='inline-flex';document.getElementById('userName').textContent=user;box.title=email||'';}
-  const unverified=(emailVerified===false)&&user!=='__anon__';
+  const logout=document.getElementById('logoutBtn');
+  if(!user){if(box)box.style.display='none';if(badge)badge.style.display='none';if(aff)aff.style.display='none';return;}
+  if(box){box.style.display='inline-flex';box.classList.toggle('guest',isGuest);document.getElementById('userName').textContent=isGuest?L('访客 Guest','Guest'):user;box.title=[raw.email,raw.affiliation].filter(Boolean).join(' · ');}
+  if(aff){
+    const parts=[];if(raw.is_admin)parts.push('ADMIN');if(raw.affiliation)parts.push(raw.affiliation);
+    aff.textContent=parts.join(' · ');aff.style.display=parts.length&&!isGuest?'':'none';
+  }
+  if(logout){logout.textContent=isGuest?L('登录','Login'):L('退出','Logout');logout.onclick=isGuest?()=>showAuthWall():doLogout;}
+  const unverified=(raw.email_verified===false)&&!isGuest;
   if(badge){
     badge.style.display=unverified?'':'none';
     badge.textContent=L('emailNotVerified','Email unverified');
     badge.title=L('emailNotVerified','Email unverified');
-    badge.onclick=unverified&&email?()=>requestResend(email):null;
+    badge.onclick=unverified&&raw.email?()=>requestResend(raw.email):null;
   }
 }
+function applyAuthUser(user,email,emailVerified){applyAuthState({user,email,email_verified:emailVerified});}
 function setAuthMode(mode){
   AUTH_MODE=mode;
   document.getElementById('atabLogin').classList.toggle('on',mode==='login');
@@ -828,11 +845,13 @@ function setAuthMode(mode){
   const hint=document.getElementById('authHint');
   const userWrap=document.getElementById('authUserWrap');
   const emailWrap=document.getElementById('authEmailWrap');
+  const affWrap=document.getElementById('authAffWrap');
   const pass2Wrap=document.getElementById('authPass2Wrap');
   const pass=document.getElementById('authPass');
   const pass2=document.getElementById('authPass2');
   if(userWrap)userWrap.style.display=mode==='register'?'':'none';
   if(emailWrap)emailWrap.style.display='';  // email always visible (login + register)
+  if(affWrap)affWrap.style.display=mode==='register'?'':'none';
   if(pass2Wrap)pass2Wrap.style.display=mode==='register'?'':'none';
   if(pass)pass.setAttribute('autocomplete',mode==='login'?'current-password':'new-password');
   if(pass2)pass2.setAttribute('autocomplete','new-password');
@@ -904,9 +923,10 @@ async function doAuth(){
     if(isReg){
       const username=(document.getElementById('authUser').value||'').trim();
       const password2=document.getElementById('authPass2').value||'';
+      const affiliation=(document.getElementById('authAff').value||'').trim();
       if(!email){err.textContent=L('请输入邮箱','Please enter your email');return;}
       if(password2!==password){err.textContent=L('两次输入的密码不一致','Passwords do not match');return;}
-      body={username,password,email,password2};
+      body={username,password,email,password2,affiliation};
     }else{
       if(!email){err.textContent=L('请输入邮箱','Please enter your email');return;}
     }
@@ -941,18 +961,20 @@ async function doAuth(){
       if(!lr.ok){const ld=await lr.json().catch(()=>({}));err.textContent=ld.error||'login failed after register';return;}
     }
     document.getElementById('authPass').value='';
-    if(isReg){document.getElementById('authPass2').value='';document.getElementById('authEmail').value='';document.getElementById('authUser').value='';}
+    if(isReg){document.getElementById('authPass2').value='';document.getElementById('authEmail').value='';document.getElementById('authUser').value='';document.getElementById('authAff').value='';}
     const me=await jget('/api/auth/me');
-    applyAuthUser(me&&me.user?me.user:(isReg?body.username:email),me&&me.email?me.email:null,me?!!me.email_verified:true);
+    applyAuthState(me&&me.user?me:{user:isReg?body.username:email,email:me&&me.email?me.email:null,email_verified:me?!!me.email_verified:true});
     hideAuthWall();
     if(!CONFIGS)await initAfterAuth();
   }catch(e){err.textContent=(e&&e.message)||String(e);}
   finally{btn.disabled=false;btn.textContent=orig;}
 }
 async function doLogout(){
+  if(AUTH_STATE&&AUTH_STATE.is_guest){showAuthWall();return;}
   try{await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'});}catch(e){}
-  applyAuthUser(null);AUTH_USER=null;
-  if(AUTH_REQUIRED){showAuthWall();}
+  if(GUEST_MODE){applyAuthState(guestIdentity());}
+  else{applyAuthUser(null);AUTH_USER=null;}
+  if(AUTH_REQUIRED&&!GUEST_MODE){showAuthWall();}
 }
 
 
@@ -963,11 +985,15 @@ async function init(){
   try{
     const meta=await jget('/api/meta');
     AUTH_REQUIRED=!!meta.auth_required;
-  }catch(e){AUTH_REQUIRED=false;}
+    GUEST_MODE=!!meta.guest_mode;
+  }catch(e){AUTH_REQUIRED=false;GUEST_MODE=false;}
   if(AUTH_REQUIRED){
-    const me=await jget('/api/auth/me');
-    if(!me||!me.user||me.user==='__anon__'){showAuthWall();return;}
-    applyAuthUser(me.user, me && me.email ? me.email : null, me ? !!me.email_verified : true);
+    let me=null;
+    try{me=await jget('/api/auth/me');}catch(e){if(!GUEST_MODE){showAuthWall();return;}}
+    if(!me||!me.user||me.user==='__anon__'){
+      if(GUEST_MODE){applyAuthState(guestIdentity());}
+      else{showAuthWall();return;}
+    }else{applyAuthState(me);}
   }
   await initAfterAuth();
 }
@@ -2104,7 +2130,8 @@ td:first-child,th:first-child{font-family:monospace;color:#49586f;white-space:no
   el('authSubmit').onclick=doAuth;
   el('logoutBtn').onclick=doLogout;
   el('authPass').addEventListener('keydown',e=>{if(e.key==='Enter'){if(AUTH_MODE==='register'&&el('authPass2'))el('authPass2').focus();else doAuth();}});
-  el('authPass2').addEventListener('keydown',e=>{if(e.key==='Enter')doAuth();});
+  el('authPass2').addEventListener('keydown',e=>{if(e.key==='Enter'){if(AUTH_MODE==='register'&&el('authAff'))el('authAff').focus();else doAuth();}});
+  el('authAff').addEventListener('keydown',e=>{if(e.key==='Enter')doAuth();});
   el('authUser').addEventListener('keydown',e=>{if(e.key==='Enter'){if(AUTH_MODE==='register'&&el('authEmail'))el('authEmail').focus();else el('authPass').focus();}});
   el('authEmail').addEventListener('keydown',e=>{if(e.key==='Enter')el('authPass').focus();});
   el('manualBtn').onclick=openManual;

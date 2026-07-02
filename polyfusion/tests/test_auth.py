@@ -54,6 +54,18 @@ def test_register_puts_username_into_options_data(fake):
     assert rec["username"] == "alice"
 
 
+def test_register_puts_affiliation_into_options_data(fake):
+    auth.register(
+        "alice",
+        "alice@example.com",
+        "password1",
+        "password1",
+        affiliation="ASIPP",
+    )
+    rec = fake.auth.users["alice@example.com"]
+    assert rec["affiliation"] == "ASIPP"
+
+
 def test_register_rejects_password_mismatch(fake):
     with pytest.raises(auth.AuthError, match="password"):
         auth.register("alice", "alice@example.com", "password1", "different")
@@ -126,7 +138,14 @@ def test_register_translates_retryable_error(fake):
 
 def test_login_returns_tokens_and_user_dict(fake):
     fake.auth.confirm_email_on = False
-    auth.register("alice", "alice@example.com", "password1", "password1")
+    auth.register(
+        "alice",
+        "alice@example.com",
+        "password1",
+        "password1",
+        affiliation="ASIPP",
+    )
+    fake.auth.users["alice@example.com"]["is_admin"] = True
     access, refresh, user = auth.login("alice@example.com", "password1")
     assert access
     assert refresh
@@ -134,6 +153,8 @@ def test_login_returns_tokens_and_user_dict(fake):
     assert user["email"] == "alice@example.com"
     assert user["email_verified"] is False
     assert user["user_id"]
+    assert user["affiliation"] == "ASIPP"
+    assert user["is_admin"] is False
 
 
 def test_login_invalid_credentials_raises(fake):

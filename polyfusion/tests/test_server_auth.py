@@ -201,6 +201,22 @@ def test_register_success_returns_user_and_verification_flag(inproc_server):
     assert isinstance(payload["email_verification_sent"], bool)
 
 
+def test_register_accepts_affiliation(inproc_server, fake):
+    status, payload, _ = _post(
+        inproc_server,
+        "/api/auth/register",
+        {
+            "username": "affuser",
+            "email": "aff@example.com",
+            "password": "supersecret",
+            "password2": "supersecret",
+            "affiliation": "ASIPP",
+        },
+    )
+    assert status == 200, payload
+    assert fake.auth.users["aff@example.com"]["affiliation"] == "ASIPP"
+
+
 # ---------------------------------------------------------------------------
 # Login
 # ---------------------------------------------------------------------------
@@ -274,16 +290,74 @@ def test_me_with_cookie_returns_user_info(inproc_server):
         headers={"Cookie": cookie_header},
     )
     assert status == 200, payload
+    assert payload["user_id"]
     assert payload["user"] == "alice"
     assert payload["email"] == "frank@example.com"
     assert "email_verified" in payload
+    assert payload["affiliation"] is None
+    assert payload["is_admin"] is False
+
+
+def test_me_returns_affiliation(inproc_server):
+    _post(
+        inproc_server,
+        "/api/auth/register",
+        {
+            "username": "ivan",
+            "email": "ivan@example.com",
+            "password": "supersecret",
+            "password2": "supersecret",
+            "affiliation": "ASIPP",
+        },
+    )
+    _, _, hdrs = _post(
+        inproc_server,
+        "/api/auth/login",
+        {"email": "ivan@example.com", "password": "supersecret"},
+    )
+    cookies = _cookies_from_headers(hdrs)
+    cookie_header = f"{srv.ACCESS_COOKIE}={cookies[srv.ACCESS_COOKIE]}"
+    status, payload, _ = _get(
+        inproc_server,
+        "/api/auth/me",
+        headers={"Cookie": cookie_header},
+    )
+    assert status == 200, payload
+    assert payload["affiliation"] == "ASIPP"
+
+
+def test_me_uses_profile_row_for_admin_flag(inproc_server, monkeypatch):
+    cookie_header = _register_and_login(inproc_server, email="admin@example.com")
+    calls = []
+
+    def fake_get_profile(access_token, user_id):
+        calls.append((access_token, user_id))
+        return {"affiliation": "ASIPP Admin", "is_admin": True}
+
+    monkeypatch.setattr(srv.profile_mod, "get_profile", fake_get_profile)
+    status, payload, _ = _get(
+        inproc_server,
+        "/api/auth/me",
+        headers={"Cookie": cookie_header},
+    )
+    assert status == 200, payload
+    assert calls and calls[0][1] == payload["user_id"]
+    assert payload["affiliation"] == "ASIPP Admin"
+    assert payload["is_admin"] is True
 
 
 def test_me_anonymous_when_require_auth_off(inproc_server, monkeypatch):
     monkeypatch.setattr(srv, "REQUIRE_AUTH", False)
     status, payload, _ = _get(inproc_server, "/api/auth/me")
     assert status == 200
-    assert payload == {"user": "__anon__", "email": None, "email_verified": False}
+    assert payload == {
+        "user_id": "__anon__",
+        "user": "__anon__",
+        "email": None,
+        "email_verified": False,
+        "affiliation": None,
+        "is_admin": False,
+    }
 
 
 # ---------------------------------------------------------------------------

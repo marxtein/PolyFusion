@@ -104,7 +104,11 @@ class FakeSupabaseAuth:
         return _AttrBag(
             id=rec["user_id"],
             email=rec["email"],
-            user_metadata={"username": rec["username"]},
+            user_metadata={
+                "username": rec["username"],
+                "affiliation": rec.get("affiliation"),
+                "is_admin": rec.get("is_admin", False),
+            },
             email_confirmed_at=rec.get("email_confirmed_at"),
             confirmation_sent_at=rec.get("confirmation_sent_at"),
         )
@@ -130,6 +134,8 @@ class FakeSupabaseAuth:
             "user_id": user_id,
             "email": email,
             "username": username,
+            "affiliation": data.get("affiliation"),
+            "is_admin": bool(data.get("is_admin")),
             "password": password,
             "email_confirmed_at": None,
             "confirmation_sent_at": confirmation_sent_at,

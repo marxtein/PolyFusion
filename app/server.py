@@ -57,8 +57,10 @@ from polyfusion.docs_generator import generate_manual  # noqa: E402
 from polyfusion.report_generator import generate_report  # noqa: E402
 from polyfusion import history as history_mod  # noqa: E402
 from polyfusion import admin as admin_mod  # noqa: E402
+from polyfusion import profile as profile_mod  # noqa: E402
 from polyfusion.history import HistoryError  # noqa: E402
 from polyfusion.admin import AdminError  # noqa: E402
+from polyfusion.profile import ProfileError  # noqa: E402
 from polyfusion.postgrest import PostgrestError  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -451,9 +453,12 @@ class Handler(BaseHTTPRequestHandler):
                     200,
                     json.dumps(
                         {
+                            "user_id": "__anon__",
                             "user": "__anon__",
                             "email": None,
                             "email_verified": False,
+                            "affiliation": None,
+                            "is_admin": False,
                         }
                     ),
                 )
@@ -461,14 +466,38 @@ class Handler(BaseHTTPRequestHandler):
             access = auth_mod.parse_session_cookie(cookie)
             info = auth_mod.get_user(access)
             if info is None:
+                if GUEST_MODE:
+                    return self._send(
+                        200,
+                        json.dumps(
+                            {
+                                "user_id": "__guest__",
+                                "user": "__guest__",
+                                "email": None,
+                                "email_verified": False,
+                                "affiliation": None,
+                                "is_admin": False,
+                            }
+                        ),
+                    )
                 return self._send(401, json.dumps({"error": "unauthorized"}))
+            profile = None
+            try:
+                profile = profile_mod.get_profile(access, info.get("user_id"))
+            except (ProfileError, PostgrestError):
+                profile = None
             return self._send(
                 200,
                 json.dumps(
                     {
+                        "user_id": info.get("user_id"),
                         "user": info.get("username"),
                         "email": info.get("email"),
                         "email_verified": bool(info.get("email_verified")),
+                        "affiliation": (profile or {}).get(
+                            "affiliation", info.get("affiliation")
+                        ),
+                        "is_admin": bool((profile or {}).get("is_admin")),
                     }
                 ),
             )
@@ -854,6 +883,7 @@ class Handler(BaseHTTPRequestHandler):
         password = req.get("password", "")
         password2 = req.get("password2", "")
         email = (req.get("email") or "").strip()
+        affiliation = (req.get("affiliation") or "").strip() or None
 
         # Require all four fields explicitly — Supabase auth is email-based, so
         # the legacy "username-only" fallback no longer applies.
@@ -866,7 +896,13 @@ class Handler(BaseHTTPRequestHandler):
             )
 
         try:
-            result = auth_mod.register(username, email, password, password2)
+            result = auth_mod.register(
+                username,
+                email,
+                password,
+                password2,
+                affiliation=affiliation,
+            )
         except AuthError as e:
             return self._send(400, json.dumps({"error": str(e)}))
         return self._send(

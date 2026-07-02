@@ -173,6 +173,19 @@ def test_meta_reports_guest_mode_off(strict_server):
     assert payload["guest_mode"] is False
 
 
+def test_guest_mode_me_returns_guest_identity(guest_server):
+    status, payload, _ = _get(guest_server, "/api/auth/me")
+    assert status == 200
+    assert payload == {
+        "user_id": "__guest__",
+        "user": "__guest__",
+        "email": None,
+        "email_verified": False,
+        "affiliation": None,
+        "is_admin": False,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Strict mode (GUEST_MODE off): no cookie → 401
 # ---------------------------------------------------------------------------
@@ -221,7 +234,9 @@ def test_guest_mode_history_still_requires_auth(guest_server):
     """Auth-only routes do NOT admit guests — /api/history still 401."""
     status, _, _ = _get(guest_server, "/api/history")
     assert status == 401
-    status, _, _ = _post(guest_server, "/api/history", {"kind": "run", "config": "x", "inputs": {}})
+    status, _, _ = _post(
+        guest_server, "/api/history", {"kind": "run", "config": "x", "inputs": {}}
+    )
     assert status == 401
 
 
@@ -257,9 +272,7 @@ def test_authenticated_compute_rate_limit_is_higher(guest_server):
     for _ in range(srv.GUEST_COMPUTE_LIMIT):
         _post(guest_server, "/api/run", body)  # guest bucket
     # Authenticated caller should still be well under their quota.
-    status, _, _ = _post(
-        guest_server, "/api/run", body, headers={"Cookie": cookie}
-    )
+    status, _, _ = _post(guest_server, "/api/run", body, headers={"Cookie": cookie})
     assert status == 200
     # And driving past GUEST_COMPUTE_LIMIT as guest stays blocked.
     status, payload, _ = _post(guest_server, "/api/run", body)
@@ -272,9 +285,7 @@ def test_authenticated_compute_rate_limit_kicks_in(guest_server):
     cookie = _login_cookie(guest_server)
     body = {"config": "tokamak", "preset": "ITER"}
     for i in range(srv.USER_COMPUTE_LIMIT):
-        status, _, _ = _post(
-            guest_server, "/api/run", body, headers={"Cookie": cookie}
-        )
+        status, _, _ = _post(guest_server, "/api/run", body, headers={"Cookie": cookie})
         assert status == 200, f"call {i} should succeed, got {status}"
     status, payload, _ = _post(
         guest_server, "/api/run", body, headers={"Cookie": cookie}
