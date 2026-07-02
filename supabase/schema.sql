@@ -54,7 +54,6 @@ grant update (affiliation) on public.profiles to authenticated;
 -- PostgREST never runs queries as `postgres`; every role that will appear in a
 -- Bearer token MUST have GRANTs on the tables it touches.
 grant select on public.profiles to anon, authenticated, service_role;
-grant select, insert, delete on public.computations to anon, authenticated, service_role;
 
 -- Auto-provision a profiles row when auth.users gains a row. The username and
 -- affiliation are pulled from raw_user_meta_data which the PolyFusion register
@@ -94,6 +93,8 @@ create table if not exists public.computations (
 
 create index if not exists computations_user_created_idx
   on public.computations (user_id, created_at desc);
+
+grant select, insert, delete on public.computations to anon, authenticated, service_role;
 
 alter table public.computations enable row level security;
 
