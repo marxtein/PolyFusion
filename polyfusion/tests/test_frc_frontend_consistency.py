@@ -21,6 +21,9 @@ def test_frontend_states_frc_fit_and_dipole_coordinate_and_wall_limits():
     src = open(INDEX, encoding="utf-8").read()
     assert "BORAY 风格 Z-R 轴对称半平面" in src
     assert "separatrix ψ=0 and closed flux surfaces are drawn for R≥0 only" in src
+    assert 'data-frc-view="half"' in src
+    assert 'data-frc-view="full"' in src
+    assert "Full FRC cross-section" in src
     assert "ρ<sub>U</sub>=ln(U/U<sub>in</sub>)/ln(U<sub>out</sub>/U<sub>in</sub>)" in src
     assert "球形面积代理" in src
     assert "spherical-area proxy" in src
