@@ -27,6 +27,16 @@ docs/
 .env.*
 !.env.example
 
+# Local agent and planning artifacts
+.omc/
+.planning/
+
+# Local generated drafts
+latex_paper/
+local-backup-pre-feature/
+polyfusion-project-docs/
+
 # Worktrees
 .worktrees/
+.claude/worktrees/
 .trash
