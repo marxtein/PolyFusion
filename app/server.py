@@ -55,6 +55,7 @@ from polyfusion import auth as auth_mod  # noqa: E402
 from polyfusion.auth import AuthError  # noqa: E402
 from polyfusion.docs_generator import generate_manual  # noqa: E402
 from polyfusion.report_generator import generate_report  # noqa: E402
+from polyfusion.ai_report import AiReportError, generate_ai_report_analysis  # noqa: E402
 from polyfusion import history as history_mod  # noqa: E402
 from polyfusion import admin as admin_mod  # noqa: E402
 from polyfusion import profile as profile_mod  # noqa: E402
@@ -96,6 +97,7 @@ USE_HTTPS = os.environ.get("USE_HTTPS", "0") == "1"
 # routes 401 as before. Auth-only routes (/api/history, /api/admin) ignore
 # this and always require a real session.
 GUEST_MODE = os.environ.get("GUEST_MODE", "1") == "1"
+DEBUG_AUTH = os.environ.get("POLYFUSION_DEBUG_AUTH", "0") == "1"
 
 # Two-cookie session design:
 #   - ACCESS_COOKIE  is sent on every request (Path=/) and validated locally
@@ -574,8 +576,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._handle_auth_login(n)
         if self.path == "/api/auth/logout":
             return self._handle_auth_logout()
+        if self.path == "/api/auth/delete":
+            return self._handle_auth_delete()
         if self.path == "/api/auth/resend":
             return self._handle_auth_resend(n)
+        if self.path == "/api/debug/auth/register":
+            return self._handle_debug_auth_register(n)
 
         if self.path == "/api/stellarator/equilibrium/preview":
             if not self._require_auth():
@@ -626,6 +632,40 @@ class Handler(BaseHTTPRequestHandler):
                 200,
                 html_body,
                 ctype="text/html; charset=utf-8",
+                cache_control="no-store, max-age=0",
+            )
+
+        if self.path == "/api/report/ai":
+            principal, _role = self._principal()
+            if not principal:
+                self._send(
+                    401,
+                    json.dumps({"error": "unauthorized", "auth_required": True}),
+                )
+                return None
+            if n > MAX_REPORT_BYTES:
+                limit_mib = MAX_REPORT_BYTES // (1024 * 1024)
+                return self._send(
+                    413,
+                    json.dumps({"error": f"report body exceeds {limit_mib} MiB limit"}),
+                )
+            try:
+                req = json.loads(self.rfile.read(n) or b"{}")
+                req.setdefault("user", principal)
+                analysis = generate_ai_report_analysis(req)
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+            except AiReportError as e:
+                return self._send(
+                    502, json.dumps({"error": str(e)}, ensure_ascii=False)
+                )
+            except Exception as e:
+                return self._send(
+                    400, json.dumps({"error": f"{type(e).__name__}: {e}"})
+                )
+            return self._send(
+                200,
+                json.dumps({"analysis": analysis}, ensure_ascii=False),
                 cache_control="no-store, max-age=0",
             )
 
@@ -982,6 +1022,77 @@ class Handler(BaseHTTPRequestHandler):
             200,
             json.dumps({"ok": True}),
             set_cookie=_clear_auth_cookies(),
+        )
+
+    def _handle_auth_delete(self):
+        client_ip = _client_ip(self.headers)
+        if not _check_rate_limit(client_ip, _RATE_LIMIT_MAX, _RATE_LIMIT_WINDOW):
+            return self._send(429, json.dumps({"error": "rate limit exceeded"}))
+        user = self._require_auth()
+        if not user:
+            return None
+        access = getattr(self, "_access_token", None)
+        if not access:
+            return self._send(500, json.dumps({"error": "session token missing"}))
+        refresh = getattr(self, "_refresh_token", None) or _parse_refresh_cookie(
+            self.headers.get("Cookie")
+        )
+        try:
+            profile_mod.delete_current_account(access)
+        except (ProfileError, PostgrestError) as e:
+            return self._send(400, json.dumps({"error": str(e)}))
+        try:
+            auth_mod.logout(access, refresh)
+        except Exception:
+            pass
+        return self._send(
+            200,
+            json.dumps({"ok": True}),
+            set_cookie=_clear_auth_cookies(),
+        )
+
+    def _is_loopback_request(self) -> bool:
+        host = (self.client_address[0] if self.client_address else "").strip()
+        return host == "::1" or host.startswith("127.")
+
+    def _handle_debug_auth_register(self, n: int):
+        if not DEBUG_AUTH or not self._is_loopback_request():
+            return self._send(404, json.dumps({"error": "not found"}))
+        client_ip = _client_ip(self.headers)
+        if not _check_rate_limit(client_ip, _RATE_LIMIT_MAX, _RATE_LIMIT_WINDOW):
+            return self._send(429, json.dumps({"error": "rate limit exceeded"}))
+        try:
+            req = json.loads(self.rfile.read(n) or b"{}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+        username = req.get("username", "")
+        password = req.get("password", "")
+        password2 = req.get("password2", "")
+        email = (req.get("email") or "").strip()
+        affiliation = (req.get("affiliation") or "").strip() or None
+        try:
+            result = auth_mod.debug_create_verified_user(
+                username,
+                email,
+                password,
+                password2,
+                affiliation=affiliation,
+            )
+            access, refresh, user = auth_mod.login(email, password)
+        except AuthError as e:
+            return self._send(400, json.dumps({"error": str(e)}))
+        access_cookie, refresh_cookie = _cookie_for_tokens(access, refresh)
+        return self._send(
+            200,
+            json.dumps(
+                {
+                    "ok": True,
+                    "user": result.get("username") or user.get("username"),
+                    "email_verification_sent": False,
+                    "debug": True,
+                }
+            ),
+            set_cookie=[access_cookie, refresh_cookie],
         )
 
     def _handle_auth_resend(self, n: int):

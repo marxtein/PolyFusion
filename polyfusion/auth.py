@@ -13,9 +13,9 @@ Public surface used by ``app/server.py``:
     - ``validate_session(access_token, refresh_token=None) -> str | None``
     - ``parse_session_cookie(cookie_header) -> str | None``
 
-The web process only ever reads ``SUPABASE_URL`` and ``SUPABASE_ANON_KEY``.
-The service-role key is never imported here; it lives exclusively in the
-one-shot migration script.
+The normal web process only reads ``SUPABASE_URL`` and ``SUPABASE_ANON_KEY``.
+A service-role key is accepted only by the explicit local debug registration
+path, which ``app/server.py`` hides unless ``POLYFUSION_DEBUG_AUTH=1``.
 
 JWT verification is performed locally (against the Supabase JWKS) so that
 each authenticated request does not pay a network round-trip. A near-expiry
@@ -29,10 +29,13 @@ mint tokens) avoid the asymmetric-key machinery.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import threading
 import time
+import urllib.error
+import urllib.request
 from email.utils import parseaddr
 from typing import Optional
 
@@ -362,6 +365,70 @@ def register(
         "username": username,
         "email": email,
         "email_verification_sent": verification_sent,
+    }
+
+
+def debug_create_verified_user(
+    username: str,
+    email: str,
+    password: str,
+    password2: str,
+    *,
+    affiliation: str | None = None,
+) -> dict:
+    username = validate_username(username)
+    email = validate_email(email)
+    validate_password(password)
+    if password2 != password:
+        raise AuthError("passwords do not match")
+
+    base_url = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+    service_key = (
+        os.environ.get("POLYFUSION_DEBUG_SERVICE_ROLE_KEY")
+        or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+        or ""
+    ).strip()
+    if not base_url or not service_key:
+        raise AuthError("debug auth is not configured")
+
+    metadata = {"username": username}
+    if affiliation:
+        metadata["affiliation"] = affiliation.strip()
+    body = {
+        "email": email,
+        "password": password,
+        "email_confirm": True,
+        "user_metadata": metadata,
+    }
+    request = urllib.request.Request(
+        f"{base_url}/auth/v1/admin/users",
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {service_key}",
+            "apikey": service_key,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30.0) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode("utf-8", errors="replace").lower()
+        if exc.code in (400, 409, 422) and (
+            "already" in body_text or "duplicate" in body_text
+        ):
+            raise AuthError("registration failed") from exc
+        raise AuthError("debug registration failed") from exc
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise AuthError("debug registration failed") from exc
+
+    user_id = payload.get("id") if isinstance(payload, dict) else None
+    return {
+        "user_id": user_id,
+        "username": username,
+        "email": email,
+        "email_verification_sent": False,
     }
 
 

@@ -40,6 +40,30 @@ $$;
 
 grant execute on function public.is_admin(uuid) to authenticated, anon, service_role;
 
+-- Current-user account deletion. Runs with definer privileges so the caller can
+-- delete their own auth.users row without exposing the service-role key to the
+-- web process; profiles and computations cascade via their foreign keys.
+create or replace function public.delete_current_user()
+returns boolean
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  target_uid uuid := auth.uid();
+begin
+  if target_uid is null then
+    raise exception 'not authenticated' using errcode = '28000';
+  end if;
+
+  delete from auth.users where id = target_uid;
+  return found;
+end;
+$$;
+
+revoke all on function public.delete_current_user() from public;
+grant execute on function public.delete_current_user() to authenticated;
+
 -- Admins may read all profiles (for the admin dashboard).
 drop policy if exists "profiles_select_admin" on public.profiles;
 create policy "profiles_select_admin" on public.profiles

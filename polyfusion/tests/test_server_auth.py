@@ -217,6 +217,66 @@ def test_register_accepts_affiliation(inproc_server, fake):
     assert fake.auth.users["aff@example.com"]["affiliation"] == "ASIPP"
 
 
+def test_debug_register_hidden_by_default(inproc_server):
+    status, payload, _ = _post(
+        inproc_server,
+        "/api/debug/auth/register",
+        {
+            "username": "debuguser",
+            "email": "debug@example.com",
+            "password": "supersecret",
+            "password2": "supersecret",
+        },
+    )
+    assert status == 404
+    assert payload == {"error": "not found"}
+
+
+def test_debug_register_creates_verified_session(inproc_server, fake, monkeypatch):
+    monkeypatch.setattr(srv, "DEBUG_AUTH", True)
+
+    def fake_debug_register(username, email, password, password2, *, affiliation=None):
+        old = fake.auth.confirm_email_on
+        fake.auth.confirm_email_on = False
+        try:
+            return srv.auth_mod.register(
+                username,
+                email,
+                password,
+                password2,
+                affiliation=affiliation,
+            )
+        finally:
+            fake.auth.confirm_email_on = old
+
+    monkeypatch.setattr(srv.auth_mod, "debug_create_verified_user", fake_debug_register)
+    status, payload, hdrs = _post(
+        inproc_server,
+        "/api/debug/auth/register",
+        {
+            "username": "debuguser",
+            "email": "debug@example.com",
+            "password": "supersecret",
+            "password2": "supersecret",
+            "affiliation": "ASIPP",
+        },
+    )
+    assert status == 200, payload
+    assert payload["ok"] is True
+    assert payload["debug"] is True
+    assert payload["email_verification_sent"] is False
+    cookies = _cookies_from_headers(hdrs)
+    cookie_header = f"{srv.ACCESS_COOKIE}={cookies[srv.ACCESS_COOKIE]}"
+    status, me, _ = _get(
+        inproc_server,
+        "/api/auth/me",
+        headers={"Cookie": cookie_header},
+    )
+    assert status == 200, me
+    assert me["user"] == "debuguser"
+    assert me["email"] == "debug@example.com"
+
+
 # ---------------------------------------------------------------------------
 # Login
 # ---------------------------------------------------------------------------
@@ -382,6 +442,41 @@ def test_logout_clears_both_cookies(inproc_server):
     assert srv.ACCESS_COOKIE in joined
     assert srv.REFRESH_COOKIE in joined
     assert "Max-Age=0" in joined
+
+
+def test_delete_account_removes_user_and_clears_cookies(
+    inproc_server, fake, monkeypatch
+):
+    cookie_header = _register_and_login(inproc_server, email="deleteme@example.com")
+
+    def fake_delete_current_account(access_token):
+        resp = fake.auth.get_user(access_token)
+        assert resp and resp.user
+        del fake.auth.users[resp.user.email]
+
+    monkeypatch.setattr(
+        srv.profile_mod, "delete_current_account", fake_delete_current_account
+    )
+    status, payload, hdrs = _post(
+        inproc_server,
+        "/api/auth/delete",
+        {},
+        headers={"Cookie": cookie_header},
+    )
+    assert status == 200, payload
+    assert payload == {"ok": True}
+    raw = "\n".join(hdrs.get_all("Set-Cookie") or [])
+    assert srv.ACCESS_COOKIE in raw
+    assert srv.REFRESH_COOKIE in raw
+    assert "Max-Age=0" in raw
+
+    status, payload, _ = _post(
+        inproc_server,
+        "/api/auth/login",
+        {"email": "deleteme@example.com", "password": "password1"},
+    )
+    assert status == 401
+    assert "error" in payload
 
 
 # ---------------------------------------------------------------------------

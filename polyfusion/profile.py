@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from polyfusion.postgrest import pg_rest
 
-__all__ = ["ProfileError", "get_profile"]
+__all__ = ["ProfileError", "delete_current_account", "get_profile"]
 
 
 class ProfileError(ValueError):
@@ -24,3 +24,18 @@ def get_profile(access_token: str, user_id: str) -> dict | None:
         raise ProfileError(f"PostgREST profile fetch failed: {status} {payload}")
     rows = payload if isinstance(payload, list) else []
     return rows[0] if rows else None
+
+
+def delete_current_account(access_token: str) -> None:
+    if not access_token:
+        raise ProfileError("session token missing")
+    status, payload = pg_rest(
+        "/rpc/delete_current_user",
+        access_token=access_token,
+        method="POST",
+        body={},
+    )
+    if status not in (200, 204):
+        raise ProfileError(f"PostgREST account delete failed: {status} {payload}")
+    if payload is False:
+        raise ProfileError("account delete failed")

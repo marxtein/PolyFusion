@@ -26,6 +26,7 @@ def test_manual_has_all_sections(config):
         "presets",
         "params",
         "outputs",
+        "dependencies",
         "workflow",
         "notes",
     ]
@@ -118,3 +119,31 @@ def test_key_params_have_units_for_known_docs():
         assert g["items"]
         for row in g["items"]:
             assert row["k"] and row["desc"]
+
+
+@pytest.mark.parametrize("config", ALL_CONFIGS)
+def test_manual_exposes_param_docs_for_all_registry_params(config):
+    spec = REGISTRY[config]
+    m = generate_manual(config, "zh")
+    assert set(m["param_docs"]) == set(spec.params)
+    for key, row in m["param_docs"].items():
+        assert row["k"] == key
+        assert row["desc"]
+
+
+def test_manual_exposes_output_interpretation_docs():
+    m = generate_manual("stellarator", "zh")
+    for key in ("Pwall", "Pheat", "nbar_o_Sudo", "H_ISS04"):
+        row = m["output_docs"][key]
+        assert row["reading"]
+        assert row["adjust"]
+
+
+def test_stellarator_manual_covers_geometry_inputs_and_outputs():
+    m = generate_manual("stellarator", "zh")
+    for key in ("iota", "shape", "Vp_override", "Sw_override", "rc", "zs"):
+        assert key in m["param_docs"]
+        assert m["param_docs"][key]["desc"]
+    for key in ("H_ISS04", "A_flux", "a_vol", "nbar_o_Sudo", "Vp_geom", "Sw_geom"):
+        assert key in m["output_docs"]
+        assert m["output_docs"][key]["desc"]

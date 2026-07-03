@@ -6,12 +6,14 @@ import os
 import re
 import sys
 import threading
+import urllib.error
 import urllib.request
 import json as jsonlib
 
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+from polyfusion import ai_report  # noqa: E402
 from polyfusion.report_generator import generate_report  # noqa: E402
 
 
@@ -150,6 +152,23 @@ def test_report_lang_switch_changes_section_titles():
     assert zh != en
 
 
+def test_report_includes_basic_and_ai_sections():
+    html = generate_report(_sample_data())
+    assert "基础报告" in html
+    assert "AI 分析报告" in html
+    assert "id='aiReport'" in html
+    assert "加载中" in html
+
+
+def test_report_embeds_markdown_export_and_ai_renderer():
+    html = generate_report(_sample_data())
+    assert "id='exportMarkdown'" in html
+    assert "POLYFUSION_REPORT_MARKDOWN" in html
+    assert "POLYFUSION_SET_AI_REPORT" in html
+    assert "renderMarkdown" in html
+    assert "text/markdown;charset=utf-8" in html
+
+
 def test_report_handles_minimal_input():
     html = generate_report({})
     assert "<!DOCTYPE html>" in html
@@ -226,6 +245,61 @@ def test_report_endpoint_serves_html(monkeypatch):
     assert "结论摘要" in payload
 
 
+def test_ai_report_falls_back_to_minimal_chat_payload(monkeypatch):
+    calls = []
+
+    def fake_post_json(base_url, path, payload, api_key, timeout):
+        calls.append((path, payload))
+        if len(calls) < 3:
+            raise urllib.error.HTTPError(
+                url="http://example.test",
+                code=400,
+                msg="bad",
+                hdrs=None,
+                fp=None,
+            )
+        return {"choices": [{"message": {"content": "minimal ok"}}]}
+
+    monkeypatch.setenv("CODEX_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_ENDPOINT", "auto")
+    monkeypatch.setattr(ai_report, "_post_json", fake_post_json)
+    assert ai_report.generate_ai_report_analysis(_sample_data()) == "minimal ok"
+    assert [path for path, _payload in calls] == [
+        "/responses",
+        "/chat/completions",
+        "/chat/completions",
+    ]
+    assert "verbosity" in calls[1][1]
+    assert "verbosity" not in calls[2][1]
+
+
+def test_ai_report_endpoint_serves_json(monkeypatch):
+    import app.server as srv
+
+    monkeypatch.setattr(srv, "REQUIRE_AUTH", False)
+    monkeypatch.setattr(srv, "generate_ai_report_analysis", lambda _req: "AI ok")
+    from app.server import Handler, ThreadingHTTPServer
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        body = jsonlib.dumps(_sample_data()).encode()
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/api/report/ai",
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as response:
+            payload = jsonlib.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+    assert payload == {"analysis": "AI ok"}
+
+
 def test_report_endpoint_rejects_oversized_body(monkeypatch):
     import app.server as srv
 
@@ -262,10 +336,13 @@ def test_frontend_exposes_report_buttons_and_handlers():
     assert 'id="reportBtn"' in html
     # export-panel full-report button
     assert 'id="genReport"' in html
-    # backend endpoint wired
+    # backend endpoints wired
     assert "/api/report" in html
+    assert "/api/report/ai" in html
     # JS entry points exist
     assert "function generateSimulationReport" in html
+    assert "requestAiReport" in html
+    assert "POLYFUSION_SET_AI_REPORT" in html
     assert "capturePlotImage" in html
     # size-limit helper: dense arrays must be stripped before upload
     assert "function stripLargeArrays" in html

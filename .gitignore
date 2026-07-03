@@ -29,3 +29,4 @@ docs/
 
 # Worktrees
 .worktrees/
+.trash

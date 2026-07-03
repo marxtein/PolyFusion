@@ -14,6 +14,7 @@ anything else is silently dropped.
 from __future__ import annotations
 
 import html
+import json
 import os
 import re
 import subprocess
@@ -33,6 +34,10 @@ h2{font-size:15px;color:#0c8678;border-bottom:1px solid #c3cddc;
 .meta{display:flex;flex-wrap:wrap;gap:6px 24px;font-size:12px;color:#49586f;
   margin:10px 0 0;padding:10px 14px;background:#fff;border:1px solid #e0e5ee;border-radius:6px}
 .meta b{color:#1a2332}
+.actions{margin:14px 0 4px;text-align:right}
+.actions button{border:1px solid #c3cddc;background:#fff;color:#0c3a5e;border-radius:5px;
+  padding:6px 10px;cursor:pointer;font-size:12px}
+.actions button:hover{border-color:#0c8678;color:#0c8678}
 table{width:100%;border-collapse:collapse;margin:6px 0 14px;background:#fff}
 th,td{padding:5px 9px;border-bottom:1px solid #e6ebf2;text-align:left;font-size:12px}
 th{background:#f0f4f9;color:#0c3a5e;font-weight:600}
@@ -47,7 +52,18 @@ tr.hl td{background:#fff7e8;font-weight:700}
 .empty{color:#8995a8;font-style:italic;padding:6px 0}
 .errlist{background:#fff0f1;border-left:3px solid #cc3a50;padding:8px 12px;
   border-radius:0 4px 4px 0;font-family:monospace;font-size:11.5px;color:#7a1f2c}
-@media print{.wrap{padding:8px 0}h2{page-break-after:avoid}
+.part-title{font-size:17px;border-bottom:2px solid #0c8678;margin-top:32px}
+.ai-report{background:#fff;border:1px solid #e0e5ee;border-radius:6px;padding:12px 14px;
+  font-size:12.5px;color:#1a2332}
+.ai-report.loading{color:#8995a8;font-style:italic;white-space:pre-wrap}
+.ai-report.error{background:#fff0f1;border-color:#f0c5cc;color:#7a1f2c;white-space:pre-wrap}
+.ai-report h1,.ai-report h2,.ai-report h3{border:0;margin:10px 0 6px;padding:0;color:#0c3a5e}
+.ai-report h1{font-size:16px}.ai-report h2{font-size:14px}.ai-report h3{font-size:13px}
+.ai-report p{margin:6px 0}.ai-report ul,.ai-report ol{margin:6px 0 8px 22px;padding:0}
+.ai-report li{margin:3px 0}.ai-report pre{background:#f0f4f9;border:1px solid #e0e5ee;
+  border-radius:4px;padding:8px;overflow:auto;white-space:pre-wrap}
+.ai-report code{font-family:"JetBrains Mono",monospace;background:#f0f4f9;border-radius:3px;padding:0 3px}
+@media print{.actions{display:none}.wrap{padding:8px 0}h2{page-break-after:avoid}
   .imgbox{page-break-inside:avoid}}
 """
 
@@ -233,6 +249,144 @@ def _image_block(images: dict, key: str, caption_zh: str, caption_en: str) -> st
     )
 
 
+def _md_fmt(x: Any) -> str:
+    rendered = _fmt(x)
+    return rendered.replace("|", "\\|").replace("\n", " ")
+
+
+def _md_table(rows: list[tuple[str, Any, str]]) -> str:
+    if not rows:
+        return "无 / none"
+    out = ["| 项目 / Item | 值 / Value | 单位 / Unit |", "|---|---:|---|"]
+    for key, value, unit in rows:
+        out.append(f"| {_md_fmt(key)} | {_md_fmt(value)} | {_md_fmt(unit)} |")
+    return "\n".join(out)
+
+
+def _report_markdown(
+    *,
+    title: str,
+    config: Any,
+    config_label: Any,
+    preset: Any,
+    user: Any,
+    ts: Any,
+    version: Any,
+    summary: str,
+    output_rows: list[tuple[str, Any, str]],
+    param_rows: list[tuple[str, Any, str]],
+    scan_rows: list[tuple[str, Any, str]],
+    image_keys: list[str],
+    disclaimer: str,
+    is_zh: bool,
+) -> str:
+    lines = [
+        f"# {_md_fmt(title)}",
+        "",
+        f"- 位形 / Config: {_md_fmt(config_label)}",
+        f"- 预设 / Preset: {_md_fmt(preset)}",
+        f"- 用户 / User: {_md_fmt(user)}",
+        f"- 时间 / Time: {_md_fmt(ts)}",
+        f"- 版本 / Version: {_md_fmt(version)}",
+        f"- Key: {_md_fmt(config)}",
+        "",
+        "## 基础报告" if is_zh else "## Basic Report",
+        "",
+        "### 一、结论摘要" if is_zh else "### 1. Summary",
+        "",
+        _md_fmt(summary),
+        "",
+        "### 二、工作点输出" if is_zh else "### 2. Operating-point outputs",
+        "",
+        _md_table(output_rows),
+        "",
+        "### 三、输入参数" if is_zh else "### 3. Input parameters",
+        "",
+        _md_table(param_rows),
+        "",
+        "### 四、POPCON 扫描摘要" if is_zh else "### 4. POPCON scan summary",
+        "",
+        _md_table(scan_rows),
+        "",
+        "### 五、图表" if is_zh else "### 5. Figures",
+        "",
+    ]
+    if image_keys:
+        labels = {"popcon": "POPCON", "shape": "Geometry", "profile": "Profiles"}
+        lines.extend(f"- {labels.get(key, key)}" for key in image_keys)
+    else:
+        lines.append("无图表 / no figures")
+    lines.extend(
+        [
+            "",
+            "### 六、注意事项" if is_zh else "### 6. Notes",
+            "",
+            _md_fmt(disclaimer),
+            "",
+            "## AI 分析报告" if is_zh else "## AI Analysis Report",
+            "",
+            "加载中…" if is_zh else "Loading…",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _report_script(markdown_doc: str, filename: str) -> str:
+    markdown_json = json.dumps(markdown_doc, ensure_ascii=False)
+    filename_json = json.dumps(filename, ensure_ascii=False)
+    return rf"""
+<script>
+(function(){{
+  const baseMarkdown={markdown_json};
+  const filename={filename_json};
+  window.POLYFUSION_REPORT_MARKDOWN=baseMarkdown;
+  function escapeHtml(s){{return String(s||'').replace(/[&<>\"]/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}}[c]));}}
+  function inline(s){{return escapeHtml(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');}}
+  function renderMarkdown(md){{
+    const lines=String(md||'').replace(/\r\n/g,'\n').split('\n');
+    const out=[];let list=null;let inCode=false;let code=[];
+    function closeList(){{if(list){{out.push('</'+list+'>');list=null;}}}}
+    for(const raw of lines){{
+      const line=raw.trimEnd();
+      if(line.trim().startsWith('```')){{
+        if(inCode){{out.push('<pre><code>'+escapeHtml(code.join('\n'))+'</code></pre>');code=[];inCode=false;}}
+        else{{closeList();inCode=true;code=[];}}
+        continue;
+      }}
+      if(inCode){{code.push(raw);continue;}}
+      if(!line.trim()){{closeList();continue;}}
+      let m=line.match(/^(#{1, 3})\s+(.+)$/);
+      if(m){{closeList();out.push('<h'+m[1].length+'>'+inline(m[2])+'</h'+m[1].length+'>');continue;}}
+      m=line.match(/^[-*]\s+(.+)$/);
+      if(m){{if(list!=='ul'){{closeList();out.push('<ul>');list='ul';}}out.push('<li>'+inline(m[1])+'</li>');continue;}}
+      m=line.match(/^\d+[.)]\s+(.+)$/);
+      if(m){{if(list!=='ol'){{closeList();out.push('<ol>');list='ol';}}out.push('<li>'+inline(m[1])+'</li>');continue;}}
+      closeList();out.push('<p>'+inline(line.trim())+'</p>');
+    }}
+    if(inCode)out.push('<pre><code>'+escapeHtml(code.join('\n'))+'</code></pre>');
+    closeList();
+    return out.join('');
+  }}
+  window.POLYFUSION_SET_AI_REPORT=function(text,isError){{
+    const box=document.getElementById('aiReport');if(!box)return;
+    const content=String(text||'');
+    if(isError){{box.className='ai-report error';box.textContent=content;return;}}
+    box.className='ai-report';box.innerHTML=renderMarkdown(content);
+    const aiTitle=baseMarkdown.includes('## AI 分析报告')?'## AI 分析报告':'## AI Analysis Report';
+    const aiStart=baseMarkdown.indexOf(aiTitle);
+    window.POLYFUSION_REPORT_MARKDOWN=(aiStart>=0?baseMarkdown.slice(0,aiStart):baseMarkdown+'\n\n')+aiTitle+'\n\n'+content+'\n';
+  }};
+  const btn=document.getElementById('exportMarkdown');
+  if(btn)btn.onclick=function(){{
+    const blob=new Blob([window.POLYFUSION_REPORT_MARKDOWN||baseMarkdown],{{type:'text/markdown;charset=utf-8'}});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(a.href);
+  }};
+}})();
+</script>
+"""
+
+
 def generate_report(data: dict) -> str:
     """Render a self-contained HTML report.
 
@@ -283,17 +437,35 @@ def generate_report(data: dict) -> str:
     )
 
     summary = _summary_text(last_run, last_scan)
+    output_rows = _outputs_rows(last_run)
+    param_rows = _params_rows(params)
+    scan_rows = (
+        [
+            ("xkey", last_scan.get("xkey"), ""),
+            ("ykey", last_scan.get("ykey"), ""),
+            ("nx", len(last_scan.get("x") or []), ""),
+            ("ny", len(last_scan.get("y") or []), ""),
+            ("n_invalid", last_scan.get("n_invalid", 0), ""),
+        ]
+        if last_scan
+        else []
+    )
+    image_keys = [
+        key
+        for key in ("popcon", "shape", "profile")
+        if _DATA_IMAGE_PNG_RE.match((images or {}).get(key) or "")
+    ]
 
     sections = []
+    sections.append(f"<h2 class='part-title'>{t('基础报告', 'Basic Report')}</h2>")
     sections.append(f"<h2>{t('一、结论摘要', '1. Summary')}</h2>")
     sections.append(f"<p>{_esc(summary)}</p>")
     sections.append(_errors_block(last_run))
 
     sections.append(f"<h2>{t('二、工作点输出', '2. Operating-point outputs')}</h2>")
-    sections.append(_outputs_table(_outputs_rows(last_run)))
+    sections.append(_outputs_table(output_rows))
 
     sections.append(f"<h2>{t('三、输入参数', '3. Input parameters')}</h2>")
-    param_rows = _params_rows(params)
     sections.append(
         _kv_table(param_rows)
         if param_rows
@@ -341,7 +513,32 @@ def generate_report(data: dict) -> str:
     sections.append(f"<h2>{t('六、注意事项', '6. Notes')}</h2>")
     sections.append(f"<div class='note'>{_esc(disclaimer)}</div>")
 
+    sections.append(
+        f"<h2 class='part-title'>{t('AI 分析报告', 'AI Analysis Report')}</h2>"
+    )
+    sections.append(
+        f"<div id='aiReport' class='ai-report loading'>{t('加载中…', 'Loading…')}</div>"
+    )
+
     body = "".join(sections)
+    markdown_doc = _report_markdown(
+        title=title,
+        config=config,
+        config_label=config_label,
+        preset=preset,
+        user=user,
+        ts=ts,
+        version=version,
+        summary=summary,
+        output_rows=output_rows,
+        param_rows=param_rows,
+        scan_rows=scan_rows,
+        image_keys=image_keys,
+        disclaimer=disclaimer,
+        is_zh=is_zh,
+    )
+    safe_filename = re.sub(r"[^A-Za-z0-9_.-]+", "_", f"polyfusion-{config}-{ts}.md")
+    report_script = _report_script(markdown_doc, safe_filename)
     html_doc = (
         "<!DOCTYPE html>"
         f"<html lang='{lang}'><head><meta charset='utf-8'>"
@@ -349,9 +546,10 @@ def generate_report(data: dict) -> str:
         f"<style>{_REPORT_CSS}</style></head><body>"
         f"<div class='wrap'><h1>{_esc(title)}</h1>"
         f"<div class='sub'>{_esc(config)} · preset {_esc(preset)}</div>"
-        f"{meta}{body}"
+        f"{meta}<div class='actions'><button id='exportMarkdown'>"
+        f"{t('导出 Markdown', 'Export Markdown')}</button></div>{body}"
         f"<div class='sub' style='margin-top:24px;text-align:right;color:#8995a8'>"
         f"PolyFusion · {_esc(version)} · {_esc(ts)}"
-        f"</div></div></body></html>"
+        f"</div></div>{report_script}</body></html>"
     )
     return html_doc
