@@ -1424,16 +1424,6 @@ function drawShape(){
         pc.querySelectorAll('.phbtn[data-frc-view]').forEach(b=>b.onclick=()=>{FRC_VIEW=b.dataset.frcView;try{localStorage.setItem('polyfusion_frc_view',FRC_VIEW)}catch(e){};pc.dataset.state='';drawShape();});
       }
     }
-    const upperEnvelope=(zs,rs,bins=220)=>{
-      const pts=[];for(let i=0;i<Math.min(zs.length,rs.length);i++){const z=+zs[i],r=+rs[i];if(isFinite(z)&&isFinite(r)&&r>=-1e-9)pts.push([z,Math.max(0,r)]);}
-      if(pts.length<3)return[pts.map(p=>p[0]),pts.map(p=>p[1])];
-      let zmin=Infinity,zmax=-Infinity;pts.forEach(p=>{if(p[0]<zmin)zmin=p[0];if(p[0]>zmax)zmax=p[0];});
-      if(!(zmax>zmin)){pts.sort((a,b)=>a[0]-b[0]);return[pts.map(p=>p[0]),pts.map(p=>p[1])];}
-      const rmax=Array(bins+1).fill(-Infinity);
-      pts.forEach(p=>{const k=Math.max(0,Math.min(bins,Math.round((p[0]-zmin)/(zmax-zmin)*bins)));if(p[1]>rmax[k])rmax[k]=p[1];});
-      const X=[],Y=[];for(let k=0;k<=bins;k++)if(isFinite(rmax[k])){X.push(zmin+(zmax-zmin)*k/bins);Y.push(rmax[k]);}
-      return[X,Y];
-    };
     const superE=(lam=1)=>{const X=[],Y=[];for(let i=0;i<=220;i++){const th=2*Math.PI*i/220,c=Math.cos(th),s=Math.sin(th);
       const cr=Math.sign(c)*Math.pow(Math.abs(c),2/p),sr=Math.sign(s)*Math.pow(Math.abs(s),2/p);
       X.push(lam*(v.l_s/2)*cr);Y.push(lam*v.r_s*sr);}return[X,Y];};
@@ -1478,22 +1468,18 @@ function drawShape(){
       lay.xaxis.range=[-v.l_s/2*1.18,v.l_s/2*1.18];lay.yaxis.range=[-Math.max(v.r_w*1.42,v.r_s*1.35),Math.max(v.r_w*1.42,v.r_s*1.35)];
       document.getElementById('plotMeta').innerHTML=`<span>${L('完整 FRC 截面；上下半径同时显示，用于检查完整分离面与内部磁面','Full FRC cross-section; both signs of radius are shown for checking the complete separatrix and internal flux surfaces')}</span>`;
     }else{
-      const ar=sh?upperEnvelope(sh.separatrix.z,sh.separatrix.r):superHalf(1);
+      const ar=superHalf(1);
       const Az=ar[0],Ar=ar[1],sepFillZ=[...Az,...[...Az].reverse()],sepFillR=[...Ar,...Az.map(()=>0).reverse()];
       add(lin(sepFillZ,sepFillR,GC('boundary'),2.6,true),'boundary');
       add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
       add(cv([-v.l_s/2*1.15,v.l_s/2*1.15],[0,0],GC('annot'),1.3,'dot'),'annot');
-      if(sh&&Array.isArray(sh.surfaces)&&sh.surfaces.length){
-        sh.surfaces.forEach(srf=>{const s=upperEnvelope(srf.z,srf.r,180);if(s[0].length>2)add(cv(s[0],s[1],GC('flux'),1.18,'solid'),'flux');});
-      }else{
-        [0.30,0.48,0.66,0.84].forEach(q=>{const s=superHalf(0.82*q);add(cv(s[0],s[1],GC('flux'),1.18,'solid'),'flux');});
-      }
-      if(sh&&Array.isArray(sh.open_lines)&&sh.open_lines.length){
-        sh.open_lines.forEach(ln=>{const s=upperEnvelope(ln.z,ln.r,120);if(s[0].length>1)add(cv(s[0],s[1],GC('open'),1.05,'dot'),'open');});
-      }else{
-        [0.48,0.72].forEach(yy=>add(cv([-v.l_s/2*1.15,-v.l_s/2*0.95,-v.l_s/2*0.72,v.l_s/2*0.72,v.l_s/2*0.95,v.l_s/2*1.15],
-          [yy*v.r_w,yy*v.r_w,yy*v.r_s*0.86,yy*v.r_s*0.86,yy*v.r_w,yy*v.r_w],GC('open'),1.05,'dot'),'open'));
-      }
+      const fluxLoop=q=>{const X=[],Y=[],zw=(v.l_s/2)*0.78*q,rh=(v.r_s-rn)*0.86*q;
+        for(let i=0;i<=180;i++){const th=2*Math.PI*i/180;X.push(zw*Math.cos(th));Y.push(rn+rh*Math.sin(th));}
+        return[X,Y];};
+      [0.30,0.48,0.66,0.84].forEach(q=>{const s=fluxLoop(q);add(cv(s[0],s[1],GC('flux'),1.18,'solid'),'flux');});
+      [0.50,0.72].forEach(yy=>{const X=[],Y=[];for(let i=0;i<=140;i++){const u=-1.15+2.30*i/140;
+          X.push((v.l_s/2)*u);Y.push(yy*v.r_w+(v.r_s*0.12)*Math.pow(Math.max(0,1-Math.pow(Math.abs(u/1.15),2)),0.5));}
+        add(cv(X,Y,GC('open'),1.05,'dot'),'open');});
       const nullZ=Az.length?[Az[0],Az[Az.length-1]]:[-v.l_s/2,v.l_s/2];
       add(cv(nullZ,[rn,rn],'#c792ff',1.7,'dash'),'annot');
       add(txt([0],[rn*1.07],[L('场零点 r_s/√2','field null r_s/√2')],'#c792ff'),'annot');
