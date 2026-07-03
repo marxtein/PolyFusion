@@ -28,11 +28,12 @@ def test_frontend_states_frc_fit_and_dipole_coordinate_and_wall_limits():
     assert "const frcPsiGrid=(sol=false,sgn=1)" in src
     assert "const frcShapeFactor=()=>Math.min(1,Math.max(2/3,+(v.f_shape==null?0.85:v.f_shape)))" in src
     assert "const sepMode=(v.sep_model==='mrr'||v.sep_model==='ma_xie')?'ma_xie':'superellipse'" in src
-    assert "const psiMax=0.96,psiStep=0.08,solStart=1.16,solEnd=1.72,solStep=0.28" in src
+    assert "const psiNearNull=0.02,psiMax=0.98,psiStep=0.07,solStart=1.16,solEnd=1.72,solStep=0.28" in src
     assert "type:'contour'" in src
-    assert "start:sol?solStart:psiStep,end:sol?solEnd:psiMax,size:sol?solStep:psiStep" in src
+    assert "const cs=sol?{start:solStart,end:solEnd,size:solStep}:{start:start??psiStep,end:end??psiMax,size:size??psiStep}" in src
+    assert "const addFrcFluxContours=sgn=>{add(frcPsiContour(false,sgn,psiNearNull,psiNearNull,1),'flux');add(frcPsiContour(false,sgn),'flux');}" in src
     assert "colorscale:[[0,c],[1,c]]" in src
-    assert "add(frcPsiContour(false,1),'flux');add(frcPsiContour(false,-1),'flux')" in src
+    assert "addFrcFluxContours(1);addFrcFluxContours(-1)" in src
     assert "add(frcPsiContour(true,1),'open');add(frcPsiContour(true,-1),'open')" in src
     assert "const rn=v.r_s/Math.SQRT2" in src
     assert "Full FRC cross-section" in src

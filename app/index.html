@@ -1440,7 +1440,7 @@ function drawShape(){
     const frcMFromShape=fs=>fs>=1-1e-9?80:Math.max(2,fs/(1-fs));
     const sepMode=(v.sep_model==='mrr'||v.sep_model==='ma_xie')?'ma_xie':'superellipse';
     const fs=frcShapeFactor(),shapeExp=sepMode==='ma_xie'?frcMFromShape(fs):frcPFromShape(fs);
-    const psiMax=0.96,psiStep=0.08,solStart=1.16,solEnd=1.72,solStep=0.28;
+    const psiNearNull=0.02,psiMax=0.98,psiStep=0.07,solStart=1.16,solEnd=1.72,solStep=0.28;
     const frcSepR=u=>{const au=Math.min(1,Math.abs(u));if(sepMode==='ma_xie')return v.r_s*Math.sqrt(Math.max(0,1-Math.pow(au,shapeExp)));
       return v.r_s*Math.pow(Math.max(0,1-Math.pow(au,shapeExp)),1/shapeExp);};
     const frcPsiNorm=(z,r)=>{const b=v.l_s/2,u=z/(b||1e-12),au=Math.abs(u),uc=Math.max(-1,Math.min(1,u)),rsu=frcSepR(uc);
@@ -1456,14 +1456,16 @@ function drawShape(){
       for(let j=0;j<ny;j++){const r=ymax*j/(ny-1),row=[];yb.push(r);for(let i=0;i<nx;i++)row.push(sol?frcSolPsiNorm(x[i],r):frcPsiNorm(x[i],r));zb.push(row);}
       if(sgn>=0)return{x,y:yb,z:zb};
       return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()};};
-    const frcPsiContour=(sol=false,sgn=1)=>{const g=frcPsiGrid(sol,sgn),c=sol?GC('open'):GC('flux');
-      return{type:'contour',x:g.x,y:g.y,z:g.z,autocontour:false,contours:{coloring:'lines',start:sol?solStart:psiStep,end:sol?solEnd:psiMax,size:sol?solStep:psiStep,showlabels:false},line:{color:c,width:1.05},colorscale:[[0,c],[1,c]],showscale:false,hoverinfo:'skip'};};
+    const frcPsiContour=(sol=false,sgn=1,start=null,end=null,size=null)=>{const g=frcPsiGrid(sol,sgn),c=sol?GC('open'):GC('flux');
+      const cs=sol?{start:solStart,end:solEnd,size:solStep}:{start:start??psiStep,end:end??psiMax,size:size??psiStep};
+      return{type:'contour',x:g.x,y:g.y,z:g.z,autocontour:false,contours:{coloring:'lines',start:cs.start,end:cs.end,size:cs.size,showlabels:false},line:{color:c,width:1.05},colorscale:[[0,c],[1,c]],showscale:false,hoverinfo:'skip'};};
+    const addFrcFluxContours=sgn=>{add(frcPsiContour(false,sgn,psiNearNull,psiNearNull,1),'flux');add(frcPsiContour(false,sgn),'flux');};
     if(FRC_VIEW==='full'){
       const up=frcSep(1),dn=frcSep(-1),ar=[[...up[0],...dn[0].reverse()],[...up[1],...dn[1].reverse()]];
       add(lin(ar[0],ar[1],GC('boundary'),2.6,true),'boundary');
       add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
       add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[-v.r_w,-v.r_w],GC('wall'),2.2),'wall');
-      add(frcPsiContour(false,1),'flux');add(frcPsiContour(false,-1),'flux');
+      addFrcFluxContours(1);addFrcFluxContours(-1);
       add(frcPsiContour(true,1),'open');add(frcPsiContour(true,-1),'open');
       const opR=[rn,-rn],opZ=[0,0];
       add({type:'scatter',mode:'markers+text',x:opZ,y:opR,text:[L('O 点','O-point'),L('O 点','O-point')],
@@ -1491,7 +1493,7 @@ function drawShape(){
       add(lin(sepFillZ,sepFillR,GC('boundary'),2.6,true),'boundary');
       add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
       add(cv([-v.l_s/2*1.15,v.l_s/2*1.15],[0,0],GC('annot'),1.3,'dot'),'annot');
-      add(frcPsiContour(false,1),'flux');
+      addFrcFluxContours(1);
       add(frcPsiContour(true,1),'open');
       const nullZ=Az.length?[Az[0],Az[Az.length-1]]:[-v.l_s/2,v.l_s/2];
       add(cv(nullZ,[rn,rn],'#c792ff',1.7,'dash'),'annot');
