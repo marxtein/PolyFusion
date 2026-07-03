@@ -1391,60 +1391,57 @@ function drawShape(){
     const prof=z=>{const az=Math.abs(z);if(az<=Lc/2)return a;const t=Math.min((az-Lc/2)/Math.max(Lth,1e-6),1);
       return a/Math.sqrt(1+(Rm-1)*Math.pow(Math.sin(Math.PI*t/2),2));};
     for(let i=0;i<=160;i++){const z=-Lc/2-Lth+(Lc+2*Lth)*i/160;Z.push(z);Rr.push(prof(z));}
-    const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rr].reverse().map(r=>-r)];
+    const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...Z.map(()=>0).reverse()];
     add(lin(Zb,Rb,GC('boundary'),2.6,true),'boundary');
     add(lin([-Lc/2-Lth,Lc/2+Lth],[a+gg,a+gg],GC('wall'),2.2),'wall');
-    add(lin([-Lc/2-Lth,Lc/2+Lth],[-(a+gg),-(a+gg)],GC('wall'),2.2),'wall');
-    [0.35,0.65,0.88].forEach(q=>{add(cv(Z,Rr.map(r=>q*r),GC('flux'),1.2,'solid'),'flux');add(cv(Z,Rr.map(r=>-q*r),GC('flux'),1.2,'solid'),'flux');});
+    add(cv([-Lc/2-Lth,Lc/2+Lth],[0,0],GC('annot'),1.3,'dot'),'annot');
+    [0.35,0.65,0.88].forEach(q=>add(cv(Z,Rr.map(r=>q*r),GC('flux'),1.2,'solid'),'flux'));
     const zt=Lc/2+Lth,rt=prof(zt);
-    add(cv([zt,zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
-    add(cv([-zt,-zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
+    add(cv([zt,zt],[0,rt],'#c792ff',2.2,'dot'),'annot');
+    add(cv([-zt,-zt],[0,rt],'#c792ff',2.2,'dot'),'annot');
     add({type:'scatter',mode:'markers',x:[-zt,zt],y:[0,0],marker:{color:'#36e2c4',size:10,symbol:'line-ns-open'}},'annot');
-    add(txt([-zt,zt],[-rt*1.35,rt*1.35],['B↑','B↑'],'#36e2c4'),'annot');
+    add(txt([-zt,zt],[rt*1.30,rt*1.30],['B↑','B↑'],'#36e2c4'),'annot');
     // geometry parameter labels (Task 6): L_c central-cell length, a_c radius,
     // mirror ratio R_m + loss-cone formula
-    add(cv([-Lc/2,Lc/2],[-a*0.55,-a*0.55],'#ffd166',1.4,'dot'),'annot');
-    add(txt([0],[-a*0.8],[`L<sub>c</sub>=${(+Lc).toFixed(2)} m`],'#ffd166'),'annot');
+    add(cv([-Lc/2,Lc/2],[a*0.20,a*0.20],'#ffd166',1.4,'dot'),'annot');
+    add(txt([0],[a*0.32],[`L<sub>c</sub>=${(+Lc).toFixed(2)} m`],'#ffd166'),'annot');
     add(cv([0,0],[0,a],'#9be564',1.4,'dot'),'annot');
     add(txt([Lc*0.05],[a*0.5],[`a<sub>c</sub>=${(+a).toFixed(2)} m`],'#9be564'),'annot');
     if(gg>0)add({type:'scatter',mode:'lines+markers+text',x:[-Lc*0.25,-Lc*0.25],y:[a,a+gg],line:{color:GC('wall'),width:1.4,dash:'dot'},marker:{color:GC('wall'),size:3},text:['',`g=${(+gg).toFixed(2)} m`],textposition:'middle left',textfont:{color:GC('wall'),size:10}},'annot');
-    add(txt([0],[(a+gg)*1.5],[`R<sub>m</sub>=B<sub>max</sub>/B<sub>min</sub>=${(+Rm).toFixed(1)} · ${L('损失锥','loss cone')} sinθ=1/√R<sub>m</sub>=${(1/Math.sqrt(Rm)).toFixed(2)}`],'#c792ff'),'annot');
-    lay=LAYOUT('z [m]',L('r [m]（径向放大）','r [m] (radial enlarged)'));
-    lay.xaxis.range=[-Lc/2-Lth*1.15,Lc/2+Lth*1.15];lay.yaxis.range=[-(a+gg)*1.75,(a+gg)*1.75];
-    document.getElementById('plotMeta').innerHTML=`<span>${L('径向放大显示磁通管收缩；壁含间隙 g；端面积为通量诊断','radial enlarged; wall includes gap g; throat area diagnostic')}</span>`;
+    add(txt([0],[(a+gg)*1.45],[`R<sub>m</sub>=B<sub>max</sub>/B<sub>min</sub>=${(+Rm).toFixed(1)} · ${L('损失锥','loss cone')} sinθ=1/√R<sub>m</sub>=${(1/Math.sqrt(Rm)).toFixed(2)}`],'#c792ff'),'annot');
+    lay=LAYOUT('Z [m]','R [m]');
+    lay.xaxis.range=[-Lc/2-Lth*1.15,Lc/2+Lth*1.15];lay.yaxis.range=[0,(a+gg)*1.75];
+    document.getElementById('plotMeta').innerHTML=`<span>${L('BORAY 风格 Z-R 轴对称半平面；R=0 为对称轴；壁含间隙 g','BORAY-style Z-R axisymmetric half-plane; R=0 is the symmetry axis; wall includes gap g')}</span>`;
   }else if(CUR==='frc'){
     const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.type==='frc')?LASTRUN.shape:null;
     const fs=(v.f_shape!=null?v.f_shape:0.85),p=sh?sh.p_shape:Math.min(2/(3*Math.max(1-fs,0.017)),40);
-    const superE=(lam=1)=>{const X=[],Y=[];for(let i=0;i<=220;i++){const th=2*Math.PI*i/220,c=Math.cos(th),s=Math.sin(th);
-      const cr=Math.sign(c)*Math.pow(Math.abs(c),2/p),sr=Math.sign(s)*Math.pow(Math.abs(s),2/p);
-      X.push(lam*(v.l_s/2)*cr);Y.push(lam*v.r_s*sr);}return[X,Y];};
-    const ar=sh?[sh.separatrix.z,sh.separatrix.r]:superE(1);
+    const upperEnvelope=(zs,rs)=>{const pts=[];for(let i=0;i<Math.min(zs.length,rs.length);i++){const z=+zs[i],r=+rs[i];if(isFinite(z)&&isFinite(r)&&r>=-1e-9)pts.push([z,Math.max(0,r)]);}
+      pts.sort((a,b)=>a[0]-b[0]);return[pts.map(p=>p[0]),pts.map(p=>p[1])];};
+    const superHalf=(lam=1)=>{const X=[],Y=[];for(let i=0;i<=160;i++){const u=-1+2*i/160;X.push(lam*(v.l_s/2)*u);Y.push(lam*v.r_s*Math.pow(Math.max(0,1-Math.pow(Math.abs(u),p)),1/p));}return[X,Y];};
+    const ar=sh?upperEnvelope(sh.separatrix.z,sh.separatrix.r):superHalf(1);
     const rn=sh?Math.abs(sh.null_points.r[0]):v.r_s/Math.SQRT2;
-    add(lin(ar[0],ar[1],GC('boundary'),2.6,true),'boundary');
+    const Az=ar[0],Ar=ar[1],sepFillZ=[...Az,...[...Az].reverse()],sepFillR=[...Ar,...Az.map(()=>0).reverse()];
+    add(lin(sepFillZ,sepFillR,GC('boundary'),2.6,true),'boundary');
     add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
-    add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[-v.r_w,-v.r_w],GC('wall'),2.2),'wall');
+    add(cv([-v.l_s/2*1.15,v.l_s/2*1.15],[0,0],GC('annot'),1.3,'dot'),'annot');
     // nested poloidal flux surfaces: real backend psi=const loops (audit docs/42
     // P0) when a run is present, else a schematic fallback.
     if(sh&&Array.isArray(sh.surfaces)&&sh.surfaces.length){
-      sh.surfaces.forEach(srf=>add(cv(srf.z,srf.r,GC('flux'),1.18,'solid'),'flux'));
+      sh.surfaces.forEach(srf=>{const s=upperEnvelope(srf.z,srf.r);if(s[0].length>2)add(cv(s[0],s[1],GC('flux'),1.18,'solid'),'flux');});
     }else{
-      [-1,1].forEach(sgn=>[0.30,0.48,0.66,0.84].forEach(q=>{const X=[],Y=[];for(let i=0;i<=180;i++){const th=2*Math.PI*i/180;
-          X.push((v.l_s/2)*0.78*q*Math.cos(th));Y.push(sgn*rn+sgn*(v.r_s-rn)*0.86*q*Math.sin(th));}
-        add(cv(X,Y,GC('flux'),1.18,'solid'),'flux');}));
+      [0.30,0.48,0.66,0.84].forEach(q=>{const s=superHalf(0.82*q);add(cv(s[0],s[1],GC('flux'),1.18,'solid'),'flux');});
     }
     // open SOL field lines outside the separatrix: real backend curves (audit
     // docs/42 P2) when a run is present, else a schematic fallback.
     if(sh&&Array.isArray(sh.open_lines)&&sh.open_lines.length){
-      sh.open_lines.forEach(ln=>add(cv(ln.z,ln.r,GC('open'),1.05,'dot'),'open'));
+      sh.open_lines.forEach(ln=>{const s=upperEnvelope(ln.z,ln.r);if(s[0].length>1)add(cv(s[0],s[1],GC('open'),1.05,'dot'),'open');});
     }else{
-      [-0.72,-0.48,0.48,0.72].forEach(yy=>add(cv([-v.l_s/2*1.15,-v.l_s/2*0.95,-v.l_s/2*0.72,v.l_s/2*0.72,v.l_s/2*0.95,v.l_s/2*1.15],
+      [0.48,0.72].forEach(yy=>add(cv([-v.l_s/2*1.15,-v.l_s/2*0.95,-v.l_s/2*0.72,v.l_s/2*0.72,v.l_s/2*0.95,v.l_s/2*1.15],
         [yy*v.r_w,yy*v.r_w,yy*v.r_s*0.86,yy*v.r_s*0.86,yy*v.r_w,yy*v.r_w],GC('open'),1.05,'dot'),'open'));
     }
-    // O point (magnetic axis / field null) and X points (separatrix on axis)
-    const opR=sh?sh.o_points.r:[rn,-rn],opZ=sh?sh.o_points.z:[0,0];
-    add({type:'scatter',mode:'markers+text',x:opZ,y:opR,text:[L('O 点','O-point'),L('O 点','O-point')],
-      textposition:['top center','bottom center'],textfont:{color:'#c792ff',size:10},
-      marker:{color:'#c792ff',size:9,symbol:'circle-open',line:{width:2,color:'#c792ff'}}},'annot');
+    const nullZ=Az.length?[Az[0],Az[Az.length-1]]:[-v.l_s/2,v.l_s/2];
+    add(cv(nullZ,[rn,rn],'#c792ff',1.7,'dash'),'annot');
+    add(txt([0],[rn*1.07],[L('场零点 r_s/√2','field null r_s/√2')],'#c792ff'),'annot');
     const xpZ=sh?sh.x_points.z:[v.l_s/2,-v.l_s/2],xpR=sh?sh.x_points.r:[0,0];
     add({type:'scatter',mode:'markers+text',x:xpZ,y:xpR,text:[L('X 点','X-point'),L('X 点','X-point')],
       textposition:['middle right','middle left'],textfont:{color:'#ff9f43',size:10},
@@ -1454,7 +1451,6 @@ function drawShape(){
     // point left — head (big marker) at the left end, triangle-left symbol.
     add(seg(-0.05*v.l_s,0.18*v.r_s,-0.38*v.l_s,0.18*v.r_s,'#ff6b6b',L('B←','B←'),'triangle-left'),'annot');
     add(seg(-0.50*v.l_s,1.08*v.r_s,-0.15*v.l_s,1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');
-    add(seg(-0.50*v.l_s,-1.08*v.r_s,-0.15*v.l_s,-1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');
     // geometry parameter labels (Task 6): r_s, l_s, r_w + elongation formula
     add(cv([0,0],[0,v.r_s],'#9be564',1.4,'dot'),'annot');
     add(txt([v.l_s*0.05],[v.r_s*0.5],['r<sub>s</sub>'],'#9be564'),'annot');
@@ -1462,7 +1458,9 @@ function drawShape(){
     add(txt([0],[v.r_s*1.18],[`l<sub>s</sub>=${(+v.l_s).toFixed(2)} m`],'#ffd166'),'annot');
     add(txt([v.l_s*0.40],[v.r_w*1.05],['r<sub>w</sub>'],GC('wall')),'annot');
     add(txt([0],[v.r_w*1.30],[`E=l<sub>s</sub>/2r<sub>s</sub>=${v.r_s>0?(v.l_s/(2*v.r_s)).toFixed(2):'—'} · ${L('倾斜稳定','tilt')} s/E≲3-4`],'#c792ff'),'annot');
-    document.getElementById('plotMeta').innerHTML=`<span>${L('分离面来自后端几何；二维内面是中面磁通锚定拟合，非完整二维平衡；壁 r_w','separatrix from backend; inner 2-D surfaces are a midplane-flux-anchored fit, not a full 2-D equilibrium; wall r_w')}</span>`;
+    lay=LAYOUT('Z [m]','R [m]');
+    lay.xaxis.range=[-v.l_s/2*1.18,v.l_s/2*1.18];lay.yaxis.range=[0,Math.max(v.r_w*1.42,v.r_s*1.35)];
+    document.getElementById('plotMeta').innerHTML=`<span>${L('BORAY 风格 Z-R 轴对称半平面；R=0 为对称轴；分离面 ψ=0 与闭合磁通面仅画 R≥0','BORAY-style Z-R axisymmetric half-plane; R=0 is the symmetry axis; separatrix ψ=0 and closed flux surfaces are drawn for R≥0 only')}</span>`;
   }else if(CUR==='dipole'){
     const Lin=(v.L_in_fac!=null?v.L_in_fac:1.5)*v.r_ring;
     const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.type==='dipole')?LASTRUN.shape:null;
