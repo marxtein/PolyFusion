@@ -1850,9 +1850,9 @@ function readable(c){if(THEME==='light'&&typeof c==='string'&&c[0]==='#'&&c.leng
 function plotTheme(){const d=THEME!=='light';return d?
   {paper:'rgba(0,0,0,0)',plot:'rgba(9,13,21,0.5)',font:'#8b98a9',title:'#e9eef7',grid:'rgba(43,54,72,0.55)',axis:'#2b3648',legend:'#aab6cc'}:
   {paper:'rgba(0,0,0,0)',plot:'rgba(248,250,253,0.85)',font:'#51607a',title:'#16212f',grid:'rgba(120,138,168,0.28)',axis:'#c3cddc',legend:'#46566f'};}
-const LAYOUT=(xt,yt)=>{const c=plotTheme();return{paper_bgcolor:c.paper,plot_bgcolor:c.plot,font:{color:c.font,family:'JetBrains Mono',size:11},
-  margin:{l:64,r:16,t:10,b:50},xaxis:{title:{text:xt,font:{family:'Chakra Petch',size:13,color:c.title}},gridcolor:c.grid,zeroline:false,linecolor:c.axis},
-  yaxis:{title:{text:yt,font:{family:'Chakra Petch',size:13,color:c.title}},gridcolor:c.grid,zeroline:false,linecolor:c.axis},showlegend:true,legend:{orientation:'h',y:-0.18,font:{size:10,color:c.legend}}};};
+const LAYOUT=(xt,yt)=>{const c=plotTheme(),mobile=isMobileLayout();return{paper_bgcolor:c.paper,plot_bgcolor:c.plot,font:{color:c.font,family:'JetBrains Mono',size:11},
+  margin:{l:64,r:16,t:10,b:mobile?118:88},xaxis:{title:{text:xt,font:{family:'Chakra Petch',size:13,color:c.title},standoff:mobile?18:12},automargin:true,gridcolor:c.grid,zeroline:false,linecolor:c.axis},
+  yaxis:{title:{text:yt,font:{family:'Chakra Petch',size:13,color:c.title}},automargin:true,gridcolor:c.grid,zeroline:false,linecolor:c.axis},showlegend:true,legend:{orientation:'h',x:.5,xanchor:'center',y:mobile?-.38:-.26,yanchor:'top',font:{size:10,color:c.legend}}};};
 function plotlyReady(){return !!(window.Plotly&&Plotly.react&&Plotly.downloadImage);}
 let plotResizePending=false;
 function resizePlotSoon(){

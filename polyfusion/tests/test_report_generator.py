@@ -245,6 +245,25 @@ def test_report_endpoint_serves_html(monkeypatch):
     assert "结论摘要" in payload
 
 
+def test_ai_report_loads_codex_api_key_from_project_env(monkeypatch, tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "CODEX_API_KEY=sk-from-env-file\nOPENAI_ENDPOINT=chat\n", encoding="utf-8"
+    )
+    calls = []
+
+    def fake_post_json(base_url, path, payload, api_key, timeout):
+        calls.append(api_key)
+        return {"choices": [{"message": {"content": "env ok"}}]}
+
+    monkeypatch.delenv("CODEX_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_ENDPOINT", raising=False)
+    monkeypatch.setattr(ai_report, "_project_env_path", lambda: str(env_file))
+    monkeypatch.setattr(ai_report, "_post_json", fake_post_json)
+    assert ai_report.generate_ai_report_analysis(_sample_data()) == "env ok"
+    assert calls == ["sk-from-env-file"]
+
+
 def test_ai_report_falls_back_to_minimal_chat_payload(monkeypatch):
     calls = []
 

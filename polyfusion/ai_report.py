@@ -13,6 +13,32 @@ from typing import Any
 DEFAULT_BASE_URL = "https://api.codexzh.com/v1"
 DEFAULT_MODEL = "gpt-5.4"
 MAX_PROMPT_CHARS = 24000
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _project_env_path() -> str:
+    return os.path.join(ROOT, ".env")
+
+
+def _load_env_file(path: str) -> None:
+    if not os.path.isfile(path):
+        return
+    with open(path, encoding="utf-8") as fh:
+        for raw_line in fh:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            if line.startswith("export "):
+                line = line[len("export ") :].strip()
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if key == "SUPABASE_SERVICE_ROLE_KEY":
+                continue
+            os.environ.setdefault(key, value.strip().strip('"').strip("'"))
+
+
+def _load_project_env() -> None:
+    _load_env_file(_project_env_path())
 
 
 class AiReportError(RuntimeError):
@@ -102,6 +128,7 @@ def _chat_payload(model: str, prompt: str, *, minimal: bool = False) -> dict:
 
 
 def generate_ai_report_analysis(data: dict) -> str:
+    _load_project_env()
     api_key = os.getenv("CODEX_API_KEY")
     if not api_key:
         raise AiReportError("CODEX_API_KEY is not configured")
