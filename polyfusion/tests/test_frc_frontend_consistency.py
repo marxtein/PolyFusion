@@ -19,14 +19,15 @@ def test_frc_profile_uses_backend_rigid_rotor_parameter_not_gaussian_proxy():
 
 def test_frontend_states_frc_fit_and_dipole_coordinate_and_wall_limits():
     src = open(INDEX, encoding="utf-8").read()
-    assert "BORAY 风格 Z-R 轴对称半平面" in src
-    assert "separatrix ψ=0 and closed flux surfaces are drawn for R≥0 only" in src
+    assert "BORAY/Solovev fpsi 等值线" in src
+    assert "BORAY/Solovev fpsi contours" in src
     assert 'data-frc-view="half"' in src
     assert 'data-frc-view="full"' in src
-    assert "const fluxLevels=[0.08,0.16,0.24,0.32,0.40,0.50,0.60,0.70,0.80,0.88,0.94,0.972,0.988,0.996,0.999]" in src
-    assert "const frcPsiLoop=(lam,sgn=1)" in src
-    assert "topSqueeze=0.72+0.27*Math.pow(lam,4)" in src
-    assert "(v.l_s/2)/Math.SQRT2" in src
+    assert "const frcPsiNorm=(z,r)" in src
+    assert "const frcPsiGrid=(full=false)" in src
+    assert "type:'contour'" in src
+    assert "contours:{coloring:'lines',start:psiStep,end:psiMax,size:psiStep" in src
+    assert "const rn=v.r_s/Math.SQRT2" in src
     assert "Full FRC cross-section" in src
     assert "ρ<sub>U</sub>=ln(U/U<sub>in</sub>)/ln(U<sub>out</sub>/U<sub>in</sub>)" in src
     assert "球形面积代理" in src

@@ -1415,7 +1415,6 @@ function drawShape(){
     document.getElementById('plotMeta').innerHTML=`<span>${L('BORAY 风格 Z-R 轴对称半平面；R=0 为对称轴；壁含间隙 g','BORAY-style Z-R axisymmetric half-plane; R=0 is the symmetry axis; wall includes gap g')}</span>`;
   }else if(CUR==='frc'){
     const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.type==='frc')?LASTRUN.shape:null;
-    const fs=(v.f_shape!=null?v.f_shape:0.85),p=sh?sh.p_shape:Math.min(2/(3*Math.max(1-fs,0.017)),40);
     const pc=document.getElementById('phControls');
     if(pc){const state=`frc-${FRC_VIEW}`;
       if(pc.dataset.state!==state){
@@ -1424,29 +1423,24 @@ function drawShape(){
         pc.querySelectorAll('.phbtn[data-frc-view]').forEach(b=>b.onclick=()=>{FRC_VIEW=b.dataset.frcView;try{localStorage.setItem('polyfusion_frc_view',FRC_VIEW)}catch(e){};pc.dataset.state='';drawShape();});
       }
     }
-    const superE=(lam=1)=>{const X=[],Y=[];for(let i=0;i<=220;i++){const th=2*Math.PI*i/220,c=Math.cos(th),s=Math.sin(th);
-      const cr=Math.sign(c)*Math.pow(Math.abs(c),2/p),sr=Math.sign(s)*Math.pow(Math.abs(s),2/p);
-      X.push(lam*(v.l_s/2)*cr);Y.push(lam*v.r_s*sr);}return[X,Y];};
-    const superHalf=(lam=1)=>{const X=[],Y=[];for(let i=0;i<=160;i++){const u=-1+2*i/160;X.push(lam*(v.l_s/2)*u);Y.push(lam*v.r_s*Math.pow(Math.max(0,1-Math.pow(Math.abs(u),p)),1/p));}return[X,Y];};
-    const rn=sh?Math.abs(sh.null_points.r[0]):v.r_s/Math.SQRT2;
-    const fluxLevels=[0.08,0.16,0.24,0.32,0.40,0.50,0.60,0.70,0.80,0.88,0.94,0.972,0.988,0.996,0.999];
-    const frcPsiLoop=(lam,sgn=1)=>{const X=[],Y=[],topSqueeze=0.72+0.27*Math.pow(lam,4),root=Math.sqrt(Math.max(0,1-lam)),smax=Math.sqrt(Math.max(0,2-2*root)),zScale=(v.l_s/2)/Math.SQRT2;
-      for(let pass=0;pass<2;pass++)for(let i=0;i<=220;i++){const t=pass?1-i/220:i/220,s=-smax+2*smax*t,D=Math.max(0,Math.pow(s,4)-4*s*s+4*lam);
-        const y=(2-s*s+(pass?-1:1)*Math.sqrt(D))/2;
-        let r=rn*Math.sqrt(Math.max(0,y));if(r>rn)r=rn+(r-rn)*topSqueeze;
-        X.push(zScale*s);Y.push(sgn*r);
-      }
-      return[X,Y];};
+    const rn=v.r_s/Math.SQRT2;
+    const frcE=Math.max(v.l_s/(2*Math.max(v.r_s,1e-9)),1e-6),psiMax=0.995,psiStep=0.025;
+    const frcPsiNorm=(z,r)=>{const y=(r*r)/(rn*rn+1e-12),s=z/(frcE*rn+1e-12);return Math.pow(y-1,2)+s*s*y;};
+    const frcSep=(sgn=1)=>{const X=[],Y=[];for(let i=0;i<=260;i++){const u=-1+2*i/260,z=(v.l_s/2)*u;
+      X.push(z);Y.push(sgn*v.r_s*Math.sqrt(Math.max(0,1-u*u)));}return[X,Y];};
+    const frcPsiGrid=(full=false)=>{const nx=241,ny=full?181:121,x=[],y=[],z=[];
+      for(let i=0;i<nx;i++)x.push(-v.l_s/2+v.l_s*i/(nx-1));
+      const ymin=full?-v.r_s:0,ymax=v.r_s;
+      for(let j=0;j<ny;j++)y.push(ymin+(ymax-ymin)*j/(ny-1));
+      for(let j=0;j<ny;j++){const row=[];for(let i=0;i<nx;i++)row.push(frcPsiNorm(x[i],Math.abs(y[j])));z.push(row);}
+      return{x,y,z};};
+    const frcPsiContour=(full=false)=>{const g=frcPsiGrid(full);return{type:'contour',x:g.x,y:g.y,z:g.z,contours:{coloring:'lines',start:psiStep,end:psiMax,size:psiStep,showlabels:false},line:{color:GC('flux'),width:1.05},showscale:false,hoverinfo:'skip'};};
     if(FRC_VIEW==='full'){
-      const ar=sh?[sh.separatrix.z,sh.separatrix.r]:superE(1);
+      const up=frcSep(1),dn=frcSep(-1),ar=[[...up[0],...dn[0].reverse()],[...up[1],...dn[1].reverse()]];
       add(lin(ar[0],ar[1],GC('boundary'),2.6,true),'boundary');
       add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
       add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[-v.r_w,-v.r_w],GC('wall'),2.2),'wall');
-      if(sh&&Array.isArray(sh.surfaces)&&sh.surfaces.length){
-        sh.surfaces.forEach(srf=>add(cv(srf.z,srf.r,GC('flux'),1.18,'solid'),'flux'));
-      }else{
-        [-1,1].forEach(sgn=>fluxLevels.forEach(lam=>{const s=frcPsiLoop(lam,sgn);add(cv(s[0],s[1],GC('flux'),1.05,'solid'),'flux');}));
-      }
+      add(frcPsiContour(true),'flux');
       if(sh&&Array.isArray(sh.open_lines)&&sh.open_lines.length){
         sh.open_lines.forEach(ln=>add(cv(ln.z,ln.r,GC('open'),1.05,'dot'),'open'));
       }else{
@@ -1474,12 +1468,12 @@ function drawShape(){
       lay.xaxis.range=[-v.l_s/2*1.18,v.l_s/2*1.18];lay.yaxis.range=[-Math.max(v.r_w*1.42,v.r_s*1.35),Math.max(v.r_w*1.42,v.r_s*1.35)];
       document.getElementById('plotMeta').innerHTML=`<span>${L('完整 FRC 截面；上下半径同时显示，用于检查完整分离面与内部磁面','Full FRC cross-section; both signs of radius are shown for checking the complete separatrix and internal flux surfaces')}</span>`;
     }else{
-      const ar=superHalf(1);
+      const ar=frcSep(1);
       const Az=ar[0],Ar=ar[1],sepFillZ=[...Az,...[...Az].reverse()],sepFillR=[...Ar,...Az.map(()=>0).reverse()];
       add(lin(sepFillZ,sepFillR,GC('boundary'),2.6,true),'boundary');
       add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
       add(cv([-v.l_s/2*1.15,v.l_s/2*1.15],[0,0],GC('annot'),1.3,'dot'),'annot');
-      fluxLevels.forEach(lam=>{const s=frcPsiLoop(lam);add(cv(s[0],s[1],GC('flux'),1.05,'solid'),'flux');});
+      add(frcPsiContour(false),'flux');
       [0.50,0.72].forEach(yy=>{const X=[],Y=[];for(let i=0;i<=140;i++){const u=-1.15+2.30*i/140;
           X.push((v.l_s/2)*u);Y.push(yy*v.r_w+(v.r_s*0.12)*Math.pow(Math.max(0,1-Math.pow(Math.abs(u/1.15),2)),0.5));}
         add(cv(X,Y,GC('open'),1.05,'dot'),'open');});
@@ -1500,7 +1494,7 @@ function drawShape(){
       add(txt([0],[v.r_w*0.96],[`E=l<sub>s</sub>/2r<sub>s</sub>=${v.r_s>0?(v.l_s/(2*v.r_s)).toFixed(2):'—'} · ${L('倾斜稳定','tilt')} s/E≲3-4`],'#c792ff'),'annot');
       lay=LAYOUT('Z [m]','R [m]');
       lay.xaxis.range=[-v.l_s/2*1.18,v.l_s/2*1.18];lay.yaxis.range=[0,Math.max(v.r_w*1.08,v.r_s*1.35)];
-      document.getElementById('plotMeta').innerHTML=`<span>${L('BORAY 风格 Z-R 轴对称半平面；R=0 为对称轴；分离面 ψ=0 与闭合磁通面仅画 R≥0','BORAY-style Z-R axisymmetric half-plane; R=0 is the symmetry axis; separatrix ψ=0 and closed flux surfaces are drawn for R≥0 only')}</span>`;
+      document.getElementById('plotMeta').innerHTML=`<span>${L('BORAY/Solovev fpsi 等值线；Z-R 轴对称半平面，R=0 为对称轴，闭合磁面仅画 R≥0','BORAY/Solovev fpsi contours; Z-R axisymmetric half-plane, R=0 is the symmetry axis, closed flux surfaces are drawn for R≥0 only')}</span>`;
     }
   }else if(CUR==='dipole'){
     const Lin=(v.L_in_fac!=null?v.L_in_fac:1.5)*v.r_ring;
