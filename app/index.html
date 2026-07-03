@@ -1429,6 +1429,13 @@ function drawShape(){
       X.push(lam*(v.l_s/2)*cr);Y.push(lam*v.r_s*sr);}return[X,Y];};
     const superHalf=(lam=1)=>{const X=[],Y=[];for(let i=0;i<=160;i++){const u=-1+2*i/160;X.push(lam*(v.l_s/2)*u);Y.push(lam*v.r_s*Math.pow(Math.max(0,1-Math.pow(Math.abs(u),p)),1/p));}return[X,Y];};
     const rn=sh?Math.abs(sh.null_points.r[0]):v.r_s/Math.SQRT2;
+    const fluxQs=[0.18,0.30,0.42,0.54,0.66,0.78,0.88,0.96];
+    const frcFluxLoop=(q,sgn=1)=>{const X=[],Y=[],n=2+1.25*Math.pow(q,1.85),zw=(v.l_s/2)*0.88*q,rh=(v.r_s-rn)*0.96*q;
+      for(let i=0;i<=320;i++){const th=2*Math.PI*i/320,c=Math.cos(th),s=Math.sin(th);
+        X.push(zw*Math.sign(c)*Math.pow(Math.abs(c),2/n));
+        Y.push(sgn*rn+sgn*rh*Math.sign(s)*Math.pow(Math.abs(s),2/n));
+      }
+      return[X,Y];};
     if(FRC_VIEW==='full'){
       const ar=sh?[sh.separatrix.z,sh.separatrix.r]:superE(1);
       add(lin(ar[0],ar[1],GC('boundary'),2.6,true),'boundary');
@@ -1437,9 +1444,7 @@ function drawShape(){
       if(sh&&Array.isArray(sh.surfaces)&&sh.surfaces.length){
         sh.surfaces.forEach(srf=>add(cv(srf.z,srf.r,GC('flux'),1.18,'solid'),'flux'));
       }else{
-        [-1,1].forEach(sgn=>[0.30,0.48,0.66,0.84].forEach(q=>{const X=[],Y=[];for(let i=0;i<=180;i++){const th=2*Math.PI*i/180;
-            X.push((v.l_s/2)*0.78*q*Math.cos(th));Y.push(sgn*rn+sgn*(v.r_s-rn)*0.86*q*Math.sin(th));}
-          add(cv(X,Y,GC('flux'),1.18,'solid'),'flux');}));
+        [-1,1].forEach(sgn=>fluxQs.forEach(q=>{const s=frcFluxLoop(q,sgn);add(cv(s[0],s[1],GC('flux'),1.18,'solid'),'flux');}));
       }
       if(sh&&Array.isArray(sh.open_lines)&&sh.open_lines.length){
         sh.open_lines.forEach(ln=>add(cv(ln.z,ln.r,GC('open'),1.05,'dot'),'open'));
@@ -1473,10 +1478,7 @@ function drawShape(){
       add(lin(sepFillZ,sepFillR,GC('boundary'),2.6,true),'boundary');
       add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
       add(cv([-v.l_s/2*1.15,v.l_s/2*1.15],[0,0],GC('annot'),1.3,'dot'),'annot');
-      const fluxLoop=q=>{const X=[],Y=[],zw=(v.l_s/2)*0.78*q,rh=(v.r_s-rn)*0.86*q;
-        for(let i=0;i<=180;i++){const th=2*Math.PI*i/180;X.push(zw*Math.cos(th));Y.push(rn+rh*Math.sin(th));}
-        return[X,Y];};
-      [0.30,0.48,0.66,0.84].forEach(q=>{const s=fluxLoop(q);add(cv(s[0],s[1],GC('flux'),1.18,'solid'),'flux');});
+      fluxQs.forEach(q=>{const s=frcFluxLoop(q);add(cv(s[0],s[1],GC('flux'),1.18,'solid'),'flux');});
       [0.50,0.72].forEach(yy=>{const X=[],Y=[];for(let i=0;i<=140;i++){const u=-1.15+2.30*i/140;
           X.push((v.l_s/2)*u);Y.push(yy*v.r_w+(v.r_s*0.12)*Math.pow(Math.max(0,1-Math.pow(Math.abs(u/1.15),2)),0.5));}
         add(cv(X,Y,GC('open'),1.05,'dot'),'open');});

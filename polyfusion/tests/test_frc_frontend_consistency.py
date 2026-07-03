@@ -23,6 +23,9 @@ def test_frontend_states_frc_fit_and_dipole_coordinate_and_wall_limits():
     assert "separatrix ψ=0 and closed flux surfaces are drawn for R≥0 only" in src
     assert 'data-frc-view="half"' in src
     assert 'data-frc-view="full"' in src
+    assert "const fluxQs=[0.18,0.30,0.42,0.54,0.66,0.78,0.88,0.96]" in src
+    assert "const frcFluxLoop=(q,sgn=1)" in src
+    assert "2+1.25*Math.pow(q,1.85)" in src
     assert "Full FRC cross-section" in src
     assert "ρ<sub>U</sub>=ln(U/U<sub>in</sub>)/ln(U<sub>out</sub>/U<sub>in</sub>)" in src
     assert "球形面积代理" in src
