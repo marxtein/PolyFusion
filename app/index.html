@@ -1430,7 +1430,7 @@ function drawShape(){
     const superHalf=(lam=1)=>{const X=[],Y=[];for(let i=0;i<=160;i++){const u=-1+2*i/160;X.push(lam*(v.l_s/2)*u);Y.push(lam*v.r_s*Math.pow(Math.max(0,1-Math.pow(Math.abs(u),p)),1/p));}return[X,Y];};
     const rn=sh?Math.abs(sh.null_points.r[0]):v.r_s/Math.SQRT2;
     const fluxLevels=[0.08,0.16,0.24,0.32,0.40,0.50,0.60,0.70,0.80,0.88,0.94,0.98];
-    const frcPsiLoop=(lam,sgn=1)=>{const X=[],Y=[],topSqueeze=0.72,root=Math.sqrt(Math.max(0,1-lam)),smax=Math.sqrt(Math.max(0,2-2*root)),zScale=(v.l_s/2)/Math.SQRT2;
+    const frcPsiLoop=(lam,sgn=1)=>{const X=[],Y=[],topSqueeze=0.72+0.27*Math.pow(lam,4),root=Math.sqrt(Math.max(0,1-lam)),smax=Math.sqrt(Math.max(0,2-2*root)),zScale=(v.l_s/2)/Math.SQRT2;
       for(let pass=0;pass<2;pass++)for(let i=0;i<=220;i++){const t=pass?1-i/220:i/220,s=-smax+2*smax*t,D=Math.max(0,Math.pow(s,4)-4*s*s+4*lam);
         const y=(2-s*s+(pass?-1:1)*Math.sqrt(D))/2;
         let r=rn*Math.sqrt(Math.max(0,y));if(r>rn)r=rn+(r-rn)*topSqueeze;
