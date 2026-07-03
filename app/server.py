@@ -599,9 +599,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, body)
 
         if self.path == "/api/report":
-            # auth gate: report embeds user's compute results
-            user = self._require_auth()
-            if not user:
+            principal, _role = self._principal()
+            if not principal:
+                self._send(
+                    401,
+                    json.dumps({"error": "unauthorized", "auth_required": True}),
+                )
                 return None
             if n > MAX_REPORT_BYTES:
                 limit_mib = MAX_REPORT_BYTES // (1024 * 1024)
@@ -611,7 +614,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
             try:
                 req = json.loads(self.rfile.read(n) or b"{}")
-                req.setdefault("user", user)
+                req.setdefault("user", principal)
                 html_body = generate_report(req)
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
                 return self._send(400, json.dumps({"error": f"bad json: {e}"}))

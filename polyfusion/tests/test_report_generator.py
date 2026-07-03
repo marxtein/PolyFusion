@@ -271,11 +271,12 @@ def test_frontend_exposes_report_buttons_and_handlers():
     assert "function stripLargeArrays" in html
 
 
-def test_report_endpoint_requires_auth_when_enabled(monkeypatch):
-    """When REQUIRE_AUTH is on, /api/report must 401 without a session."""
+def test_report_endpoint_requires_auth_in_strict_mode(monkeypatch):
+    """When guest mode is off, /api/report must 401 without a session."""
     import app.server as srv
 
     monkeypatch.setattr(srv, "REQUIRE_AUTH", True)
+    monkeypatch.setattr(srv, "GUEST_MODE", False)
     from app.server import Handler, ThreadingHTTPServer
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -296,3 +297,34 @@ def test_report_endpoint_requires_auth_when_enabled(monkeypatch):
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_report_endpoint_allows_guest_current_report(monkeypatch):
+    """Guest mode may view the current generated report without history access."""
+    import app.server as srv
+
+    monkeypatch.setattr(srv, "REQUIRE_AUTH", True)
+    monkeypatch.setattr(srv, "GUEST_MODE", True)
+    from app.server import Handler, ThreadingHTTPServer
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        body = jsonlib.dumps(_sample_data()).encode()
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/api/report",
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as response:
+            ctype = response.headers.get("Content-Type", "")
+            payload = response.read().decode("utf-8")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+    assert ctype.startswith("text/html")
+    assert "<!DOCTYPE html>" in payload
+    assert "结论摘要" in payload
