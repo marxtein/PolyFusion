@@ -25,6 +25,9 @@ def test_frontend_states_frc_fit_and_dipole_coordinate_and_wall_limits():
     assert 'data-frc-view="full"' in src
     assert "const frcPsiNorm=(z,r)" in src
     assert "const frcPsiGrid=(full=false)" in src
+    assert "const frcShapeFactor=()=>Math.min(1,Math.max(2/3,+(v.f_shape==null?0.85:v.f_shape)))" in src
+    assert "const sepMode=(v.sep_model==='mrr'||v.sep_model==='ma_xie')?'ma_xie':'superellipse'" in src
+    assert "const psiMax=0.96,psiStep=0.08" in src
     assert "type:'contour'" in src
     assert "contours:{coloring:'lines',start:psiStep,end:psiMax,size:psiStep" in src
     assert "const rn=v.r_s/Math.SQRT2" in src

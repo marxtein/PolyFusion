@@ -1414,7 +1414,6 @@ function drawShape(){
     lay.xaxis.range=[-Lc/2-Lth*1.15,Lc/2+Lth*1.15];lay.yaxis.range=[0,(a+gg)*1.75];
     document.getElementById('plotMeta').innerHTML=`<span>${L('BORAY 风格 Z-R 轴对称半平面；R=0 为对称轴；壁含间隙 g','BORAY-style Z-R axisymmetric half-plane; R=0 is the symmetry axis; wall includes gap g')}</span>`;
   }else if(CUR==='frc'){
-    const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.type==='frc')?LASTRUN.shape:null;
     const pc=document.getElementById('phControls');
     if(pc){const state=`frc-${FRC_VIEW}`;
       if(pc.dataset.state!==state){
@@ -1424,10 +1423,21 @@ function drawShape(){
       }
     }
     const rn=v.r_s/Math.SQRT2;
-    const frcE=Math.max(v.l_s/(2*Math.max(v.r_s,1e-9)),1e-6),psiMax=0.995,psiStep=0.025;
-    const frcPsiNorm=(z,r)=>{const y=(r*r)/(rn*rn+1e-12),s=z/(frcE*rn+1e-12);return Math.pow(y-1,2)+s*s*y;};
+    const frcShapeFactor=()=>Math.min(1,Math.max(2/3,+(v.f_shape==null?0.85:v.f_shape)));
+    const frcShapeMoment=p=>{let s=0,n=96;for(let i=0;i<=n;i++){const u=i/n,w=(i===0||i===n)?1:(i%2?4:2);
+      s+=w*Math.pow(Math.max(0,1-Math.pow(u,p)),2/p);}return s/(3*n);};
+    const frcPFromShape=fs=>{if(fs<=2/3+1e-9)return 2;if(fs>=1-1e-9)return 80;let lo=2,hi=80;
+      for(let k=0;k<42;k++){const mid=(lo+hi)/2;if(frcShapeMoment(mid)<fs)lo=mid;else hi=mid;}return(lo+hi)/2;};
+    const frcMFromShape=fs=>fs>=1-1e-9?80:Math.max(2,fs/(1-fs));
+    const sepMode=(v.sep_model==='mrr'||v.sep_model==='ma_xie')?'ma_xie':'superellipse';
+    const fs=frcShapeFactor(),shapeExp=sepMode==='ma_xie'?frcMFromShape(fs):frcPFromShape(fs);
+    const psiMax=0.96,psiStep=0.08;
+    const frcSepR=u=>{const au=Math.min(1,Math.abs(u));if(sepMode==='ma_xie')return v.r_s*Math.sqrt(Math.max(0,1-Math.pow(au,shapeExp)));
+      return v.r_s*Math.pow(Math.max(0,1-Math.pow(au,shapeExp)),1/shapeExp);};
+    const frcPsiNorm=(z,r)=>{const b=v.l_s/2,u=Math.max(-1,Math.min(1,z/(b||1e-12))),rsu=frcSepR(u);
+      const y=rsu>1e-10?2*Math.max(0,1-u*u)*Math.pow(r/rsu,2):0,s=Math.SQRT2*u;return Math.pow(y-1,2)+s*s*y;};
     const frcSep=(sgn=1)=>{const X=[],Y=[];for(let i=0;i<=260;i++){const u=-1+2*i/260,z=(v.l_s/2)*u;
-      X.push(z);Y.push(sgn*v.r_s*Math.sqrt(Math.max(0,1-u*u)));}return[X,Y];};
+      X.push(z);Y.push(sgn*frcSepR(u));}return[X,Y];};
     const frcPsiGrid=(full=false)=>{const nx=241,ny=full?181:121,x=[],y=[],z=[];
       for(let i=0;i<nx;i++)x.push(-v.l_s/2+v.l_s*i/(nx-1));
       const ymin=full?-v.r_s:0,ymax=v.r_s;
@@ -1441,17 +1451,13 @@ function drawShape(){
       add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
       add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[-v.r_w,-v.r_w],GC('wall'),2.2),'wall');
       add(frcPsiContour(true),'flux');
-      if(sh&&Array.isArray(sh.open_lines)&&sh.open_lines.length){
-        sh.open_lines.forEach(ln=>add(cv(ln.z,ln.r,GC('open'),1.05,'dot'),'open'));
-      }else{
-        [-0.72,-0.48,0.48,0.72].forEach(yy=>add(cv([-v.l_s/2*1.15,-v.l_s/2*0.95,-v.l_s/2*0.72,v.l_s/2*0.72,v.l_s/2*0.95,v.l_s/2*1.15],
-          [yy*v.r_w,yy*v.r_w,yy*v.r_s*0.86,yy*v.r_s*0.86,yy*v.r_w,yy*v.r_w],GC('open'),1.05,'dot'),'open'));
-      }
-      const opR=sh?sh.o_points.r:[rn,-rn],opZ=sh?sh.o_points.z:[0,0];
+      [-0.72,-0.48,0.48,0.72].forEach(yy=>add(cv([-v.l_s/2*1.15,-v.l_s/2*0.95,-v.l_s/2*0.72,v.l_s/2*0.72,v.l_s/2*0.95,v.l_s/2*1.15],
+        [yy*v.r_w,yy*v.r_w,yy*v.r_s*0.86,yy*v.r_s*0.86,yy*v.r_w,yy*v.r_w],GC('open'),1.05,'dot'),'open'));
+      const opR=[rn,-rn],opZ=[0,0];
       add({type:'scatter',mode:'markers+text',x:opZ,y:opR,text:[L('O 点','O-point'),L('O 点','O-point')],
         textposition:['top center','bottom center'],textfont:{color:'#c792ff',size:10},
         marker:{color:'#c792ff',size:9,symbol:'circle-open',line:{width:2,color:'#c792ff'}}},'annot');
-      const xpZ=sh?sh.x_points.z:[v.l_s/2,-v.l_s/2],xpR=sh?sh.x_points.r:[0,0];
+      const xpZ=[v.l_s/2,-v.l_s/2],xpR=[0,0];
       add({type:'scatter',mode:'markers+text',x:xpZ,y:xpR,text:[L('X 点','X-point'),L('X 点','X-point')],
         textposition:['middle right','middle left'],textfont:{color:'#ff9f43',size:10},
         marker:{color:'#ff9f43',size:9,symbol:'x-thin',line:{width:2,color:'#ff9f43'}}},'annot');
@@ -1480,7 +1486,7 @@ function drawShape(){
       const nullZ=Az.length?[Az[0],Az[Az.length-1]]:[-v.l_s/2,v.l_s/2];
       add(cv(nullZ,[rn,rn],'#c792ff',1.7,'dash'),'annot');
       add(txt([0],[rn*1.07],[L('场零点 r_s/√2','field null r_s/√2')],'#c792ff'),'annot');
-      const xpZ=sh?sh.x_points.z:[v.l_s/2,-v.l_s/2],xpR=sh?sh.x_points.r:[0,0];
+      const xpZ=[v.l_s/2,-v.l_s/2],xpR=[0,0];
       add({type:'scatter',mode:'markers+text',x:xpZ,y:xpR,text:[L('X 点','X-point'),L('X 点','X-point')],
         textposition:['middle right','middle left'],textfont:{color:'#ff9f43',size:10},
         marker:{color:'#ff9f43',size:9,symbol:'x-thin',line:{width:2,color:'#ff9f43'}}},'annot');
