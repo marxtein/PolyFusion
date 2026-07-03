@@ -23,7 +23,7 @@ def test_frontend_states_frc_fit_and_dipole_coordinate_and_wall_limits():
     assert "separatrix ψ=0 and closed flux surfaces are drawn for R≥0 only" in src
     assert 'data-frc-view="half"' in src
     assert 'data-frc-view="full"' in src
-    assert "const fluxLevels=[0.08,0.16,0.24,0.32,0.40,0.50,0.60,0.70,0.80,0.88,0.94,0.98]" in src
+    assert "const fluxLevels=[0.08,0.16,0.24,0.32,0.40,0.50,0.60,0.70,0.80,0.88,0.94,0.972,0.988,0.996,0.999]" in src
     assert "const frcPsiLoop=(lam,sgn=1)" in src
     assert "topSqueeze=0.72+0.27*Math.pow(lam,4)" in src
     assert "(v.l_s/2)/Math.SQRT2" in src
