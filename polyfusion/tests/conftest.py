@@ -224,6 +224,7 @@ def _fake_supabase(monkeypatch):
     monkeypatch.setattr(auth, "supabase_client", lambda: fake)
     monkeypatch.setattr(auth, "_fetch_jwks", lambda: {"keys": []})
     monkeypatch.setenv(auth._TEST_SECRET_ENV, TEST_JWT_SECRET)
+    monkeypatch.setenv(auth._EMAIL_CONFIRM_ENV, "1")
     auth.reset_supabase_client_for_tests(fake)
     yield fake
     # Restore a clean module-level client so other tests rebuild it.

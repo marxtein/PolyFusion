@@ -36,8 +36,9 @@ h2{font-size:15px;color:#0c8678;border-bottom:1px solid #c3cddc;
 .meta b{color:#1a2332}
 .actions{margin:14px 0 4px;text-align:right}
 .actions button{border:1px solid #c3cddc;background:#fff;color:#0c3a5e;border-radius:5px;
-  padding:6px 10px;cursor:pointer;font-size:12px}
+  padding:6px 10px;cursor:pointer;font-size:12px;margin-left:6px}
 .actions button:hover{border-color:#0c8678;color:#0c8678}
+.actions .status{display:inline-block;margin-left:8px;color:#8995a8;font-size:12px}
 table{width:100%;border-collapse:collapse;margin:6px 0 14px;background:#fff}
 th,td{padding:5px 9px;border-bottom:1px solid #e6ebf2;text-align:left;font-size:12px}
 th{background:#f0f4f9;color:#0c3a5e;font-weight:600}
@@ -382,6 +383,14 @@ def _report_script(markdown_doc: str, filename: str) -> str:
     const blob=new Blob([window.POLYFUSION_REPORT_MARKDOWN||baseMarkdown],{{type:'text/markdown;charset=utf-8'}});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(a.href);
   }};
+  const saveBtn=document.getElementById('saveReport');
+  if(saveBtn)saveBtn.onclick=function(){{
+    const status=document.getElementById('saveReportStatus');
+    if(typeof window.POLYFUSION_SAVE_REPORT==='function'){{
+      if(status)status.textContent='保存中… / Saving…';
+      window.POLYFUSION_SAVE_REPORT();
+    }}else if(status){{status.textContent='请在 PolyFusion 登录后保存 / Sign in from PolyFusion to save';status.style.color='#7a1f2c';}}
+  }};
 }})();
 </script>
 """
@@ -546,8 +555,10 @@ def generate_report(data: dict) -> str:
         f"<style>{_REPORT_CSS}</style></head><body>"
         f"<div class='wrap'><h1>{_esc(title)}</h1>"
         f"<div class='sub'>{_esc(config)} · preset {_esc(preset)}</div>"
-        f"{meta}<div class='actions'><button id='exportMarkdown'>"
-        f"{t('导出 Markdown', 'Export Markdown')}</button></div>{body}"
+        f"{meta}<div class='actions'><button id='saveReport'>"
+        f"{t('保存报告', 'Save Report')}</button><button id='exportMarkdown'>"
+        f"{t('导出 Markdown', 'Export Markdown')}</button>"
+        f"<span id='saveReportStatus' class='status'></span></div>{body}"
         f"<div class='sub' style='margin-top:24px;text-align:right;color:#8995a8'>"
         f"PolyFusion · {_esc(version)} · {_esc(ts)}"
         f"</div></div>{report_script}</body></html>"

@@ -7,7 +7,7 @@ service-role key is loaded **exclusively** by the one-shot migration script.
 
 | File | Purpose |
 |------|---------|
-| `schema.sql` | `public.profiles` table + RLS policies + `handle_new_user` trigger. Run once per fresh project. |
+| `schema.sql` | `public.profiles`, `public.computations` tables + RLS policies + auth triggers. Run once per fresh project and re-run after schema updates. |
 | `README.md` | This document — setup, local dev, Huawei deploy runbook, migration workflow, manual verification checklist. |
 
 Companion files outside this directory:
@@ -16,6 +16,7 @@ Companion files outside this directory:
 - `polyfusion/auth.py` — anon-key Supabase adapter (JWT verify, register,
   login, logout, resend, validate_session).
 - `app/server.py` — HTTP routes + cookies + CSRF + rate limit.
+- `polyfusion/report_cache.py` — local SQLite storage for full-report cache.
 - `.env.example` — env template (URL + ANON only; service role never lives here).
 
 ---
@@ -65,6 +66,11 @@ Companion files outside this directory:
    immediately.
 5. Sanity check: `GET /api/auth/me` against the running server should return
    your username/email with `email_verified=true` once you are logged in.
+
+Full-report cache is stored locally by the web process in SQLite. By default it
+uses `~/.polyfusion/report_cache.sqlite3`; override with
+`POLYFUSION_REPORT_CACHE_DB` if the deployment service user needs an explicit
+writable path. This cache does not require any Supabase table or RLS policy.
 
 `requirements.txt` and the dev toolchain (`pytest`, `ruff`) are expected to be
 installed in the active environment.

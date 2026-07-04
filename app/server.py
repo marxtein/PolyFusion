@@ -59,9 +59,11 @@ from polyfusion.ai_report import AiReportError, generate_ai_report_analysis  # n
 from polyfusion import history as history_mod  # noqa: E402
 from polyfusion import admin as admin_mod  # noqa: E402
 from polyfusion import profile as profile_mod  # noqa: E402
+from polyfusion import report_cache as report_cache_mod  # noqa: E402
 from polyfusion.history import HistoryError  # noqa: E402
 from polyfusion.admin import AdminError  # noqa: E402
 from polyfusion.profile import ProfileError  # noqa: E402
+from polyfusion.report_cache import ReportCacheError  # noqa: E402
 from polyfusion.postgrest import PostgrestError  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -506,10 +508,11 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 return self._send(401, json.dumps({"error": "unauthorized"}))
             profile = None
-            try:
-                profile = profile_mod.get_profile(access, info.get("user_id"))
-            except (ProfileError, PostgrestError):
-                profile = None
+            if not auth_mod.is_local_token(access):
+                try:
+                    profile = profile_mod.get_profile(access, info.get("user_id"))
+                except (ProfileError, PostgrestError):
+                    profile = None
             return self._send(
                 200,
                 json.dumps(
@@ -635,6 +638,11 @@ class Handler(BaseHTTPRequestHandler):
                 cache_control="no-store, max-age=0",
             )
 
+        if self.path == "/api/report/cache/lookup":
+            return self._handle_report_cache_lookup(n)
+        if self.path == "/api/report/cache/save":
+            return self._handle_report_cache_save(n)
+
         if self.path == "/api/report/ai":
             principal, _role = self._principal()
             if not principal:
@@ -752,6 +760,74 @@ class Handler(BaseHTTPRequestHandler):
             return self._handle_history_delete()
         return self._send(404, json.dumps({"error": "not found"}))
 
+    # ---- report cache handlers -------------------------------------------
+
+    def _report_cache_user(self):
+        user = self._require_auth()
+        if not user:
+            return None
+        if user == "__anon__":
+            return self._send(
+                401,
+                json.dumps({"error": "login required", "auth_required": True}),
+            )
+        return user
+
+    def _handle_report_cache_lookup(self, n: int):
+        user = self._report_cache_user()
+        if user is None:
+            return None
+        if n > MAX_REPORT_BYTES:
+            limit_mib = MAX_REPORT_BYTES // (1024 * 1024)
+            return self._send(
+                413,
+                json.dumps(
+                    {"error": f"report cache body exceeds {limit_mib} MiB limit"}
+                ),
+            )
+        try:
+            req = json.loads(self.rfile.read(n) or b"{}")
+            row = report_cache_mod.get_report(user, req.get("cache_key"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+        except ReportCacheError as e:
+            return self._send(400, json.dumps({"error": str(e)}))
+        if row is None:
+            return self._send(200, json.dumps({"hit": False}))
+        return self._send(200, json.dumps({"hit": True, "report": row}, default=str))
+
+    def _handle_report_cache_save(self, n: int):
+        user = self._report_cache_user()
+        if user is None:
+            return None
+        if n > MAX_REPORT_BYTES:
+            limit_mib = MAX_REPORT_BYTES // (1024 * 1024)
+            return self._send(
+                413,
+                json.dumps(
+                    {"error": f"report cache body exceeds {limit_mib} MiB limit"}
+                ),
+            )
+        try:
+            req = json.loads(self.rfile.read(n) or b"{}")
+            row = report_cache_mod.save_report(
+                user,
+                cache_key=req.get("cache_key"),
+                config=req.get("config"),
+                preset=req.get("preset"),
+                label=req.get("label"),
+                inputs=req.get("inputs") or {},
+                summary=req.get("summary"),
+                html=req.get("html") or "",
+                ai_analysis=req.get("ai_analysis"),
+                markdown=req.get("markdown"),
+            )
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+        except ReportCacheError as e:
+            return self._send(400, json.dumps({"error": str(e)}))
+        return self._send(201, json.dumps(row, default=str))
+
     # ---- history handlers -------------------------------------------------
 
     def _history_access_token(self):
@@ -766,6 +842,11 @@ class Handler(BaseHTTPRequestHandler):
         token = getattr(self, "_access_token", None)
         if not token:
             return self._send(500, json.dumps({"error": "session token missing"}))
+        if auth_mod.is_local_token(token):
+            return self._send(
+                403,
+                json.dumps({"error": "Supabase-backed account required"}),
+            )
         return token, user
 
     def _handle_history_get(self):

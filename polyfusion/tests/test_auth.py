@@ -48,6 +48,34 @@ def test_register_no_verification_sent_when_confirm_off(fake):
     assert result["email_verification_sent"] is False
 
 
+def test_register_without_email_confirmation_uses_local_store(
+    fake, monkeypatch, tmp_path
+):
+    monkeypatch.setenv("POLYFUSION_REQUIRE_EMAIL_CONFIRMATION", "0")
+    monkeypatch.setenv("POLYFUSION_LOCAL_AUTH_DB", str(tmp_path / "auth.sqlite3"))
+
+    result = auth.register(
+        "localuser",
+        "local@example.com",
+        "password1",
+        "password1",
+        affiliation="ASIPP",
+    )
+
+    assert result["email_verification_sent"] is False
+    assert result["auth_provider"] == "local"
+    assert "local@example.com" not in fake.auth.users
+
+    access, refresh, user = auth.login("local@example.com", "password1")
+    assert access
+    assert refresh.startswith("local-")
+    assert user["username"] == "localuser"
+    assert user["affiliation"] == "ASIPP"
+    assert user["auth_provider"] == "local"
+    assert auth.validate_session(access) == result["user_id"]
+    assert auth.get_user(access)["email"] == "local@example.com"
+
+
 def test_register_puts_username_into_options_data(fake):
     auth.register("alice", "alice@example.com", "password1", "password1")
     rec = fake.auth.users["alice@example.com"]

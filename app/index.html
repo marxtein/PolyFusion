@@ -432,8 +432,8 @@
       <div class="exports" style="margin-top:6px"><button id="saveAsP">★ 另存为预设</button><button id="delP" disabled>✕ 删除预设</button></div>
       <div id="eqQuick"></div></div>
     <div class="sec collapsed" data-sec="params"><p class="sec-t" data-t="params">参数 Parameters <span class="n" data-t="liveN">编辑即重算</span></p><div id="params"></div></div>
-    <div class="sec" data-sec="window"><p class="sec-t" data-t="window">最佳区判据 Operating Window</p><div id="thresh" class="scanbox"></div></div>
-    <div class="sec" data-sec="scan"><p class="sec-t" data-t="scan">POPCON 扫描轴 Scan Axes</p>
+    <div class="sec collapsed" data-sec="window"><p class="sec-t" data-t="window">最佳区判据 Operating Window</p><div id="thresh" class="scanbox"></div></div>
+    <div class="sec collapsed" data-sec="scan"><p class="sec-t" data-t="scan">POPCON 扫描轴 Scan Axes</p>
       <div class="scanbox">
         <div class="axis"><div class="hd"><span class="tag">X</span><span data-t="xax">横轴</span></div><select id="xkey"></select>
           <div class="row3"><div class="fld"><label>min</label><input id="xmin" type="number" step="any"></div>
@@ -1136,8 +1136,10 @@ function updateHistoryControls(){
 function historyStatus(msg,isErr){const e=document.getElementById('err');if(e)e.textContent=msg||'';if(isErr&&e)e.scrollIntoView({block:'nearest'});}
 function setFoldGroup(group,titleSelector,collapsed){group.classList.toggle('collapsed',collapsed);const title=group.querySelector(titleSelector);if(title)title.setAttribute('aria-expanded',String(!collapsed));}
 function setParamGroupsCollapsed(collapsed){
-  const sec=document.querySelector('.sec[data-sec="params"]');
-  if(sec)sec.classList.toggle('collapsed',collapsed);
+  ['params','window','scan'].forEach(name=>{
+    const sec=document.querySelector(`.sec[data-sec="${name}"]`);
+    if(sec)sec.classList.toggle('collapsed',collapsed);
+  });
   document.querySelectorAll('#params .param-grp').forEach(g=>setFoldGroup(g,'.grp-h',collapsed));
 }
 function setOutputGroupsCollapsed(collapsed){document.querySelectorAll('#results .grp').forEach(g=>setFoldGroup(g,'.grp-t',collapsed));}
@@ -2319,6 +2321,55 @@ function scanCsv(s){const F=Object.keys(s.fields);let out='# '+s.xkey+','+s.ykey
   for(let j=0;j<s.y.length;j++)for(let i=0;i<s.x.length;i++)out+=s.x[i]+','+s.y[j]+','+F.map(f=>s.fields[f][j][i]).join(',')+'\n';return out;}
 // bind auth-wall UI once (independent of init gating)
 // ---- phase 4: one-click simulation report ----
+function stableJson(v){
+  if(Array.isArray(v))return '['+v.map(stableJson).join(',')+']';
+  if(v&&typeof v==='object')return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stableJson(v[k])).join(',')+'}';
+  return JSON.stringify(v);
+}
+function hashString(s){
+  let h=2166136261>>>0;
+  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}
+  return h.toString(16).padStart(8,'0')+'-'+s.length.toString(36);
+}
+function reportCacheInput(payload){return{config:payload.config,preset:payload.preset||null,params:payload.params||{},last_run:payload.last_run||null,last_scan:payload.last_scan||null,lang:payload.lang||'zh'};}
+function reportCacheKey(input){return 'pf-report-v1-'+hashString(stableJson(input));}
+function reportSummaryForCache(payload){
+  const out=compactSummary((payload.last_run&&payload.last_run.outputs)||{});
+  const scan=payload.last_scan||{};['xkey','ykey','n_invalid'].forEach(k=>{if(scan[k]!=null)out[k]=scan[k];});
+  return out;
+}
+async function lookupReportCache(cacheKey){
+  if(!historyAllowed())return null;
+  try{
+    const r=await fetch('/api/report/cache/lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cache_key:cacheKey}),credentials:'same-origin'});
+    if(r.status===401){_handleAuthResponse(r);return null;}
+    if(!r.ok)return null;
+    const data=await r.json().catch(()=>({}));
+    return data&&data.hit&&data.report?data.report:null;
+  }catch(e){return null;}
+}
+function setReportSaveStatus(reportWindow,msg,isErr){
+  try{const box=reportWindow&&reportWindow.document&&reportWindow.document.getElementById('saveReportStatus');if(box){box.textContent=msg||'';box.style.color=isErr?'#7a1f2c':'#0c8678';}}catch(e){}
+}
+async function saveReportCache(cacheKey,payload,reportWindow,aiAnalysis,manual){
+  if(!historyAllowed()){if(manual)showAuthWall();setReportSaveStatus(reportWindow,L('请先登录后保存报告。','Sign in to save reports.'),true);return null;}
+  try{
+    const html=(reportWindow&&reportWindow.POLYFUSION_BASE_REPORT_HTML)||'<!DOCTYPE html>\n'+reportWindow.document.documentElement.outerHTML;
+    const body={cache_key:cacheKey,config:payload.config,preset:payload.preset,label:payload.config_label,inputs:reportCacheInput(payload),summary:reportSummaryForCache(payload),html,ai_analysis:aiAnalysis||null,markdown:(reportWindow&&reportWindow.POLYFUSION_REPORT_MARKDOWN)||null};
+    const r=await fetch('/api/report/cache/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),credentials:'same-origin'});
+    if(r.status===401){_handleAuthResponse(r);return null;}
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(data.error||`HTTP ${r.status}`);
+    setReportSaveStatus(reportWindow,L('报告已保存。','Report saved.'));
+    if(manual){const ee=document.getElementById('err');if(ee)ee.textContent=L('报告已保存。','Report saved.');}
+    return data;
+  }catch(e){setReportSaveStatus(reportWindow,L('保存报告失败：','Save report failed: ')+(e&&e.message?e.message:String(e)),true);return null;}
+}
+function attachReportSave(reportWindow,cacheKey,payload,aiState){
+  try{
+    reportWindow.POLYFUSION_SAVE_REPORT=()=>saveReportCache(cacheKey,payload,reportWindow,aiState&&aiState.text,true);
+  }catch(e){}
+}
 async function capturePlotImage(maxW, maxH){
   // Grab the rendered plot as a base64 PNG data URI. Returns null when the
   // plot is empty (Plotly purged or never drawn) so callers can skip that
@@ -2338,35 +2389,48 @@ async function generateSimulationReport(opts){
   const ee=document.getElementById('err');if(ee)ee.textContent='';
   if(!plotlyReady()){showPlotlyMissing();return;}
   if(!LASTRUN){if(ee)ee.textContent=L('请先运行一次工作点计算再生成报告。','Run an operating-point calculation before generating a report.');return;}
-  const origView=VIEW;
   const cfgLabel=(CONFIGS&&CUR&&CONFIGS[CUR]&&CONFIGS[CUR].label)||CUR||'PolyFusion';
+  const strippedRun=stripLargeArrays(LASTRUN),strippedScan=stripLargeArrays(LASTSCAN);
+  const basePayload={
+    config:CUR,
+    config_label:cfgLabel,
+    preset:(document.getElementById('preset')||{}).value||null,
+    params:snapshotParamsForReport(),
+    last_run:strippedRun,
+    last_scan:strippedScan,
+    images:{},
+    timestamp:new Date().toISOString(),
+    user:AUTH_USER||'anonymous',
+    lang:LANG||'zh',
+  };
+  const cacheInput=reportCacheInput(basePayload),cacheKey=reportCacheKey(cacheInput);
+  const cached=await lookupReportCache(cacheKey);
+  if(cached&&cached.html){
+    const w=window.open('','_blank');
+    if(!w){if(ee)ee.textContent=L('新窗口被浏览器拦截，请允许弹出窗口后重试。','Pop-up blocked. Please allow pop-ups and retry.');return;}
+    w.document.open();w.document.write(cached.html);w.document.close();
+    const aiState={text:cached.ai_analysis||''};
+    w.POLYFUSION_BASE_REPORT_HTML=cached.html;
+    attachReportSave(w,cacheKey,basePayload,aiState);
+    if(cached.ai_analysis)setAiReportContent(w,cached.ai_analysis,false);
+    setReportSaveStatus(w,L('已从缓存加载。','Loaded from cache.'));
+    if(ee)ee.textContent=L('已从报告缓存加载。','Loaded from report cache.');
+    return;
+  }
+
+  const origView=VIEW;
   const images={};
-  // Render each view in turn, snapshot, then we'll restore the user's view.
-  // 'quick' mode (header button) skips tab-tour and just captures the current view.
   const views=opts.quick?[origView]:['popcon','shape','profile'];
   try{
     for(const v of views){
       if(v==='popcon'&&!LASTSCAN)continue;
       setView(v);
-      // Plotly react runs synchronously inside draw*, but toImage needs the
-      // layout to settle on the rasterised canvas. One animation frame is enough.
       await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
       const uri=await capturePlotImage(1200,900);
       if(uri)images[v]=uri;
     }
   }finally{setView(origView);}
-  const payload={
-    config:CUR,
-    config_label:cfgLabel,
-    preset:(document.getElementById('preset')||{}).value||null,
-    params:snapshotParamsForReport(),
-    last_run:stripLargeArrays(LASTRUN),
-    last_scan:stripLargeArrays(LASTSCAN),
-    images:images,
-    timestamp:new Date().toISOString(),
-    user:AUTH_USER||'anonymous',
-    lang:LANG||'zh',
-  };
+  const payload=Object.assign({},basePayload,{images,timestamp:new Date().toISOString()});
   try{
     const r=await fetch('/api/report',{
       method:'POST',
@@ -2380,7 +2444,10 @@ async function generateSimulationReport(opts){
     const w=window.open('','_blank');
     if(!w){if(ee)ee.textContent=L('新窗口被浏览器拦截，请允许弹出窗口后重试。','Pop-up blocked. Please allow pop-ups and retry.');return;}
     w.document.open();w.document.write(html);w.document.close();
-    requestAiReport(payload,w,ee);
+    const aiState={text:''};
+    w.POLYFUSION_BASE_REPORT_HTML=html;
+    attachReportSave(w,cacheKey,payload,aiState);
+    requestAiReport(payload,w,ee,cacheKey,aiState);
   }catch(e){if(ee)ee.textContent=L('生成报告失败：','Report generation failed: ')+(e&&e.message?e.message:String(e));}
 }
 function setAiReportContent(reportWindow,text,isError){
@@ -2397,7 +2464,7 @@ function setAiReportContent(reportWindow,text,isError){
     box.textContent=text;
   }catch(e){}
 }
-async function requestAiReport(payload,reportWindow,ee){
+async function requestAiReport(payload,reportWindow,ee,cacheKey,aiState){
   try{
     const aiPayload=Object.assign({},payload,{images:{}});
     const r=await fetch('/api/report/ai',{
@@ -2409,7 +2476,11 @@ async function requestAiReport(payload,reportWindow,ee){
     if(r.status===401){_handleAuthResponse(r);setAiReportContent(reportWindow,L('AI 报告生成失败：请重新登录。','AI report failed: please sign in again.'),true);return;}
     const d=await r.json().catch(()=>({}));
     if(!r.ok){setAiReportContent(reportWindow,L('AI 报告生成失败：','AI report failed: ')+(d.error||r.status),true);return;}
-    setAiReportContent(reportWindow,d.analysis||L('AI 未返回分析内容。','AI returned no analysis.'),false);
+    const analysis=d.analysis||L('AI 未返回分析内容。','AI returned no analysis.');
+    if(aiState)aiState.text=analysis;
+    setAiReportContent(reportWindow,analysis,false);
+    attachReportSave(reportWindow,cacheKey,payload,aiState);
+    saveReportCache(cacheKey,payload,reportWindow,analysis,false);
   }catch(e){
     const msg=e&&e.message?e.message:String(e);
     setAiReportContent(reportWindow,L('AI 报告生成失败：','AI report failed: ')+msg,true);

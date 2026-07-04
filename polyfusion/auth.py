@@ -1,8 +1,9 @@
 """User authentication and session management for PolyFusion.
 
-This module is a thin adapter over Supabase Auth. Password hashing, email
-verification, password reset and JWT issuance are all delegated to Supabase;
-the local process stores no password material at all.
+This module is normally a thin adapter over Supabase Auth. When
+``POLYFUSION_REQUIRE_EMAIL_CONFIRMATION=0``, registration/login use a local
+SQLite auth store so the web process can avoid confirmation emails without
+loading a Supabase service-role key.
 
 Public surface used by ``app/server.py``:
     - ``register(username, email, password, password2) -> dict``
@@ -29,14 +30,20 @@ mint tokens) avoid the asymmetric-key machinery.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import re
+import secrets
+import sqlite3
 import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 from email.utils import parseaddr
+from pathlib import Path
 from typing import Optional
 
 from supabase import Client, create_client
@@ -74,9 +81,221 @@ _REFRESH_WINDOW = 5 * 60
 # Test-only: when set, verify_jwt decodes HS256 tokens with this secret.
 _TEST_SECRET_ENV = "POLYFUSION_TEST_JWT_SECRET"
 
+_EMAIL_CONFIRM_ENV = "POLYFUSION_REQUIRE_EMAIL_CONFIRMATION"
+_LOCAL_AUTH_DB_ENV = "POLYFUSION_LOCAL_AUTH_DB"
+_LOCAL_AUTH_ISSUER = "polyfusion-local-auth"
+_LOCAL_AUTH_ITERATIONS = 210_000
+
 
 class AuthError(Exception):
     """Raised for all PolyFusion-side auth failures."""
+
+
+def email_confirmation_required() -> bool:
+    return os.environ.get(_EMAIL_CONFIRM_ENV, "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
+def _local_auth_db_path() -> Path:
+    raw = os.environ.get(_LOCAL_AUTH_DB_ENV, "").strip()
+    return (
+        Path(raw).expanduser() if raw else Path.home() / ".polyfusion" / "auth.sqlite3"
+    )
+
+
+def _local_conn() -> sqlite3.Connection:
+    path = _local_auth_db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path, timeout=10.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS local_users (
+            user_id TEXT PRIMARY KEY,
+            username TEXT NOT NULL UNIQUE,
+            email TEXT NOT NULL UNIQUE,
+            salt TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            affiliation TEXT,
+            created_at REAL NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS local_auth_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
+    conn.commit()
+    return conn
+
+
+def _local_secret(conn: sqlite3.Connection) -> str:
+    row = conn.execute(
+        "SELECT value FROM local_auth_meta WHERE key = 'jwt_secret'"
+    ).fetchone()
+    if row:
+        return str(row["value"])
+    secret = secrets.token_urlsafe(48)
+    conn.execute(
+        "INSERT INTO local_auth_meta(key, value) VALUES('jwt_secret', ?)",
+        (secret,),
+    )
+    conn.commit()
+    return secret
+
+
+def _hash_password(password: str, salt: bytes) -> str:
+    return hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, _LOCAL_AUTH_ITERATIONS
+    ).hex()
+
+
+def _local_user_dict(row: sqlite3.Row) -> dict:
+    return {
+        "user_id": row["user_id"],
+        "username": row["username"],
+        "email": row["email"],
+        "email_verified": True,
+        "affiliation": row["affiliation"],
+        "is_admin": False,
+        "auth_provider": "local",
+    }
+
+
+def _local_register(
+    username: str,
+    email: str,
+    password: str,
+    *,
+    affiliation: str | None = None,
+) -> dict:
+    salt = secrets.token_bytes(16)
+    user_id = f"local-{uuid.uuid4()}"
+    try:
+        with _local_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO local_users(
+                    user_id, username, email, salt, password_hash, affiliation, created_at
+                ) VALUES(?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    username,
+                    email,
+                    salt.hex(),
+                    _hash_password(password, salt),
+                    affiliation,
+                    time.time(),
+                ),
+            )
+    except sqlite3.IntegrityError as exc:
+        raise AuthError("registration failed") from exc
+    except sqlite3.Error as exc:
+        raise AuthError("service unavailable") from exc
+    return {
+        "user_id": user_id,
+        "username": username,
+        "email": email,
+        "email_verification_sent": False,
+        "auth_provider": "local",
+    }
+
+
+def _local_issue_session(
+    conn: sqlite3.Connection, row: sqlite3.Row
+) -> tuple[str, str, dict]:
+    if _pyjwt is None:
+        raise AuthError("service unavailable")
+    now = int(time.time())
+    access = _pyjwt.encode(
+        {
+            "iss": _LOCAL_AUTH_ISSUER,
+            "provider": "local",
+            "sub": row["user_id"],
+            "email": row["email"],
+            "iat": now,
+            "exp": now + 3600,
+        },
+        _local_secret(conn),
+        algorithm="HS256",
+    )
+    refresh = f"local-{secrets.token_urlsafe(32)}"
+    return access, refresh, _local_user_dict(row)
+
+
+def _local_login(email: str, password: str) -> tuple[str, str, dict] | None:
+    try:
+        with _local_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM local_users WHERE email = ?", (email,)
+            ).fetchone()
+            if row is None:
+                return None
+            expected = _hash_password(password, bytes.fromhex(row["salt"]))
+            if not hmac.compare_digest(expected, row["password_hash"]):
+                raise AuthError("invalid credentials")
+            return _local_issue_session(conn, row)
+    except AuthError:
+        raise
+    except sqlite3.Error as exc:
+        raise AuthError("service unavailable") from exc
+
+
+def _local_claims(token: str) -> Optional[dict]:
+    if not token or _pyjwt is None:
+        return None
+    try:
+        unverified = _pyjwt.decode(token, options={"verify_signature": False})
+    except Exception:
+        return None
+    if (
+        unverified.get("provider") != "local"
+        or unverified.get("iss") != _LOCAL_AUTH_ISSUER
+    ):
+        return None
+    try:
+        with _local_conn() as conn:
+            return _pyjwt.decode(
+                token,
+                _local_secret(conn),
+                algorithms=["HS256"],
+                issuer=_LOCAL_AUTH_ISSUER,
+                options={"verify_aud": False},
+            )
+    except Exception:
+        return None
+
+
+def _local_get_user(access_token: str) -> Optional[dict]:
+    claims = _local_claims(access_token)
+    if claims is None:
+        return None
+    try:
+        with _local_conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM local_users WHERE user_id = ?", (claims.get("sub"),)
+            ).fetchone()
+    except sqlite3.Error:
+        return None
+    return _local_user_dict(row) if row else None
+
+
+def is_local_token(access_token: Optional[str]) -> bool:
+    return bool(
+        not email_confirmation_required()
+        and access_token
+        and _local_claims(access_token) is not None
+    )
 
 
 def validate_username(name: str) -> str:
@@ -218,7 +437,12 @@ def verify_jwt(token: str) -> Optional[dict]:
                 token, test_secret, algorithms=["HS256"], options={"verify_aud": False}
             )
         except Exception:
-            return None
+            pass
+
+    if not email_confirmation_required():
+        local = _local_claims(token)
+        if local is not None:
+            return local
 
     try:
         unverified_header = _pyjwt.get_unverified_header(token)
@@ -337,6 +561,14 @@ def register(
     if password2 != password:
         raise AuthError("passwords do not match")
 
+    if not email_confirmation_required():
+        return _local_register(
+            username,
+            email,
+            password,
+            affiliation=affiliation.strip() if affiliation else None,
+        )
+
     client = supabase_client()
     try:
         data = {"username": username}
@@ -441,6 +673,10 @@ def login(email: str, password: str) -> tuple[str, str, dict]:
     email = validate_email(email)
     if not isinstance(password, str) or not password:
         raise AuthError("invalid credentials")
+    if not email_confirmation_required():
+        local = _local_login(email, password)
+        if local is not None:
+            return local
     client = supabase_client()
     try:
         resp = client.auth.sign_in_with_password({"email": email, "password": password})
@@ -464,6 +700,8 @@ def logout(access_token: Optional[str], refresh_token: Optional[str] = None) -> 
     """
     if not access_token:
         return
+    if not email_confirmation_required() and _local_claims(access_token) is not None:
+        return
     client = supabase_client()
     try:
         client.auth.sign_out(access_token)
@@ -476,6 +714,10 @@ def get_user(access_token: Optional[str]) -> Optional[dict]:
     """Return the public-shape user dict for ``access_token`` or ``None``."""
     if not access_token:
         return None
+    if not email_confirmation_required():
+        local = _local_get_user(access_token)
+        if local is not None:
+            return local
     client = supabase_client()
     try:
         resp = client.auth.get_user(access_token)

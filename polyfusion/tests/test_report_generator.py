@@ -163,8 +163,11 @@ def test_report_includes_basic_and_ai_sections():
 def test_report_embeds_markdown_export_and_ai_renderer():
     html = generate_report(_sample_data())
     assert "id='exportMarkdown'" in html
+    assert "id='saveReport'" in html
+    assert "saveReportStatus" in html
     assert "POLYFUSION_REPORT_MARKDOWN" in html
     assert "POLYFUSION_SET_AI_REPORT" in html
+    assert "POLYFUSION_SAVE_REPORT" in html
     assert "renderMarkdown" in html
     assert "text/markdown;charset=utf-8" in html
 
@@ -292,6 +295,91 @@ def test_ai_report_falls_back_to_minimal_chat_payload(monkeypatch):
     assert "verbosity" not in calls[2][1]
 
 
+def test_report_cache_lookup_endpoint_serves_hit(monkeypatch):
+    import app.server as srv
+
+    calls = []
+
+    def fake_get_report(user_id, cache_key):
+        calls.append((user_id, cache_key))
+        return {
+            "id": "r1",
+            "cache_key": cache_key,
+            "html": "<!DOCTYPE html><html></html>",
+            "ai_analysis": "ok",
+        }
+
+    monkeypatch.setattr(srv.Handler, "_require_auth", lambda self: "u1")
+    monkeypatch.setattr(srv.report_cache_mod, "get_report", fake_get_report)
+    from app.server import Handler, ThreadingHTTPServer
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        body = jsonlib.dumps({"cache_key": "pf-report-v1-a"}).encode()
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/api/report/cache/lookup",
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as response:
+            payload = jsonlib.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+    assert payload["hit"] is True
+    assert payload["report"]["ai_analysis"] == "ok"
+    assert calls == [("u1", "pf-report-v1-a")]
+
+
+def test_report_cache_save_endpoint_serves_row(monkeypatch):
+    import app.server as srv
+
+    calls = []
+
+    def fake_save_report(user_id, **kwargs):
+        calls.append((user_id, kwargs))
+        return {"id": "r1", "cache_key": kwargs["cache_key"]}
+
+    monkeypatch.setattr(srv.Handler, "_require_auth", lambda self: "u1")
+    monkeypatch.setattr(srv.report_cache_mod, "save_report", fake_save_report)
+    from app.server import Handler, ThreadingHTTPServer
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        body = jsonlib.dumps(
+            {
+                "cache_key": "pf-report-v1-a",
+                "config": "tokamak",
+                "inputs": {"config": "tokamak"},
+                "html": "<!DOCTYPE html><html></html>",
+                "ai_analysis": "ok",
+            }
+        ).encode()
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/api/report/cache/save",
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as response:
+            status = response.status
+            payload = jsonlib.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+    assert status == 201
+    assert payload == {"id": "r1", "cache_key": "pf-report-v1-a"}
+    assert calls[0][0] == "u1"
+    assert calls[0][1]["cache_key"] == "pf-report-v1-a"
+
+
 def test_ai_report_endpoint_serves_json(monkeypatch):
     import app.server as srv
 
@@ -358,10 +446,15 @@ def test_frontend_exposes_report_buttons_and_handlers():
     # backend endpoints wired
     assert "/api/report" in html
     assert "/api/report/ai" in html
+    assert "/api/report/cache/lookup" in html
+    assert "/api/report/cache/save" in html
     # JS entry points exist
     assert "function generateSimulationReport" in html
     assert "requestAiReport" in html
     assert "POLYFUSION_SET_AI_REPORT" in html
+    assert "reportCacheKey" in html
+    assert "lookupReportCache" in html
+    assert "saveReportCache" in html
     assert "capturePlotImage" in html
     # size-limit helper: dense arrays must be stripped before upload
     assert "function stripLargeArrays" in html

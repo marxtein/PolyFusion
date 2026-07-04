@@ -217,6 +217,44 @@ def test_register_accepts_affiliation(inproc_server, fake):
     assert fake.auth.users["aff@example.com"]["affiliation"] == "ASIPP"
 
 
+def test_register_without_email_confirmation_allows_login(
+    inproc_server, fake, monkeypatch, tmp_path
+):
+    monkeypatch.setenv("POLYFUSION_REQUIRE_EMAIL_CONFIRMATION", "0")
+    monkeypatch.setenv("POLYFUSION_LOCAL_AUTH_DB", str(tmp_path / "auth.sqlite3"))
+    status, payload, _ = _post(
+        inproc_server,
+        "/api/auth/register",
+        {
+            "username": "localweb",
+            "email": "localweb@example.com",
+            "password": "supersecret",
+            "password2": "supersecret",
+            "affiliation": "ASIPP",
+        },
+    )
+    assert status == 200, payload
+    assert payload["email_verification_sent"] is False
+    assert "localweb@example.com" not in fake.auth.users
+
+    status, payload, hdrs = _post(
+        inproc_server,
+        "/api/auth/login",
+        {"email": "localweb@example.com", "password": "supersecret"},
+    )
+    assert status == 200, payload
+    cookies = _cookies_from_headers(hdrs)
+    cookie_header = f"{srv.ACCESS_COOKIE}={cookies[srv.ACCESS_COOKIE]}"
+    status, me, _ = _get(
+        inproc_server,
+        "/api/auth/me",
+        headers={"Cookie": cookie_header},
+    )
+    assert status == 200, me
+    assert me["user"] == "localweb"
+    assert me["affiliation"] == "ASIPP"
+
+
 def test_debug_register_hidden_by_default(inproc_server):
     status, payload, _ = _post(
         inproc_server,
