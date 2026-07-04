@@ -19,10 +19,13 @@ def test_mirror_shape_uses_boray_style_psi_contours_not_scaled_hand_lines():
     assert "const zt=Lc/2+Lth,zpad=Math.max(Lth*0.60,Lc*0.04,1e-6)" in src
     assert "const mirrorShoulder=Math.min(Lth*0.05,Lc*0.015),mirrorSoft0=Lc/2-mirrorShoulder" in src
     assert "const mirrorThroatU=z=>Math.max(0,Math.min(1,(Math.abs(z)-mirrorSoft0)/Math.max(zt-mirrorSoft0,1e-6)))" in src
-    assert "const mirrorBaxis=z=>1+(Rm-1)*mirrorSmoother(mirrorThroatU(z))" in src
+    assert "const mirrorCoreU=z=>{const q=Math.min(1,Math.abs(z)/Math.max(Lc/2,1e-6));return q*q*(3-2*q);}" in src
+    assert "const mirrorCoreRise=Math.min(0.10,0.004*(Rm-1))" in src
+    assert "const mirrorBaxis=z=>1+mirrorCoreRise*mirrorCoreU(z)*(1-mirrorThroatU(z))+(Rm-1)*mirrorSmoother(mirrorThroatU(z))" in src
+    assert "const mirrorRadialBow=(z,r)=>{const q=Math.min(1,Math.abs(z)/Math.max(Lc/2,1e-6)),rr=Math.pow(r/Math.max(a,1e-6),2)" in src
     assert "mirrorW=Math.max" not in src
     assert "mirrorBaxis2" not in src
-    assert "const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z))" in src
+    assert "const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z)*mirrorRadialBow(z,r))" in src
     assert "const mirrorPsiAt=(z,r)=>{const n=28,dr=r/n,norm=0.5*a*a;let psi=0,br0=mirrorBzRZ(z,0)" in src
     assert "const prof=z=>{let lo=0,hi=a*1.02;for(let k=0;k<28;k++)" in src
     assert "const mirrorPsiGrid=(sgn=1)=>{const nx=241,ny=121" in src
