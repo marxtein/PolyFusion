@@ -18,7 +18,10 @@ def test_mirror_shape_uses_boray_style_psi_contours_not_scaled_hand_lines():
     assert "const zt=Lc/2+Lth,zpad=Math.max(Lth*0.18,Lc*0.015,1e-6)" in src
     assert "const mirrorW=Math.max(Lth*0.45,Lc*0.01,1e-6)" in src
     assert "const mirrorPeak=(z,z0)=>Math.exp(-Math.pow((z-z0)/mirrorW,2))" in src
+    assert "const mirrorCoreU=z=>{const q=Math.min(1,Math.abs(z)/Math.max(Lc/2,1e-6));return q*q*(3-2*q);}" in src
+    assert "const mirrorCoreRise=Math.min(0.035,0.0012*(Rm-1))" in src
     assert "const mirrorBaxis=z=>{const g0=2*Math.exp(-Math.pow(zt/mirrorW,2)),gp=1+Math.exp(-Math.pow((2*zt)/mirrorW,2))" in src
+    assert "return 1+mirrorCoreRise*mirrorCoreU(z)*(1-s)+(Rm-1)*s;}" in src
     assert "mirrorW=Math.max(Lth*1.35,Lc*0.16" not in src
     assert "Lc*0.16" not in src
     assert "const mirrorBaxis2=z=>" in src

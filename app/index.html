@@ -1402,9 +1402,11 @@ function drawShape(){
     const zmin=-zt-zpad,zmax=zt+zpad;
     const mirrorW=Math.max(Lth*0.45,Lc*0.01,1e-6);
     const mirrorPeak=(z,z0)=>Math.exp(-Math.pow((z-z0)/mirrorW,2));
+    const mirrorCoreU=z=>{const q=Math.min(1,Math.abs(z)/Math.max(Lc/2,1e-6));return q*q*(3-2*q);};
+    const mirrorCoreRise=Math.min(0.035,0.0012*(Rm-1));
     const mirrorBaxis=z=>{const g0=2*Math.exp(-Math.pow(zt/mirrorW,2)),gp=1+Math.exp(-Math.pow((2*zt)/mirrorW,2));
       const s=Math.max(0,Math.min(1,(mirrorPeak(z,zt)+mirrorPeak(z,-zt)-g0)/Math.max(gp-g0,1e-9)));
-      return 1+(Rm-1)*s;};
+      return 1+mirrorCoreRise*mirrorCoreU(z)*(1-s)+(Rm-1)*s;};
     const mirrorBaxis2=z=>{const h=Math.max((zmax-zmin)/360,1e-5);return(mirrorBaxis(z+h)-2*mirrorBaxis(z)+mirrorBaxis(z-h))/(h*h);};
     const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z)-0.25*r*r*mirrorBaxis2(z));
     const mirrorPsiAt=(z,r)=>{const n=28,dr=r/n,norm=0.5*a*a;let psi=0,br0=mirrorBzRZ(z,0);
