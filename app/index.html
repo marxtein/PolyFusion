@@ -1389,24 +1389,34 @@ function drawShape(){
   }else if(CUR==='mirror'){
     const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
     const Lth=ft*Lc,Z=[],Rr=[];
-    const mirrorBnorm=z=>{const az=Math.abs(z);if(az<=Lc/2)return 1;const t=Math.min((az-Lc/2)/Math.max(Lth,1e-6),1);
-      return 1+(Rm-1)*Math.pow(Math.sin(Math.PI*t/2),2);};
-    const prof=z=>a/Math.sqrt(mirrorBnorm(z));
     const zmin=-Lc/2-Lth,zmax=Lc/2+Lth;
+    const zc=Lc/2,mirrorW=Math.max(Lth*1.35,Lc*0.16,1e-6);
+    const mirrorPeak=(z,z0)=>Math.exp(-Math.pow((z-z0)/mirrorW,2));
+    const mirrorBaxis=z=>{const g0=2*Math.exp(-Math.pow(zc/mirrorW,2)),gp=1+Math.exp(-Math.pow((2*zc)/mirrorW,2));
+      const s=Math.max(0,Math.min(1,(mirrorPeak(z,zc)+mirrorPeak(z,-zc)-g0)/Math.max(gp-g0,1e-9)));
+      return 1+(Rm-1)*s;};
+    const mirrorBaxis2=z=>{const h=Math.max((zmax-zmin)/360,1e-5);return(mirrorBaxis(z+h)-2*mirrorBaxis(z)+mirrorBaxis(z-h))/(h*h);};
+    const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z)-0.25*r*r*mirrorBaxis2(z));
+    const mirrorPsiAt=(z,r)=>{const n=28,dr=r/n,norm=0.5*a*a;let psi=0,br0=mirrorBzRZ(z,0);
+      for(let j=1;j<=n;j++){const rp=(j-1)*dr,rc=j*dr,br1=mirrorBzRZ(z,rc);psi+=dr*0.5*(br0+br1)*0.5*(rp+rc);br0=br1;}return psi/Math.max(norm,1e-12);};
+    const prof=z=>{let lo=0,hi=a*Math.max(1.12,1.02/Math.sqrt(Math.max(mirrorBaxis(z),1e-6)));
+      for(let k=0;k<28;k++){const mid=0.5*(lo+hi);if(mirrorPsiAt(z,mid)<1)lo=mid;else hi=mid;}return 0.5*(lo+hi);};
     for(let i=0;i<=160;i++){const z=zmin+(zmax-zmin)*i/160;Z.push(z);Rr.push(prof(z));}
     const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rr].map(r=>-r).reverse()];
     add(lin(Zb,Rb,GC('boundary'),2.6,true),'boundary');
     add(lin([zmin,zmax],[a+gg,a+gg],GC('wall'),2.2),'wall');
     add(lin([zmin,zmax],[-a-gg,-a-gg],GC('wall'),2.2),'wall');
     add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
-    const mirrorPsiNorm=(z,r)=>mirrorBnorm(z)*Math.pow(r/(a||1e-12),2);
     const mirrorPsiGrid=(sgn=1)=>{const nx=241,ny=121,x=[],yb=[],zb=[];
       for(let i=0;i<nx;i++)x.push(zmin+(zmax-zmin)*i/(nx-1));
-      for(let j=0;j<ny;j++){const r=a*j/(ny-1),row=[];yb.push(r);for(let i=0;i<nx;i++)row.push(mirrorPsiNorm(x[i],r));zb.push(row);}
+      for(let j=0;j<ny;j++){const r=a*j/(ny-1),row=[];yb.push(r);
+        for(let i=0;i<nx;i++){if(j===0)row.push(0);else{const rp=yb[j-1],prev=zb[j-1][i],dr=r-rp;
+          row.push(prev+dr*0.5*(mirrorBzRZ(x[i],r)+mirrorBzRZ(x[i],rp))*0.5*(r+rp)/Math.max(0.5*a*a,1e-12));}}
+        zb.push(row);}
       if(sgn>=0)return{x,y:yb,z:zb};
       return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()};};
     const mirrorPsiContour=(sgn=1)=>{const g=mirrorPsiGrid(sgn),c=GC('flux');
-      return{type:'contour',x:g.x,y:g.y,z:g.z,autocontour:false,contours:{coloring:'lines',start:0.16,end:0.76,size:0.30,showlabels:false},line:{color:c,width:1.1},colorscale:[[0,c],[1,c]],showscale:false,hoverinfo:'skip'};};
+      return{type:'contour',x:g.x,y:g.y,z:g.z,autocontour:false,contours:{coloring:'lines',start:0.12,end:0.90,size:0.13,showlabels:false},line:{color:c,width:1.05},colorscale:[[0,c],[1,c]],showscale:false,hoverinfo:'skip'};};
     add(mirrorPsiContour(1),'flux');add(mirrorPsiContour(-1),'flux');
     const zt=Lc/2+Lth,rt=prof(zt);
     add(cv([zt,zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
@@ -1423,7 +1433,7 @@ function drawShape(){
     add(txt([0],[(a+gg)*1.45],[`R<sub>m</sub>=B<sub>max</sub>/B<sub>min</sub>=${(+Rm).toFixed(1)} · ${L('损失锥','loss cone')} sinθ=1/√R<sub>m</sub>=${(1/Math.sqrt(Rm)).toFixed(2)}`],'#c792ff'),'annot');
     lay=LAYOUT('Z [m]','R [m]');
     lay.xaxis.range=[-Lc/2-Lth*1.15,Lc/2+Lth*1.15];lay.yaxis.range=[-(a+gg)*1.75,(a+gg)*1.75];
-    document.getElementById('plotMeta').innerHTML=`<span>${L('BORAY 风格 ψ 等值线；Z-R 全平面，上下半径同时显示；壁含间隙 g','BORAY-style psi contours; full Z-R plane with both radius signs; wall includes gap g')}</span>`;
+    document.getElementById('plotMeta').innerHTML=`<span>${L('BORAY 风格 ψ=∫B_z R dR 等值线；Z-R 全平面，上下半径同时显示','BORAY-style psi contours (radial integral); full Z-R plane with both radius signs')}</span>`;
   }else if(CUR==='frc'){
     const pc=document.getElementById('phControls');
     if(pc){const state=`frc-${FRC_VIEW}`;

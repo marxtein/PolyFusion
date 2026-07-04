@@ -11,13 +11,16 @@ INDEX = os.path.join(ROOT, "app", "index.html")
 
 def test_mirror_shape_uses_boray_style_psi_contours_not_scaled_hand_lines():
     src = open(INDEX, encoding="utf-8").read()
-    assert "const mirrorBnorm=z=>" in src
-    assert "const mirrorPsiNorm=(z,r)=>mirrorBnorm(z)*Math.pow(r/(a||1e-12),2)" in src
+    assert "const mirrorBaxis=z=>" in src
+    assert "const mirrorBaxis2=z=>" in src
+    assert "const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z)-0.25*r*r*mirrorBaxis2(z))" in src
+    assert "const mirrorPsiAt=(z,r)=>{const n=28,dr=r/n,norm=0.5*a*a;let psi=0,br0=mirrorBzRZ(z,0)" in src
     assert "const mirrorPsiGrid=(sgn=1)=>{const nx=241,ny=121" in src
+    assert "row.push(prev+dr*0.5*(mirrorBzRZ(x[i],r)+mirrorBzRZ(x[i],rp))*0.5*(r+rp)/Math.max(0.5*a*a,1e-12))" in src
     assert "return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()}" in src
     assert "const mirrorPsiContour=(sgn=1)=>{const g=mirrorPsiGrid(sgn),c=GC('flux')" in src
     assert "type:'contour'" in src
-    assert "start:0.16,end:0.76,size:0.30" in src
+    assert "start:0.12,end:0.90,size:0.13" in src
     assert "colorscale:[[0,c],[1,c]]" in src
     assert "add(mirrorPsiContour(1),'flux');add(mirrorPsiContour(-1),'flux')" in src
     assert "BORAY-style psi contours" in src
