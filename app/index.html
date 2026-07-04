@@ -1398,17 +1398,15 @@ function drawShape(){
     }
     const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
     const Lth=ft*Lc,Z=[],Rr=[];
-    const zt=Lc/2+Lth,zpad=Math.max(Lth*0.60,Lc*0.04,1e-6);
+    const zt=Lc/2+Lth,zpad=Math.max(Lth*0.18,Lc*0.015,1e-6);
     const zmin=-zt-zpad,zmax=zt+zpad;
-    const mirrorSmoother=t=>{const u=Math.max(0,Math.min(1,t));return u*u*u*(u*(u*6-15)+10);};
-    const mirrorShoulder=Math.min(Lth*0.05,Lc*0.015),mirrorSoft0=Lc/2-mirrorShoulder;
-    const mirrorThroatU=z=>Math.max(0,Math.min(1,(Math.abs(z)-mirrorSoft0)/Math.max(zt-mirrorSoft0,1e-6)));
-    const mirrorCoreU=z=>{const q=Math.min(1,Math.abs(z)/Math.max(Lc/2,1e-6));return q*q*(3-2*q);};
-    const mirrorCoreRise=Math.min(0.10,0.004*(Rm-1));
-    const mirrorBaxis=z=>1+mirrorCoreRise*mirrorCoreU(z)*(1-mirrorThroatU(z))+(Rm-1)*mirrorSmoother(mirrorThroatU(z));
-    const mirrorRadialBow=(z,r)=>{const q=Math.min(1,Math.abs(z)/Math.max(Lc/2,1e-6)),rr=Math.pow(r/Math.max(a,1e-6),2);
-      return 1-Math.min(0.10,0.003*(Rm-1))*Math.max(0,1-q*q)*(1-mirrorThroatU(z))*rr;};
-    const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z)*mirrorRadialBow(z,r));
+    const mirrorW=Math.max(Lth*0.45,Lc*0.01,1e-6);
+    const mirrorPeak=(z,z0)=>Math.exp(-Math.pow((z-z0)/mirrorW,2));
+    const mirrorBaxis=z=>{const g0=2*Math.exp(-Math.pow(zt/mirrorW,2)),gp=1+Math.exp(-Math.pow((2*zt)/mirrorW,2));
+      const s=Math.max(0,Math.min(1,(mirrorPeak(z,zt)+mirrorPeak(z,-zt)-g0)/Math.max(gp-g0,1e-9)));
+      return 1+(Rm-1)*s;};
+    const mirrorBaxis2=z=>{const h=Math.max((zmax-zmin)/360,1e-5);return(mirrorBaxis(z+h)-2*mirrorBaxis(z)+mirrorBaxis(z-h))/(h*h);};
+    const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z)-0.25*r*r*mirrorBaxis2(z));
     const mirrorPsiAt=(z,r)=>{const n=28,dr=r/n,norm=0.5*a*a;let psi=0,br0=mirrorBzRZ(z,0);
       for(let j=1;j<=n;j++){const rp=(j-1)*dr,rc=j*dr,br1=mirrorBzRZ(z,rc);psi+=dr*0.5*(br0+br1)*0.5*(rp+rc);br0=br1;}return psi/Math.max(norm,1e-12);};
     const prof=z=>{let lo=0,hi=a*1.02;for(let k=0;k<28;k++){const mid=0.5*(lo+hi);if(mirrorPsiAt(z,mid)<1)lo=mid;else hi=mid;}return 0.5*(lo+hi);};
