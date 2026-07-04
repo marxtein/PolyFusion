@@ -1400,27 +1400,18 @@ function drawShape(){
     const Lth=ft*Lc,Z=[],Rr=[];
     const zt=Lc/2+Lth,zpad=Math.max(Lth*0.18,Lc*0.015,1e-6);
     const zmin=-zt-zpad,zmax=zt+zpad;
-    const mirrorW=Math.max(Lth*0.45,Lc*0.01,a*1.6,1e-6);
     const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));
-    const mirrorThroatS=z=>{const q=Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6)));
-      return mirrorEase(q)*Math.exp(-Math.pow((1-q)*Lth/mirrorW,2));};
+    const mirrorThroatS=z=>mirrorEase(Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6))));
+    const mirrorBoundaryR=z=>{const s=mirrorThroatS(z),rt=1/Math.sqrt(Math.max(Rm,1e-6));return a*(1-s+s*rt);};
     const mirrorCoreU=z=>{const q=Math.min(1,Math.abs(z)/Math.max(Lc/2,1e-6));return q*q*(3-2*q);};
-    const mirrorCoreRise=Math.min(0.050,0.0017*(Rm-1));
-    const mirrorBaxis=z=>{const s=mirrorThroatS(z),rs=1-s+s/Math.sqrt(Math.max(Rm,1e-6));
-      return 1/Math.max(rs*rs,1e-9)+mirrorCoreRise*mirrorCoreU(z)*(1-s);};
-    const mirrorBaxis2=z=>{const h=Math.max((zmax-zmin)/360,1e-5);return(mirrorBaxis(z+h)-2*mirrorBaxis(z)+mirrorBaxis(z-h))/(h*h);};
-    const mirrorBzRZ=(z,r)=>{const b=mirrorBaxis(z),rr=Math.pow(r/Math.max(a,1e-6),2);
-      const curv=-0.25*r*r*mirrorBaxis2(z),lim=0.30*b*rr;
-      return Math.max(0.05,b+Math.max(-lim,Math.min(lim,curv)));};
-    const mirrorPsiAt=(z,r)=>{const n=28,dr=r/n,norm=0.5*a*a;let psi=0,br0=mirrorBzRZ(z,0);
-      for(let j=1;j<=n;j++){const rp=(j-1)*dr,rc=j*dr,br1=mirrorBzRZ(z,rc);psi+=dr*0.5*(br0+br1)*0.5*(rp+rc);br0=br1;}return psi/Math.max(norm,1e-12);};
-    const prof=z=>{let lo=0,hi=a;for(let k=0;k<28;k++){const mid=0.5*(lo+hi);if(mirrorPsiAt(z,mid)<1)lo=mid;else hi=mid;}return 0.5*(lo+hi);};
-    for(let i=0;i<=220;i++){const z=zmin+(zmax-zmin)*i/220;Z.push(z);Rr.push(prof(z));}
+    const mirrorCoreRise=Math.min(0.035,0.0012*(Rm-1));
+    const mirrorCoreBow=z=>1+mirrorCoreRise*(1-mirrorCoreU(z))*(1-mirrorThroatS(z));
+    const mirrorPsiNorm=(z,r)=>Math.pow(r/Math.max(mirrorBoundaryR(z),1e-9),2)/mirrorCoreBow(z);
+    for(let i=0;i<=220;i++){const z=zmin+(zmax-zmin)*i/220;Z.push(z);Rr.push(mirrorBoundaryR(z));}
     const mirrorPsiGrid=(sgn=1)=>{const nx=241,ny=121,x=[],yb=[],zb=[];
       for(let i=0;i<nx;i++)x.push(zmin+(zmax-zmin)*i/(nx-1));
       for(let j=0;j<ny;j++){const r=a*j/(ny-1),row=[];yb.push(r);
-        for(let i=0;i<nx;i++){if(j===0)row.push(0);else{const rp=yb[j-1],prev=zb[j-1][i],dr=r-rp;
-          row.push(prev+dr*0.5*(mirrorBzRZ(x[i],r)+mirrorBzRZ(x[i],rp))*0.5*(r+rp)/Math.max(0.5*a*a,1e-12));}}
+        for(let i=0;i<nx;i++)row.push(mirrorPsiNorm(x[i],r));
         zb.push(row);}
       if(sgn>=0)return{x,y:yb,z:zb};
       return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()};};
@@ -1441,7 +1432,7 @@ function drawShape(){
       add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
       add(mirrorPsiContour(1),'flux');
     }
-    const rt=prof(zt);
+    const rt=mirrorBoundaryR(zt);
     add(cv([zt,zt],[MIRROR_VIEW==='full'?-rt:0,rt],'#c792ff',2.2,'dot'),'annot');
     add(cv([-zt,-zt],[MIRROR_VIEW==='full'?-rt:0,rt],'#c792ff',2.2,'dot'),'annot');
     add({type:'scatter',mode:'markers',x:[-zt,zt],y:[0,0],marker:{color:'#36e2c4',size:10,symbol:'line-ns-open'}},'annot');
