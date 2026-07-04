@@ -1462,6 +1462,8 @@ function drawShape(){
       const cs=sol?{start:solStart,end:solEnd,size:solStep}:{start:start??psiStep,end:end??psiMax,size:size??psiStep};
       return{type:'contour',x:g.x,y:g.y,z:g.z,autocontour:false,contours:{coloring:'lines',start:cs.start,end:cs.end,size:cs.size,showlabels:false},line:{color:c,width:1.05},colorscale:[[0,c],[1,c]],showscale:false,hoverinfo:'skip'};};
     const addFrcFluxContours=sgn=>{add(frcPsiContour(false,sgn,psiNearNull,psiNearNull,1),'flux');add(frcPsiContour(false,sgn),'flux');};
+    const bExtY=Math.max(v.r_s*1.18,v.r_s+0.62*Math.max(0,v.r_w-v.r_s));
+    const bExtZ0=-0.42*v.l_s,bExtZ1=-0.12*v.l_s;
     if(FRC_VIEW==='full'){
       const up=frcSep(1),dn=frcSep(-1),ar=[[...up[0],...dn[0].reverse()],[...up[1],...dn[1].reverse()]];
       add(lin(ar[0],ar[1],GC('boundary'),2.6,true),'boundary');
@@ -1478,8 +1480,8 @@ function drawShape(){
         textposition:['middle right','middle left'],textfont:{color:'#ff9f43',size:10},
         marker:{color:'#ff9f43',size:9,symbol:'x-thin',line:{width:2,color:'#ff9f43'}}},'annot');
       add(seg(-0.05*v.l_s,0.18*v.r_s,-0.38*v.l_s,0.18*v.r_s,'#ff6b6b',L('B←','B←'),'triangle-left'),'annot');
-      add(seg(-0.50*v.l_s,1.08*v.r_s,-0.15*v.l_s,1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');
-      add(seg(-0.50*v.l_s,-1.08*v.r_s,-0.15*v.l_s,-1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');
+      add(seg(bExtZ0,bExtY,bExtZ1,bExtY,'#36e2c4',L('B_e→','B_e→')),'annot');
+      add(seg(bExtZ0,-bExtY,bExtZ1,-bExtY,'#36e2c4',L('B_e→','B_e→')),'annot');
       add(cv([0,0],[0,v.r_s],'#9be564',1.4,'dot'),'annot');
       add(txt([v.l_s*0.05],[v.r_s*0.5],['r<sub>s</sub>'],'#9be564'),'annot');
       add(cv([-v.l_s/2,v.l_s/2],[v.r_s*1.04,v.r_s*1.04],'#ffd166',1.4,'dot'),'annot');
@@ -1505,7 +1507,7 @@ function drawShape(){
         textposition:['middle right','middle left'],textfont:{color:'#ff9f43',size:10},
         marker:{color:'#ff9f43',size:9,symbol:'x-thin',line:{width:2,color:'#ff9f43'}}},'annot');
       add(seg(-0.05*v.l_s,0.18*v.r_s,-0.38*v.l_s,0.18*v.r_s,'#ff6b6b',L('B←','B←'),'triangle-left'),'annot');
-      add(seg(-0.50*v.l_s,1.08*v.r_s,-0.15*v.l_s,1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');
+      add(seg(bExtZ0,bExtY,bExtZ1,bExtY,'#36e2c4',L('B_e→','B_e→')),'annot');
       add(cv([0,0],[0,v.r_s],'#9be564',1.4,'dot'),'annot');
       add(txt([v.l_s*0.05],[v.r_s*0.5],['r<sub>s</sub>'],'#9be564'),'annot');
       add(cv([-v.l_s/2,v.l_s/2],[v.r_s*1.04,v.r_s*1.04],'#ffd166',1.4,'dot'),'annot');

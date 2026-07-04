@@ -32,6 +32,9 @@ def test_frontend_states_frc_fit_and_dipole_coordinate_and_wall_limits():
     assert "type:'contour'" in src
     assert "const cs=sol?{start:solStart,end:solEnd,size:solStep}:{start:start??psiStep,end:end??psiMax,size:size??psiStep}" in src
     assert "const addFrcFluxContours=sgn=>{add(frcPsiContour(false,sgn,psiNearNull,psiNearNull,1),'flux');add(frcPsiContour(false,sgn),'flux');}" in src
+    assert "const bExtY=Math.max(v.r_s*1.18,v.r_s+0.62*Math.max(0,v.r_w-v.r_s))" in src
+    assert "add(seg(bExtZ0,bExtY,bExtZ1,bExtY" in src
+    assert "add(seg(bExtZ0,-bExtY,bExtZ1,-bExtY" in src
     assert "colorscale:[[0,c],[1,c]]" in src
     assert "addFrcFluxContours(1);addFrcFluxContours(-1)" in src
     assert "add(frcPsiContour(true,1),'open');add(frcPsiContour(true,-1),'open')" in src
