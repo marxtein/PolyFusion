@@ -9,6 +9,8 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from polyfusion.report_templates import build_ai_report_prompt
+
 
 DEFAULT_BASE_URL = "https://api.codexzh.com/v1"
 DEFAULT_MODEL = "gpt-5.4"
@@ -143,13 +145,7 @@ def generate_ai_report_analysis(data: dict) -> str:
     if len(compact) > MAX_PROMPT_CHARS:
         compact = compact[:MAX_PROMPT_CHARS] + "...[truncated]"
 
-    prompt = (
-        "你是聚变 0-D 初筛报告分析助手。请只基于下面 JSON 数据做工程解读，"
-        "不要编造未提供的数值。用中文输出，结构包括：\n"
-        "1. 核心结论\n2. 关键指标解读\n3. 风险与不确定性\n4. 下一步建议\n"
-        "保持专业、简洁，适合作为报告附录。\n\n"
-        f"报告数据 JSON：{compact}"
-    )
+    prompt = build_ai_report_prompt(compact)
     timeout = float(os.getenv("OPENAI_TIMEOUT", "120"))
     endpoint = os.getenv("OPENAI_ENDPOINT", "auto").lower()
     errors: list[str] = []
