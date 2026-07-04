@@ -270,9 +270,36 @@ def test_ai_report_loads_codex_api_key_from_project_env(monkeypatch, tmp_path):
 
 def test_ai_report_prompt_uses_strict_template():
     prompt = build_ai_report_prompt('{"config":"tokamak"}')
-    assert "PolyFusion 0-D 初筛报告分析助手" in prompt
-    assert "当前运行点和 POPCON 扫描" in prompt
-    assert '{"config":"tokamak"}' in prompt
+    for text in (
+        "PolyFusion 0-D 初筛报告分析助手",
+        "当前运行点和 POPCON 扫描",
+        "扫描网格证据不足",
+        "不能判断工作窗形状或敏感性趋势",
+        "依赖固定约束时间假设",
+        "几何模型较简化",
+        "不得写成保证进入或维持 H 模",
+        "不得使用“工程可行”",
+        '{"config":"tokamak"}',
+    ):
+        assert text in prompt
+
+
+def test_ai_report_request_uses_professional_prompt_template(monkeypatch):
+    calls = []
+
+    def fake_post_json(base_url, path, payload, api_key, timeout):
+        calls.append(payload)
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    monkeypatch.setenv("CODEX_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_ENDPOINT", "chat")
+    monkeypatch.setattr(ai_report, "_post_json", fake_post_json)
+    assert ai_report.generate_ai_report_analysis(_sample_data()) == "ok"
+    prompt = calls[0]["messages"][0]["content"]
+    assert "硬性要求" in prompt
+    assert "POPCON" in prompt
+    assert "报告数据 JSON" in prompt
+    assert '"config":"tokamak"' in prompt
 
 
 def test_ai_report_falls_back_to_minimal_chat_payload(monkeypatch):
