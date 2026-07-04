@@ -15,9 +15,14 @@ def test_mirror_shape_uses_boray_style_psi_contours_not_scaled_hand_lines():
     assert 'data-mirror-view="half"' in src
     assert 'data-mirror-view="full"' in src
     assert "const mirrorBaxis=z=>" in src
+    assert "const mirrorSmoother=t=>" in src
+    assert "const mirrorThroatU=z=>Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6)))" in src
+    assert "const mirrorBaxis=z=>1+(Rm-1)*mirrorSmoother(mirrorThroatU(z))" in src
+    assert "mirrorW=Math.max" not in src
     assert "const mirrorBaxis2=z=>" in src
     assert "const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z)-0.25*r*r*mirrorBaxis2(z))" in src
     assert "const mirrorPsiAt=(z,r)=>{const n=28,dr=r/n,norm=0.5*a*a;let psi=0,br0=mirrorBzRZ(z,0)" in src
+    assert "const prof=z=>a/Math.sqrt(Math.max(mirrorBaxis(z),1e-6))" in src
     assert "const mirrorPsiGrid=(sgn=1)=>{const nx=241,ny=121" in src
     assert "row.push(prev+dr*0.5*(mirrorBzRZ(x[i],r)+mirrorBzRZ(x[i],rp))*0.5*(r+rp)/Math.max(0.5*a*a,1e-12))" in src
     assert "return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()}" in src
