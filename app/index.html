@@ -320,6 +320,7 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,VIEW='shape',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
 let THEME=(()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}})();
 let FRC_VIEW=(()=>{try{return localStorage.getItem('polyfusion_frc_view')||'half'}catch(e){return'half'}})();
+let MIRROR_VIEW=(()=>{try{return localStorage.getItem('polyfusion_mirror_view')||'half'}catch(e){return'half'}})();
 let EQMAN={};  // bundled real-equilibrium manifest {config:{preset:{file,format,...}}}
 let STELL_STASH={};
 const ADV_PARAMS=new Set(['rc','zs','Vp_override','Sw_override']);  // expert-only inputs
@@ -1387,6 +1388,14 @@ function drawShape(){
         `<span>R<sub>0</sub>=${(+v.R0).toFixed(2)} m · a=${(+v.a).toFixed(2)} m · N<sub>fp</sub>=${+v.N_fp}${isFiniteNum(v.iota)?` · ι≈${(+v.iota).toFixed(2)}`:''} · ${L('后端解析磁面','backend flux surfaces')} ${sh.mode}</span>`;
     }else{document.getElementById('plotMeta').innerHTML=`<span>${L('等待后端解析磁面','waiting for backend flux surfaces')}</span>`;document.getElementById('phControls').innerHTML='';}
   }else if(CUR==='mirror'){
+    const pc=document.getElementById('phControls');
+    if(pc){const state=`mirror-${MIRROR_VIEW}`;
+      if(pc.dataset.state!==state){
+        pc.innerHTML=`${L('磁镜视图：','Mirror view: ')}<button class="phbtn${MIRROR_VIEW==='half'?' on':''}" data-mirror-view="half">${L('半平面','half-plane')}</button><button class="phbtn${MIRROR_VIEW==='full'?' on':''}" data-mirror-view="full">${L('完整','full')}</button>`;
+        pc.dataset.state=state;
+        pc.querySelectorAll('.phbtn[data-mirror-view]').forEach(b=>b.onclick=()=>{MIRROR_VIEW=b.dataset.mirrorView;try{localStorage.setItem('polyfusion_mirror_view',MIRROR_VIEW)}catch(e){};pc.dataset.state='';drawShape();});
+      }
+    }
     const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
     const Lth=ft*Lc,Z=[],Rr=[];
     const zmin=-Lc/2-Lth,zmax=Lc/2+Lth;
@@ -1402,11 +1411,6 @@ function drawShape(){
     const prof=z=>{let lo=0,hi=a*Math.max(1.12,1.02/Math.sqrt(Math.max(mirrorBaxis(z),1e-6)));
       for(let k=0;k<28;k++){const mid=0.5*(lo+hi);if(mirrorPsiAt(z,mid)<1)lo=mid;else hi=mid;}return 0.5*(lo+hi);};
     for(let i=0;i<=160;i++){const z=zmin+(zmax-zmin)*i/160;Z.push(z);Rr.push(prof(z));}
-    const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rr].map(r=>-r).reverse()];
-    add(lin(Zb,Rb,GC('boundary'),2.6,true),'boundary');
-    add(lin([zmin,zmax],[a+gg,a+gg],GC('wall'),2.2),'wall');
-    add(lin([zmin,zmax],[-a-gg,-a-gg],GC('wall'),2.2),'wall');
-    add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
     const mirrorPsiGrid=(sgn=1)=>{const nx=241,ny=121,x=[],yb=[],zb=[];
       for(let i=0;i<nx;i++)x.push(zmin+(zmax-zmin)*i/(nx-1));
       for(let j=0;j<ny;j++){const r=a*j/(ny-1),row=[];yb.push(r);
@@ -1417,10 +1421,23 @@ function drawShape(){
       return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()};};
     const mirrorPsiContour=(sgn=1)=>{const g=mirrorPsiGrid(sgn),c=GC('flux');
       return{type:'contour',x:g.x,y:g.y,z:g.z,autocontour:false,contours:{coloring:'lines',start:0.12,end:0.90,size:0.13,showlabels:false},line:{color:c,width:1.05},colorscale:[[0,c],[1,c]],showscale:false,hoverinfo:'skip'};};
-    add(mirrorPsiContour(1),'flux');add(mirrorPsiContour(-1),'flux');
+    if(MIRROR_VIEW==='full'){
+      const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rr].map(r=>-r).reverse()];
+      add(lin(Zb,Rb,GC('boundary'),2.6,true),'boundary');
+      add(lin([zmin,zmax],[a+gg,a+gg],GC('wall'),2.2),'wall');
+      add(lin([zmin,zmax],[-a-gg,-a-gg],GC('wall'),2.2),'wall');
+      add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
+      add(mirrorPsiContour(1),'flux');add(mirrorPsiContour(-1),'flux');
+    }else{
+      const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...Z.map(()=>0).reverse()];
+      add(lin(Zb,Rb,GC('boundary'),2.6,true),'boundary');
+      add(lin([zmin,zmax],[a+gg,a+gg],GC('wall'),2.2),'wall');
+      add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
+      add(mirrorPsiContour(1),'flux');
+    }
     const zt=Lc/2+Lth,rt=prof(zt);
-    add(cv([zt,zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
-    add(cv([-zt,-zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
+    add(cv([zt,zt],[MIRROR_VIEW==='full'?-rt:0,rt],'#c792ff',2.2,'dot'),'annot');
+    add(cv([-zt,-zt],[MIRROR_VIEW==='full'?-rt:0,rt],'#c792ff',2.2,'dot'),'annot');
     add({type:'scatter',mode:'markers',x:[-zt,zt],y:[0,0],marker:{color:'#36e2c4',size:10,symbol:'line-ns-open'}},'annot');
     add(txt([-zt,zt],[rt*1.30,rt*1.30],['B↑','B↑'],'#36e2c4'),'annot');
     // geometry parameter labels (Task 6): L_c central-cell length, a_c radius,
@@ -1432,8 +1449,9 @@ function drawShape(){
     if(gg>0)add({type:'scatter',mode:'lines+markers+text',x:[-Lc*0.25,-Lc*0.25],y:[a,a+gg],line:{color:GC('wall'),width:1.4,dash:'dot'},marker:{color:GC('wall'),size:3},text:['',`g=${(+gg).toFixed(2)} m`],textposition:'middle left',textfont:{color:GC('wall'),size:10}},'annot');
     add(txt([0],[(a+gg)*1.45],[`R<sub>m</sub>=B<sub>max</sub>/B<sub>min</sub>=${(+Rm).toFixed(1)} · ${L('损失锥','loss cone')} sinθ=1/√R<sub>m</sub>=${(1/Math.sqrt(Rm)).toFixed(2)}`],'#c792ff'),'annot');
     lay=LAYOUT('Z [m]','R [m]');
-    lay.xaxis.range=[-Lc/2-Lth*1.15,Lc/2+Lth*1.15];lay.yaxis.range=[-(a+gg)*1.75,(a+gg)*1.75];
-    document.getElementById('plotMeta').innerHTML=`<span>${L('BORAY 风格 ψ=∫B_z R dR 等值线；Z-R 全平面，上下半径同时显示','BORAY-style psi contours (radial integral); full Z-R plane with both radius signs')}</span>`;
+    lay.xaxis.range=[-Lc/2-Lth*1.15,Lc/2+Lth*1.15];
+    lay.yaxis.range=MIRROR_VIEW==='full'?[-(a+gg)*1.75,(a+gg)*1.75]:[0,(a+gg)*1.75];
+    document.getElementById('plotMeta').innerHTML=`<span>${MIRROR_VIEW==='full'?L('BORAY 风格 ψ=∫B_z R dR 等值线；完整视图由半平面镜像得到','BORAY-style psi contours (radial integral); full view mirrors the half-plane'):L('BORAY 风格 ψ=∫B_z R dR 等值线；Z-R 轴对称半平面，R=0 为对称轴','BORAY-style psi contours (radial integral); Z-R axisymmetric half-plane, R=0 is the symmetry axis')}</span>`;
   }else if(CUR==='frc'){
     const pc=document.getElementById('phControls');
     if(pc){const state=`frc-${FRC_VIEW}`;

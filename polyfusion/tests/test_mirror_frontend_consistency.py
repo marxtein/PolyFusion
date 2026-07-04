@@ -11,6 +11,9 @@ INDEX = os.path.join(ROOT, "app", "index.html")
 
 def test_mirror_shape_uses_boray_style_psi_contours_not_scaled_hand_lines():
     src = open(INDEX, encoding="utf-8").read()
+    assert "let MIRROR_VIEW=(()=>{try{return localStorage.getItem('polyfusion_mirror_view')||'half'}catch(e){return'half'}})()" in src
+    assert 'data-mirror-view="half"' in src
+    assert 'data-mirror-view="full"' in src
     assert "const mirrorBaxis=z=>" in src
     assert "const mirrorBaxis2=z=>" in src
     assert "const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z)-0.25*r*r*mirrorBaxis2(z))" in src
@@ -22,8 +25,11 @@ def test_mirror_shape_uses_boray_style_psi_contours_not_scaled_hand_lines():
     assert "type:'contour'" in src
     assert "start:0.12,end:0.90,size:0.13" in src
     assert "colorscale:[[0,c],[1,c]]" in src
+    assert "if(MIRROR_VIEW==='full')" in src
     assert "add(mirrorPsiContour(1),'flux');add(mirrorPsiContour(-1),'flux')" in src
+    assert "add(mirrorPsiContour(1),'flux');" in src
     assert "BORAY-style psi contours" in src
-    assert "full Z-R plane with both radius signs" in src
-    assert "lay.yaxis.range=[-(a+gg)*1.75,(a+gg)*1.75]" in src
+    assert "full view mirrors the half-plane" in src
+    assert "Z-R axisymmetric half-plane" in src
+    assert "lay.yaxis.range=MIRROR_VIEW==='full'?[-(a+gg)*1.75,(a+gg)*1.75]:[0,(a+gg)*1.75]" in src
     assert "[0.35,0.65,0.88].forEach" not in src
