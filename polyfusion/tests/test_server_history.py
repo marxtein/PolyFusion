@@ -3,8 +3,8 @@
 Same in-process server pattern as ``test_server_auth.py``: the autouse
 ``_fake_supabase`` conftest fixture already patches ``polyfusion.auth``, so
 the handler threads see a working auth pipeline. ``polyfusion.history`` is
-patched here (per-test) so we exercise the HTTP envelope without touching
-PostgREST — the underlying ``history`` module has its own unit tests.
+patched here per test so we exercise the HTTP envelope; the underlying local
+SQLite storage module has its own unit tests.
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ import pytest
 import app.server as srv
 from polyfusion import history as history_mod
 from polyfusion.history import HistoryError
-from polyfusion.postgrest import PostgrestError
 from app.server import Handler
 
 
@@ -181,12 +180,11 @@ def test_history_list_returns_envelope(inproc_server, mock_history):
     assert payload["rows"] == [{"id": "a"}, {"id": "b"}]
     assert payload["limit"] == 20
     assert payload["offset"] == 0
-    # list_history received the bearer token + pagination defaults
     call = mock_history["list"].calls[-1]
     assert call["kwargs"]["limit"] == 20
     assert call["kwargs"]["offset"] == 0
     assert call["kwargs"]["kind"] is None
-    assert call["args"][0]  # access token passed positionally
+    assert call["args"][0]
 
 
 def test_history_list_passes_query_params(inproc_server, mock_history):
@@ -215,14 +213,14 @@ def test_history_list_400_on_caller_error(inproc_server, mock_history):
     assert "kind" in payload["error"]
 
 
-def test_history_list_500_on_postgrest_error(inproc_server, mock_history):
-    mock_history["list"].side_effect = PostgrestError("network down")
+def test_history_list_400_on_storage_error(inproc_server, mock_history):
+    mock_history["list"].side_effect = HistoryError("storage unavailable")
     cookie = _login_cookie(inproc_server)
     status, payload, _ = _request(
         inproc_server, "/api/history", headers={"Cookie": cookie}
     )
-    assert status == 500
-    assert "network down" in payload["error"]
+    assert status == 400
+    assert "storage unavailable" in payload["error"]
 
 
 # ---------------------------------------------------------------------------
@@ -251,13 +249,14 @@ def test_history_get_404_when_missing(inproc_server, mock_history):
     assert payload == {"error": "not found"}
 
 
-def test_history_get_500_on_postgrest_error(inproc_server, mock_history):
-    mock_history["get"].side_effect = PostgrestError("connection refused")
+def test_history_get_400_on_storage_error(inproc_server, mock_history):
+    mock_history["get"].side_effect = HistoryError("storage unavailable")
     cookie = _login_cookie(inproc_server)
-    status, _, _ = _request(
+    status, payload, _ = _request(
         inproc_server, "/api/history/abc", headers={"Cookie": cookie}
     )
-    assert status == 500
+    assert status == 400
+    assert "storage unavailable" in payload["error"]
 
 
 # ---------------------------------------------------------------------------

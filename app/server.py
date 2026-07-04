@@ -830,33 +830,25 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- history handlers -------------------------------------------------
 
-    def _history_access_token(self):
-        """Return ``(access_token, user_id)`` after enforcing auth.
-
-        Sets a 401/500 response on the wire and returns ``None`` on failure so
-        handlers can early-return.
-        """
+    def _history_user(self):
+        """Return the authenticated user id for local history storage."""
         user = self._require_auth()
         if not user:
             return None
-        token = getattr(self, "_access_token", None)
-        if not token:
-            return self._send(500, json.dumps({"error": "session token missing"}))
-        if auth_mod.is_local_token(token):
+        if user == "__anon__":
             return self._send(
-                403,
-                json.dumps({"error": "Supabase-backed account required"}),
+                401,
+                json.dumps({"error": "login required", "auth_required": True}),
             )
-        return token, user
+        return user
 
     def _handle_history_get(self):
         """GET /api/history (list) or /api/history/{id} (single row)."""
-        creds = self._history_access_token()
-        if creds is None:
+        user = self._history_user()
+        if user is None:
             return None
-        token, _user = creds
 
-        from urllib.parse import urlparse, parse_qs
+        from urllib.parse import parse_qs, urlparse
 
         parsed = urlparse(self.path)
         qs = parse_qs(parsed.query)
@@ -866,12 +858,9 @@ class Handler(BaseHTTPRequestHandler):
         )
         if suffix:
             try:
-                row = history_mod.get_history(token, suffix)
-            except (HistoryError, PostgrestError) as e:
-                return self._send(
-                    500 if isinstance(e, PostgrestError) else 400,
-                    json.dumps({"error": str(e)}),
-                )
+                row = history_mod.get_history(user, suffix)
+            except HistoryError as e:
+                return self._send(400, json.dumps({"error": str(e)}))
             if row is None:
                 return self._send(404, json.dumps({"error": "not found"}))
             return self._send(200, json.dumps(row, default=str))
@@ -888,13 +877,10 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             total, rows = history_mod.list_history(
-                token, limit=limit, offset=offset, kind=kind
+                user, limit=limit, offset=offset, kind=kind
             )
-        except (HistoryError, PostgrestError) as e:
-            return self._send(
-                500 if isinstance(e, PostgrestError) else 400,
-                json.dumps({"error": str(e)}),
-            )
+        except HistoryError as e:
+            return self._send(400, json.dumps({"error": str(e)}))
         return self._send(
             200,
             json.dumps(
@@ -905,10 +891,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle_history_post(self, n: int):
         """POST /api/history — save a run/scan computation."""
-        creds = self._history_access_token()
-        if creds is None:
+        user = self._history_user()
+        if user is None:
             return None
-        token, _user = creds
         try:
             req = json.loads(self.rfile.read(n) or b"{}")
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
@@ -916,30 +901,23 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             row = history_mod.save_history(
-                token,
+                user,
                 kind=req.get("kind"),
                 config=req.get("config"),
                 inputs=req.get("inputs") or {},
                 preset=req.get("preset"),
                 label=req.get("label"),
                 summary=req.get("summary"),
-                user_id=_user
-                if isinstance(_user, str) and _user != "__anon__"
-                else None,
             )
-        except (HistoryError, PostgrestError) as e:
-            return self._send(
-                500 if isinstance(e, PostgrestError) else 400,
-                json.dumps({"error": str(e)}),
-            )
+        except HistoryError as e:
+            return self._send(400, json.dumps({"error": str(e)}))
         return self._send(201, json.dumps(row, default=str))
 
     def _handle_history_delete(self):
         """DELETE /api/history/{id}."""
-        creds = self._history_access_token()
-        if creds is None:
+        user = self._history_user()
+        if user is None:
             return None
-        token, _user = creds
         from urllib.parse import urlparse
 
         path = urlparse(self.path).path
@@ -947,17 +925,28 @@ class Handler(BaseHTTPRequestHandler):
         if not comp_id:
             return self._send(400, json.dumps({"error": "computation id required"}))
         try:
-            deleted = history_mod.delete_history(token, comp_id)
-        except (HistoryError, PostgrestError) as e:
-            return self._send(
-                500 if isinstance(e, PostgrestError) else 400,
-                json.dumps({"error": str(e)}),
-            )
+            deleted = history_mod.delete_history(user, comp_id)
+        except HistoryError as e:
+            return self._send(400, json.dumps({"error": str(e)}))
         if not deleted:
             return self._send(404, json.dumps({"error": "not found"}))
         return self._send(200, json.dumps({"ok": True}))
 
     # ---- admin handlers ---------------------------------------------------
+
+    def _supabase_access_token(self):
+        user = self._require_auth()
+        if not user:
+            return None
+        token = getattr(self, "_access_token", None)
+        if not token:
+            return self._send(500, json.dumps({"error": "session token missing"}))
+        if auth_mod.is_local_token(token):
+            return self._send(
+                403,
+                json.dumps({"error": "Supabase-backed account required"}),
+            )
+        return token
 
     def _handle_admin_stats(self):
         """GET /api/admin/stats — aggregate counts visible to the caller.
@@ -965,10 +954,9 @@ class Handler(BaseHTTPRequestHandler):
         RLS: admins see full counts; non-admins see only their own row
         reflected (treated as noise). Python does NOT branch on admin-ness.
         """
-        creds = self._history_access_token()
-        if creds is None:
+        token = self._supabase_access_token()
+        if token is None:
             return None
-        token, _user = creds
         try:
             out = admin_mod.stats(token)
         except (AdminError, PostgrestError) as e:
@@ -984,10 +972,9 @@ class Handler(BaseHTTPRequestHandler):
         Same RLS posture as stats: admins get every profile; non-admins get
         only their own (silently — no 403 to avoid existence leak).
         """
-        creds = self._history_access_token()
-        if creds is None:
+        token = self._supabase_access_token()
+        if token is None:
             return None
-        token, _user = creds
         from urllib.parse import parse_qs, urlparse
 
         qs = parse_qs(urlparse(self.path).query)
@@ -1119,8 +1106,9 @@ class Handler(BaseHTTPRequestHandler):
             self.headers.get("Cookie")
         )
         try:
+            history_mod.delete_user_history(user)
             profile_mod.delete_current_account(access)
-        except (ProfileError, PostgrestError) as e:
+        except (HistoryError, ProfileError, PostgrestError) as e:
             return self._send(400, json.dumps({"error": str(e)}))
         try:
             auth_mod.logout(access, refresh)

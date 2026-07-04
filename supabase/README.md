@@ -7,15 +7,17 @@ service-role key is loaded **exclusively** by the one-shot migration script.
 
 | File | Purpose |
 |------|---------|
-| `schema.sql` | `public.profiles`, `public.computations` tables + RLS policies + auth triggers. Run once per fresh project and re-run after schema updates. |
+| `schema.sql` | `public.profiles` table + RLS policies + auth triggers. Run once per fresh project and re-run after schema updates. |
 | `README.md` | This document — setup, local dev, Huawei deploy runbook, migration workflow, manual verification checklist. |
 
 Companion files outside this directory:
 
 - `scripts/migrate_users_to_supabase.py` — idempotent legacy-user migration.
+- `scripts/migrate_computations_to_local_history.py` — optional one-shot export from legacy Supabase `public.computations` to local SQLite history.
 - `polyfusion/auth.py` — anon-key Supabase adapter (JWT verify, register,
   login, logout, resend, validate_session).
 - `app/server.py` — HTTP routes + cookies + CSRF + rate limit.
+- `polyfusion/history.py` — local SQLite storage for run/scan history.
 - `polyfusion/report_cache.py` — local SQLite storage for full-report cache.
 - `.env.example` — env template (URL + ANON only; service role never lives here).
 
@@ -67,10 +69,23 @@ Companion files outside this directory:
 5. Sanity check: `GET /api/auth/me` against the running server should return
    your username/email with `email_verified=true` once you are logged in.
 
-Full-report cache is stored locally by the web process in SQLite. By default it
-uses `~/.polyfusion/report_cache.sqlite3`; override with
-`POLYFUSION_REPORT_CACHE_DB` if the deployment service user needs an explicit
-writable path. This cache does not require any Supabase table or RLS policy.
+Run/scan history and full-report cache are stored locally by the web process in
+SQLite. By default they use `~/.polyfusion/history.sqlite3` and
+`~/.polyfusion/report_cache.sqlite3`; override with `POLYFUSION_HISTORY_DB` and
+`POLYFUSION_REPORT_CACHE_DB` if the deployment service user needs explicit
+writable paths. These local stores do not require Supabase tables or RLS policies.
+
+If existing Supabase computation history should be preserved, run the one-shot
+migration before switching production traffic:
+
+```
+SUPABASE_SERVICE_ROLE_KEY=... \
+  python scripts/migrate_computations_to_local_history.py \
+  --db ~/.polyfusion/history.sqlite3
+```
+
+If history is not important, skip the migration and PolyFusion will start from an
+empty local history database.
 
 `requirements.txt` and the dev toolchain (`pytest`, `ruff`) are expected to be
 installed in the active environment.

@@ -1,19 +1,9 @@
 """Admin-only read APIs for v1.2.
 
 Routes in ``app/server.py`` delegate here for ``/api/admin/stats`` and
-``/api/admin/users``. Both forward to Supabase PostgREST using the caller's
-access token; the schema's ``profiles_select_admin`` /
-``computations_select_admin`` RLS policies ensure non-admin callers get only
-their own rows (effectively a no-op for admin purposes). The Python layer
-does NOT decide admin-ness — that is the architectural stance from the v1.2
-synthesis review (A4): "admin 判定下沉 SQL".
-
-Counting note: PostgREST can return exact counts via ``Prefer: count=exact``
-+ the ``Content-Range`` header, but ``pg_rest`` returns only ``(status,
-payload)``. For the initial admin dashboard we cap user-list / computation
-queries at ``STATS_LIMIT`` (1000) rows and count locally — fine for early
-deployments. If real user counts exceed the cap, switch these to a
-``SECURITY DEFINER`` aggregate RPC.
+``/api/admin/users``. User/profile data still comes from Supabase PostgREST
+using the caller's access token; computation history counts come from local
+SQLite storage.
 """
 
 from __future__ import annotations
@@ -22,6 +12,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from polyfusion import history as history_mod
 from polyfusion.postgrest import pg_rest
 
 __all__ = [
@@ -118,7 +109,7 @@ def stats(access_token: str) -> dict[str, Any]:
     new_profiles = _count(
         f"/profiles?select=id&created_at=gte.{cutoff}&limit={STATS_LIMIT}"
     )
-    computations = _count(f"/computations?select=id&limit={STATS_LIMIT}")
+    total_computations = history_mod.count_history()
 
     # Aggregate affiliations locally — PostgREST doesn't expose GROUP BY
     # without an RPC. ``None`` affiliation (older rows) is bucketed as "".
@@ -134,6 +125,6 @@ def stats(access_token: str) -> dict[str, Any]:
     return {
         "total_users": len(all_profiles),
         "new_users_7d": len(new_profiles),
-        "total_computations": len(computations),
+        "total_computations": total_computations,
         "top_affiliations": top,
     }

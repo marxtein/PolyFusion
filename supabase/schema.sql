@@ -42,7 +42,7 @@ grant execute on function public.is_admin(uuid) to authenticated, anon, service_
 
 -- Current-user account deletion. Runs with definer privileges so the caller can
 -- delete their own auth.users row without exposing the service-role key to the
--- web process; profiles and computations cascade via their foreign keys.
+-- web process; profiles cascade via their foreign key.
 create or replace function public.delete_current_user()
 returns boolean
 language plpgsql
@@ -101,41 +101,3 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
-
--- computations stores user calculation history.
-create table if not exists public.computations (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references auth.users(id) on delete cascade,
-  kind        text not null check (kind in ('run', 'scan')),
-  config      text not null,
-  preset      text,
-  label       text,
-  inputs      jsonb not null,
-  summary     jsonb,
-  created_at  timestamptz not null default now()
-);
-
-create index if not exists computations_user_created_idx
-  on public.computations (user_id, created_at desc);
-
-grant select, insert, delete on public.computations to anon, authenticated, service_role;
-
-alter table public.computations enable row level security;
-
--- Users may only access their own computation history.
-drop policy if exists "computations_select_own" on public.computations;
-create policy "computations_select_own" on public.computations
-  for select to authenticated using (auth.uid() = user_id);
-
-drop policy if exists "computations_insert_own" on public.computations;
-create policy "computations_insert_own" on public.computations
-  for insert to authenticated with check (auth.uid() = user_id);
-
-drop policy if exists "computations_delete_own" on public.computations;
-create policy "computations_delete_own" on public.computations
-  for delete to authenticated using (auth.uid() = user_id);
-
--- Admins may read all computations (for the admin dashboard).
-drop policy if exists "computations_select_admin" on public.computations;
-create policy "computations_select_admin" on public.computations
-  for select to authenticated using (public.is_admin(auth.uid()));

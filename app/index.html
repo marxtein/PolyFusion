@@ -368,7 +368,7 @@
 <div id="authWall">
   <div class="card">
     <h2>Poly<b>Fusion</b></h2>
-    <p class="hint" id="authHint">多位形零维系统设计台 · 请登录后使用</p>
+    <p class="hint" id="authHint">扫描结果可生成分析报告，注册登录支持保存历史记录</p>
     <div id="authForm">
       <div class="tabs">
         <div class="atab on" id="atabLogin">登录 Login</div>
@@ -588,7 +588,7 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   emailInvalid:'请输入有效的邮箱地址',emailRequired:'请输入邮箱',confirmPassword:'确认密码 Confirm password',passwordMismatch:'两次输入的密码不一致',registerFailed:'注册失败，用户名或邮箱可能已被使用',
   verifyEmailPrompt:'请查收验证邮件',verifyEmailSub:'我们已向 {{email}} 发送一封验证邮件，请点击邮件中的链接完成验证后再登录。',
   emailNotVerified:'邮箱未验证',resendVerification:'重新发送验证邮件',resendSent:'验证邮件已重新发送，请查收。',rateLimited:'请求过于频繁，请稍后再试。',
-  help:'<h3>PolyFusion 使用说明</h3><p><b>1. 选位形</b>：顶部 5 选 1（托卡马克/磁镜/FRC/偶极/仿星器）。<br><b>2. 选预设</b>：加载真实/概念机型参数。<br><b>3. 改参数</b>：左栏字段可编辑，改完即时重算右栏工作点。<br><b>4. 最佳区判据</b>：编辑阈值（如 Q≥1、P_fus≥10MW、n̄/极限≤1）。<br><b>5. 扫描轴</b>：选 X/Y 两参数与范围 → 运行 POPCON。<br><b>6. 选等值线</b>：在右侧扫描结果栏勾选 POPCON 显示哪些量。<br><b>7. 标签页</b>：POPCON / 截面 / 剖面。<br><b>8. 保存/加载参数</b>：JSON 存读；保存扫描结果/图像。</p><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
+  help:'<h3>PolyFusion 使用说明</h3><p><b>1. 选位形</b>：顶部 5 选 1（托卡马克/磁镜/FRC/偶极/仿星器）。<br><b>2. 选预设</b>：加载真实/概念机型参数。<br><b>3. 改参数</b>：左栏字段可编辑，改完即时重算右栏工作点。<br><b>4. 最佳区判据</b>：编辑阈值（如 Q≥1、P_fus≥10MW、n̄/极限≤1）。<br><b>5. 扫描轴</b>：选 X/Y 两参数与范围 → 运行 POPCON。<br><b>6. 选等值线</b>：在右侧扫描结果栏勾选 POPCON 显示哪些量。<br><b>7. 标签页</b>：POPCON / 截面 / 剖面。<br><b>8. 保存/加载参数</b>：JSON 存读；保存扫描结果/图像。</p><p>提示：在输入参数栏中，将光标停留在输入框可查看该输入参数说明；在输出参数栏中，点击变量名可查看该输出参数含义。</p><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
  en:{config:'Configuration',preset:'Preset',params:'Parameters',liveN:'live recompute',window:'Operating Window',
   contours:'Contours shown',scan:'POPCON Scan Axes',xax:'X axis',yax:'Y axis',runBtn:'▶ Run POPCON Scan',
   opPoint:'Operating Point',inputTitle:'Input Parameters',scanTitle:'Scan Results',expandAll:'Expand All',collapseAll:'Collapse All',saveP:'⬇ Save Input Params',loadP:'⬆ Load Historical Params',expScan:'⬇ Save Scan Results',expPng:'⬇ Save Scan Image',
@@ -596,7 +596,7 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   emailInvalid:'Please enter a valid email address',emailRequired:'Please enter your email',confirmPassword:'Confirm password',passwordMismatch:'Passwords do not match',registerFailed:'Registration failed. Username or email may already be in use.',
   verifyEmailPrompt:'Check your inbox',verifyEmailSub:'We sent a verification link to {{email}}. Click the link in the email to verify your address, then log in.',
   emailNotVerified:'Email unverified',resendVerification:'Resend verification email',resendSent:'Verification email resent. Please check your inbox.',rateLimited:'Too many requests. Please try again later.',
-  help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>6. Contours</b>: choose which POPCON contours show in the right scan-results column.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; save scan results/images.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
+  help:'<h3>PolyFusion Guide</h3><p><b>1. Configuration</b>: pick one of 5 (tokamak/mirror/FRC/dipole/stellarator).<br><b>2. Preset</b>: load a machine.<br><b>3. Parameters</b>: edit fields → operating point recomputes live.<br><b>4. Operating window</b>: edit thresholds (Q≥1, P_fus≥10MW, n̄/limit≤1).<br><b>5. Scan axes</b>: pick X/Y + ranges → Run POPCON.<br><b>6. Contours</b>: choose which POPCON contours show in the right scan-results column.<br><b>7. Tabs</b>: POPCON / Shape / Profiles.<br><b>8. Save/Load</b> params JSON; save scan results/images.</p><p>Tip: in the input-parameter panel, focus a field to view its input explanation; in the output-parameter panel, click a variable name to view its output meaning.</p><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,LASTSCAN_INPUTS=null,VIEW='shape',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
 let THEME=((()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}}))();
 let AUTH_REQUIRED=false,GUEST_MODE=false,AUTH_MODE='login',AUTH_USER=null;
@@ -979,8 +979,8 @@ function setAuthMode(mode){
   if(pass)pass.setAttribute('autocomplete',mode==='login'?'current-password':'new-password');
   if(pass2)pass2.setAttribute('autocomplete','new-password');
   document.getElementById('authErr').textContent='';
-  if(mode==='login'){btn.textContent=L('登录 Login','Login');hint.textContent=L('多位形零维系统设计台 · 请登录后使用','Zero-D reactor design console · please log in');}
-  else{btn.textContent=L('注册 Register','Register');hint.textContent=L('创建新账号（用户名 3-32 位，密码 ≥ 8 位）','Create account (username 3-32 chars, password ≥ 8)');}
+  if(mode==='login'){btn.textContent=L('登录 Login','Login');hint.textContent=L('扫描结果可生成分析报告，注册登录支持保存历史记录','Generate analysis reports from scan results; sign in to save history');}
+  else{btn.textContent=L('注册 Register','Register');hint.textContent=L('扫描结果可生成分析报告，注册登录支持保存历史记录','Generate analysis reports from scan results; sign in to save history');}
 }
 function showVerifyEmailPanel(email){
   const w=document.getElementById('authWall');if(!w)return;
@@ -1362,8 +1362,9 @@ function selectConfig(name){
   const ps=m.params.filter(p=>p!=='icase'&&p!=='rc'&&p!=='zs'&&!BOOLS.has(p)&&p!=='tauC');
   fillSel(xkey,ps,m.scan_defaults.xkey);fillSel(ykey,ps,m.scan_defaults.ykey);
   const sd=m.scan_defaults;xmin.value=sd.xmin*dsc(sd.xkey);xmax.value=sd.xmax*dsc(sd.xkey);ymin.value=sd.ymin*dsc(sd.ykey);ymax.value=sd.ymax*dsc(sd.ykey);
-  xkey.onchange=()=>{const r=RANGES[xkey.value]||[0,1];xmin.value=r[0]*dsc(xkey.value);xmax.value=r[1]*dsc(xkey.value);fitAxis(xkey.value,xmin,xmax);};
-  ykey.onchange=()=>{const r=RANGES[ykey.value]||[0,1];ymin.value=r[0]*dsc(ykey.value);ymax.value=r[1]*dsc(ykey.value);fitAxis(ykey.value,ymin,ymax);};
+  xkey.onchange=()=>{const r=RANGES[xkey.value]||[0,1];xmin.value=r[0]*dsc(xkey.value);xmax.value=r[1]*dsc(xkey.value);fitAxis(xkey.value,xmin,xmax);bindScanAxisExplanations();};
+  ykey.onchange=()=>{const r=RANGES[ykey.value]||[0,1];ymin.value=r[0]*dsc(ykey.value);ymax.value=r[1]*dsc(ykey.value);fitAxis(ykey.value,ymin,ymax);bindScanAxisExplanations();};
+  bindScanAxisExplanations();
   document.getElementById('stCfg').textContent=cfgL(name);
   PLOTSEL=new Set(m.contour_spec.filter(c=>c.on).map(c=>c.f));
   loadPreset();
@@ -1720,6 +1721,7 @@ function buildThresh(){
     const inp=document.querySelector(`[data-thr="${k}"]`);
     let el=inp&&inp.previousElementSibling;for(let i=0;i<2&&el;i++){el.classList.toggle('off',!cb.checked);el=el.previousElementSibling;}
   });
+  bindThresholdExplanations();
 }
 function getWindow(){const ge={},le={};document.querySelectorAll('[data-thr]').forEach(el=>{
   const cb=document.querySelector(`[data-thr-en="${el.dataset.thr}"]`);
@@ -2606,17 +2608,32 @@ td:first-child,th:first-child{font-family:monospace;color:#49586f;white-space:no
 <body><h1>${esc(m.title)}</h1>${sectionsHtml}</body></html>`;
   const w=window.open('','_blank');if(!w)return;w.document.open();w.document.write(html);w.document.close();
 }
-function bindParamExplanations(box){
-  box.querySelectorAll('[data-p]').forEach(el=>{
-    const show=async()=>{
-      const fld=el.closest('.fld');if(!fld)return;let help=fld.querySelector('.param-help');
-      if(!help){help=document.createElement('div');help.className='param-help';fld.appendChild(help);}
-      const key=el.dataset.p;fld.dataset.helpKey=key;help.classList.add('on');help.innerHTML=`<div class="doc-title">${esc(key)}</div><div class="doc-row">${L('加载说明…','Loading explanation…')}</div>`;
-      try{const m=await fetchManualData(false);if(fld.dataset.helpKey===key)help.innerHTML=docDetailsHtml((m.param_docs&&m.param_docs[key])||docFallback(key),'param');}
-      catch(e){if(fld.dataset.helpKey===key)help.innerHTML=`<div class="doc-row">${esc(e.message||e)}</div>`;}
-    };
-    const hide=()=>{const fld=el.closest('.fld');if(!fld)return;delete fld.dataset.helpKey;const help=fld.querySelector('.param-help');if(help)help.classList.remove('on');};
-    el.addEventListener('mouseenter',show);el.addEventListener('focus',show);el.addEventListener('mouseleave',hide);el.addEventListener('blur',hide);
+function helpDocForControl(el,m){
+  if(el.dataset.docOut)return [(m.output_docs&&m.output_docs[el.dataset.docOut])||docFallback(el.dataset.docOut),'output'];
+  const key=el.dataset.p||el.dataset.docParam;
+  return [(m.param_docs&&m.param_docs[key])||docFallback(key),'param'];
+}
+function bindDocExplanation(el,keyFn){
+  if(el.dataset.docBound)return;
+  el.dataset.docBound='1';
+  const show=async()=>{
+    const fld=el.closest('.fld');if(!fld)return;let help=fld.querySelector('.param-help');
+    if(!help){help=document.createElement('div');help.className='param-help';fld.appendChild(help);}
+    const key=keyFn(el);if(!key)return;
+    fld.dataset.helpKey=key;help.classList.add('on');help.innerHTML=`<div class="doc-title">${esc(key)}</div><div class="doc-row">${L('加载说明…','Loading explanation…')}</div>`;
+    try{const m=await fetchManualData(false);if(fld.dataset.helpKey===key){const [doc,mode]=helpDocForControl(el,m);help.innerHTML=docDetailsHtml(doc,mode);}}
+    catch(e){if(fld.dataset.helpKey===key)help.innerHTML=`<div class="doc-row">${esc(e.message||e)}</div>`;}
+  };
+  const hide=()=>{const fld=el.closest('.fld');if(!fld)return;delete fld.dataset.helpKey;const help=fld.querySelector('.param-help');if(help)help.classList.remove('on');};
+  el.addEventListener('mouseenter',show);el.addEventListener('focus',show);el.addEventListener('mouseleave',hide);el.addEventListener('blur',hide);
+}
+function bindParamExplanations(box){box.querySelectorAll('[data-p]').forEach(el=>bindDocExplanation(el,e=>e.dataset.p));}
+function bindThresholdExplanations(){document.querySelectorAll('#thresh [data-thr]').forEach(el=>{el.dataset.docOut=el.dataset.thr;bindDocExplanation(el,e=>e.dataset.thr);});}
+function bindScanAxisExplanations(){
+  const pairs=[[xkey,[xmin,xmax]],[ykey,[ymin,ymax]]];
+  pairs.forEach(([sel,inputs])=>{
+    sel.dataset.docParam=sel.value;bindDocExplanation(sel,e=>e.value);
+    inputs.forEach(el=>{el.dataset.docParam=sel.value;bindDocExplanation(el,()=>sel.value);});
   });
 }
 function outputKeyHtml(k){return `<span class="k out-help" role="button" tabindex="0" data-out="${esc(k)}" title="${L('点击查看输出解释','click for output explanation')}">${pk(k)}</span>`;}

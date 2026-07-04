@@ -214,7 +214,7 @@ class FakeSupabase:
 
 
 @pytest.fixture(autouse=True)
-def _fake_supabase(monkeypatch):
+def _fake_supabase(monkeypatch, tmp_path):
     """Auto-injected fake client + HS256 test-secret for every test.
 
     Tests that need to assert on the fake's stored users should add
@@ -225,6 +225,7 @@ def _fake_supabase(monkeypatch):
     monkeypatch.setattr(auth, "_fetch_jwks", lambda: {"keys": []})
     monkeypatch.setenv(auth._TEST_SECRET_ENV, TEST_JWT_SECRET)
     monkeypatch.setenv(auth._EMAIL_CONFIRM_ENV, "1")
+    monkeypatch.setenv("POLYFUSION_HISTORY_DB", str(tmp_path / "history.sqlite3"))
     auth.reset_supabase_client_for_tests(fake)
     yield fake
     # Restore a clean module-level client so other tests rebuild it.

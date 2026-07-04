@@ -1,10 +1,9 @@
-"""Stdlib urllib forwarder for Supabase PostgREST (v1.2 user history + admin).
+"""Stdlib urllib forwarder for Supabase PostgREST profile/admin data.
 
-The web process never uses ``supabase-py`` for computations / profiles data
-access. Instead it forwards the user's access token — together with the anon
-``apikey`` header Supabase requires — straight to PostgREST via ``urllib``.
-RLS then sees the real ``auth.uid()`` and enforces isolation in SQL, which is
-the architecture validated by ``scripts/kill_switch_rls_test.py`` (A6 GREEN).
+The web process never uses ``supabase-py`` for profile data access. Instead it
+forwards the user's access token — together with the anon ``apikey`` header
+Supabase requires — straight to PostgREST via ``urllib``. RLS then sees the real
+``auth.uid()`` and enforces isolation in SQL.
 
 Public surface used by ``app/server.py``:
     - ``pg_rest(path, *, access_token, method='GET', query=None, body=None)``
@@ -12,8 +11,7 @@ Public surface used by ``app/server.py``:
       collection GETs, dict for single-row / RPC / error responses).
 
 The module reads ``SUPABASE_URL`` and ``SUPABASE_ANON_KEY`` from the
-environment. The service-role key is intentionally NOT supported here —
-history/admin routes must use the calling user's JWT so that RLS applies.
+environment. The service-role key is intentionally NOT supported here.
 
 Error model:
     - Network errors raise ``PostgrestError``.

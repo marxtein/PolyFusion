@@ -1,10 +1,8 @@
 """Unit tests for polyfusion/admin.py.
 
-Mirrors test_history.py: ``pg_rest`` is patched with a recorder so we can
-assert on path / query construction and inject canned responses per-test.
-The stats() helper issues multiple pg_rest calls; the recorder is given a
-queue of (path_substring, response) pairs so each call gets the right
-canned answer.
+``pg_rest`` is patched with a recorder so we can assert on profile query
+construction and inject canned responses per-test. Computation totals are read
+from local history storage and patched separately.
 """
 
 from __future__ import annotations
@@ -38,6 +36,7 @@ def pg(monkeypatch):
     fake_pg_rest.calls = calls
     fake_pg_rest.responses = responses
     monkeypatch.setattr(admin, "pg_rest", fake_pg_rest)
+    monkeypatch.setattr(admin.history_mod, "count_history", lambda: 3)
     return fake_pg_rest
 
 
@@ -99,10 +98,6 @@ def test_stats_aggregates_three_calls(pg):
                 ),
             ),
             ("/profiles?select=id&created_at=gte.", (200, [{"id": "2"}])),
-            (
-                "/computations?select=id",
-                (200, [{"id": "c1"}, {"id": "c2"}, {"id": "c3"}]),
-            ),
         ]
     )
 
@@ -118,8 +113,7 @@ def test_stats_aggregates_three_calls(pg):
             {"affiliation": "", "count": 1},
         ],
     }
-    # Three pg_rest calls in this specific order.
-    assert len(pg.calls) == 3
+    assert len(pg.calls) == 2
     assert pg.calls[0]["access_token"] == "tok"
 
 
@@ -132,7 +126,6 @@ def test_stats_truncates_top_affiliations(pg, monkeypatch):
                 (200, [{"id": str(i), "affiliation": f"aff{i % 3}"} for i in range(9)]),
             ),
             ("/profiles?select=id&created_at=gte.", (200, [])),
-            ("/computations?select=id", (200, [])),
         ]
     )
     out = admin.stats("tok")
@@ -146,7 +139,6 @@ def test_stats_uses_iso8601_7day_cutoff(pg):
         [
             ("/profiles?select=id,affiliation", (200, [])),
             ("/profiles?select=id&created_at=gte.", (200, [])),
-            ("/computations?select=id", (200, [])),
         ]
     )
     admin.stats("tok")
@@ -175,7 +167,6 @@ def test_stats_handles_non_list_payload(pg):
         [
             ("/profiles?select=id,affiliation", (200, {"message": "weird"})),
             ("/profiles?select=id&created_at=gte.", (200, [])),
-            ("/computations?select=id", (200, [])),
         ]
     )
     out = admin.stats("tok")
