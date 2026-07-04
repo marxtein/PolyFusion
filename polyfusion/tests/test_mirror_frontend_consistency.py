@@ -16,13 +16,15 @@ def test_mirror_shape_uses_boray_style_psi_contours_not_scaled_hand_lines():
     assert 'data-mirror-view="full"' in src
     assert "const mirrorBaxis=z=>" in src
     assert "const mirrorSmoother=t=>" in src
-    assert "const mirrorThroatU=z=>Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6)))" in src
+    assert "const zt=Lc/2+Lth,zpad=Math.max(Lth*0.60,Lc*0.04,1e-6)" in src
+    assert "const mirrorShoulder=Math.min(Lth*0.05,Lc*0.015),mirrorSoft0=Lc/2-mirrorShoulder" in src
+    assert "const mirrorThroatU=z=>Math.max(0,Math.min(1,(Math.abs(z)-mirrorSoft0)/Math.max(zt-mirrorSoft0,1e-6)))" in src
     assert "const mirrorBaxis=z=>1+(Rm-1)*mirrorSmoother(mirrorThroatU(z))" in src
     assert "mirrorW=Math.max" not in src
-    assert "const mirrorBaxis2=z=>" in src
-    assert "const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z)-0.25*r*r*mirrorBaxis2(z))" in src
+    assert "mirrorBaxis2" not in src
+    assert "const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z))" in src
     assert "const mirrorPsiAt=(z,r)=>{const n=28,dr=r/n,norm=0.5*a*a;let psi=0,br0=mirrorBzRZ(z,0)" in src
-    assert "const prof=z=>a/Math.sqrt(Math.max(mirrorBaxis(z),1e-6))" in src
+    assert "const prof=z=>{let lo=0,hi=a*1.02;for(let k=0;k<28;k++)" in src
     assert "const mirrorPsiGrid=(sgn=1)=>{const nx=241,ny=121" in src
     assert "row.push(prev+dr*0.5*(mirrorBzRZ(x[i],r)+mirrorBzRZ(x[i],rp))*0.5*(r+rp)/Math.max(0.5*a*a,1e-12))" in src
     assert "return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()}" in src
@@ -31,6 +33,7 @@ def test_mirror_shape_uses_boray_style_psi_contours_not_scaled_hand_lines():
     assert "start:0.12,end:0.90,size:0.13" in src
     assert "colorscale:[[0,c],[1,c]]" in src
     assert "if(MIRROR_VIEW==='full')" in src
+    assert "const mirrorFill=(x,y)=>add({type:'scatter',mode:'lines',x,y,line:{color:'rgba(0,0,0,0)',width:0},fill:'toself'" in src
     assert "add(mirrorPsiContour(1),'flux');add(mirrorPsiContour(-1),'flux')" in src
     assert "add(mirrorPsiContour(1),'flux');" in src
     assert "BORAY-style psi contours" in src

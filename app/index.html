@@ -1398,15 +1398,16 @@ function drawShape(){
     }
     const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
     const Lth=ft*Lc,Z=[],Rr=[];
-    const zmin=-Lc/2-Lth,zmax=Lc/2+Lth;
+    const zt=Lc/2+Lth,zpad=Math.max(Lth*0.60,Lc*0.04,1e-6);
+    const zmin=-zt-zpad,zmax=zt+zpad;
     const mirrorSmoother=t=>{const u=Math.max(0,Math.min(1,t));return u*u*u*(u*(u*6-15)+10);};
-    const mirrorThroatU=z=>Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6)));
+    const mirrorShoulder=Math.min(Lth*0.05,Lc*0.015),mirrorSoft0=Lc/2-mirrorShoulder;
+    const mirrorThroatU=z=>Math.max(0,Math.min(1,(Math.abs(z)-mirrorSoft0)/Math.max(zt-mirrorSoft0,1e-6)));
     const mirrorBaxis=z=>1+(Rm-1)*mirrorSmoother(mirrorThroatU(z));
-    const mirrorBaxis2=z=>{const h=Math.max((zmax-zmin)/360,1e-5);return(mirrorBaxis(z+h)-2*mirrorBaxis(z)+mirrorBaxis(z-h))/(h*h);};
-    const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z)-0.25*r*r*mirrorBaxis2(z));
+    const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBaxis(z));
     const mirrorPsiAt=(z,r)=>{const n=28,dr=r/n,norm=0.5*a*a;let psi=0,br0=mirrorBzRZ(z,0);
       for(let j=1;j<=n;j++){const rp=(j-1)*dr,rc=j*dr,br1=mirrorBzRZ(z,rc);psi+=dr*0.5*(br0+br1)*0.5*(rp+rc);br0=br1;}return psi/Math.max(norm,1e-12);};
-    const prof=z=>a/Math.sqrt(Math.max(mirrorBaxis(z),1e-6));
+    const prof=z=>{let lo=0,hi=a*1.02;for(let k=0;k<28;k++){const mid=0.5*(lo+hi);if(mirrorPsiAt(z,mid)<1)lo=mid;else hi=mid;}return 0.5*(lo+hi);};
     for(let i=0;i<=160;i++){const z=zmin+(zmax-zmin)*i/160;Z.push(z);Rr.push(prof(z));}
     const mirrorPsiGrid=(sgn=1)=>{const nx=241,ny=121,x=[],yb=[],zb=[];
       for(let i=0;i<nx;i++)x.push(zmin+(zmax-zmin)*i/(nx-1));
@@ -1418,21 +1419,22 @@ function drawShape(){
       return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()};};
     const mirrorPsiContour=(sgn=1)=>{const g=mirrorPsiGrid(sgn),c=GC('flux');
       return{type:'contour',x:g.x,y:g.y,z:g.z,autocontour:false,contours:{coloring:'lines',start:0.12,end:0.90,size:0.13,showlabels:false},line:{color:c,width:1.05},colorscale:[[0,c],[1,c]],showscale:false,hoverinfo:'skip'};};
+    const mirrorFill=(x,y)=>add({type:'scatter',mode:'lines',x,y,line:{color:'rgba(0,0,0,0)',width:0},fill:'toself',fillcolor:GP.bfill,hoverinfo:'skip'},'boundary');
     if(MIRROR_VIEW==='full'){
-      const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rr].map(r=>-r).reverse()];
-      add(lin(Zb,Rb,GC('boundary'),2.6,true),'boundary');
+      const Rn=Rr.map(r=>-r),Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rn].reverse()];
+      add(lin(Z,Rr,GC('boundary'),2.6),'boundary');add(lin(Z,Rn,GC('boundary'),2.6),'boundary');mirrorFill(Zb,Rb);
       add(lin([zmin,zmax],[a+gg,a+gg],GC('wall'),2.2),'wall');
       add(lin([zmin,zmax],[-a-gg,-a-gg],GC('wall'),2.2),'wall');
       add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
       add(mirrorPsiContour(1),'flux');add(mirrorPsiContour(-1),'flux');
     }else{
       const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...Z.map(()=>0).reverse()];
-      add(lin(Zb,Rb,GC('boundary'),2.6,true),'boundary');
+      add(lin(Z,Rr,GC('boundary'),2.6),'boundary');mirrorFill(Zb,Rb);
       add(lin([zmin,zmax],[a+gg,a+gg],GC('wall'),2.2),'wall');
       add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
       add(mirrorPsiContour(1),'flux');
     }
-    const zt=Lc/2+Lth,rt=prof(zt);
+    const rt=prof(zt);
     add(cv([zt,zt],[MIRROR_VIEW==='full'?-rt:0,rt],'#c792ff',2.2,'dot'),'annot');
     add(cv([-zt,-zt],[MIRROR_VIEW==='full'?-rt:0,rt],'#c792ff',2.2,'dot'),'annot');
     add({type:'scatter',mode:'markers',x:[-zt,zt],y:[0,0],marker:{color:'#36e2c4',size:10,symbol:'line-ns-open'}},'annot');
@@ -1446,7 +1448,7 @@ function drawShape(){
     if(gg>0)add({type:'scatter',mode:'lines+markers+text',x:[-Lc*0.25,-Lc*0.25],y:[a,a+gg],line:{color:GC('wall'),width:1.4,dash:'dot'},marker:{color:GC('wall'),size:3},text:['',`g=${(+gg).toFixed(2)} m`],textposition:'middle left',textfont:{color:GC('wall'),size:10}},'annot');
     add(txt([0],[(a+gg)*1.45],[`R<sub>m</sub>=B<sub>max</sub>/B<sub>min</sub>=${(+Rm).toFixed(1)} · ${L('损失锥','loss cone')} sinθ=1/√R<sub>m</sub>=${(1/Math.sqrt(Rm)).toFixed(2)}`],'#c792ff'),'annot');
     lay=LAYOUT('Z [m]','R [m]');
-    lay.xaxis.range=[-Lc/2-Lth*1.15,Lc/2+Lth*1.15];
+    lay.xaxis.range=[zmin,zmax];
     lay.yaxis.range=MIRROR_VIEW==='full'?[-(a+gg)*1.75,(a+gg)*1.75]:[0,(a+gg)*1.75];
     document.getElementById('plotMeta').innerHTML=`<span>${MIRROR_VIEW==='full'?L('BORAY 风格 ψ=∫B_z R dR 等值线；完整视图由半平面镜像得到','BORAY-style psi contours (radial integral); full view mirrors the half-plane'):L('BORAY 风格 ψ=∫B_z R dR 等值线；Z-R 轴对称半平面，R=0 为对称轴','BORAY-style psi contours (radial integral); Z-R axisymmetric half-plane, R=0 is the symmetry axis')}</span>`;
   }else if(CUR==='frc'){
