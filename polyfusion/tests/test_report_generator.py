@@ -15,6 +15,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from polyfusion import ai_report  # noqa: E402
 from polyfusion.report_generator import generate_report  # noqa: E402
+from polyfusion.report_templates import build_ai_report_prompt  # noqa: E402
 
 
 def _sample_data():
@@ -265,6 +266,13 @@ def test_ai_report_loads_codex_api_key_from_project_env(monkeypatch, tmp_path):
     monkeypatch.setattr(ai_report, "_post_json", fake_post_json)
     assert ai_report.generate_ai_report_analysis(_sample_data()) == "env ok"
     assert calls == ["sk-from-env-file"]
+
+
+def test_ai_report_prompt_uses_strict_template():
+    prompt = build_ai_report_prompt('{"config":"tokamak"}')
+    assert "PolyFusion 0-D 初筛报告分析助手" in prompt
+    assert "当前运行点和 POPCON 扫描" in prompt
+    assert '{"config":"tokamak"}' in prompt
 
 
 def test_ai_report_falls_back_to_minimal_chat_payload(monkeypatch):
