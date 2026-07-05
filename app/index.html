@@ -1446,15 +1446,18 @@ function drawShape(){
     const zc=mirrorCenterEdgeZ();
     const dimSeg=(x1,x2,y,c,ds='dot')=>add({type:'scatter',mode:'lines+markers',x:[x1,x2],y:[y,y],
       line:{color:c,width:1.35,dash:ds},marker:{color:c,size:7,symbol:'line-ns-open'},hoverinfo:'skip'},'annot');
-    const yLc=a*0.11,yEff=mirrorHeightCut,yLth=Math.max(a*0.43,yEff+a*0.08);
+    const yLc=a*0.11,yEff=mirrorHeightCut,yLth=Math.max(a*0.72,yEff+a*0.20);
     dimSeg(-Lc/2,Lc/2,yLc,'#ffc247','dot');
     add(txt([0],[yLc+a*0.055],[`L<sub>c</sub>=${(+Lc).toFixed(2)} m`],'#ffc247'),'annot');
     if(Lth>1e-9){
       dimSeg(Lc/2,zt,yLth,'#ff9e3d','dash');dimSeg(-zt,-Lc/2,yLth,'#ff9e3d','dash');
       add(txt([(Lc/2+zt)/2,(-zt-Lc/2)/2],[yLth+a*0.06,yLth+a*0.06],[`L<sub>th</sub>=${(+Lth).toFixed(2)} m`,`L<sub>th</sub>`],'#ff9e3d'),'annot');
     }
-    add(cv([-zc,zc],[yEff,yEff],'#ffd166',1.4,'dot'),'annot');
-    add(txt([0],[yEff+a*0.055],[`L<sub>c,eff</sub>≈${(2*zc).toFixed(2)} m`],'#ffd166'),'annot');
+    add(cv([-zc,zc],[yEff,yEff],'#ffd166',2.0,'dash'),'annot');
+    add(cv([zc,zc],[MIRROR_VIEW==='full'?-yEff:0,mirrorBoundaryR(zc)],'#ffd166',1.5,'dot'),'annot');
+    add(cv([-zc,-zc],[MIRROR_VIEW==='full'?-yEff:0,mirrorBoundaryR(-zc)],'#ffd166',1.5,'dot'),'annot');
+    add({type:'scatter',mode:'markers',x:[-zc,zc],y:[yEff,yEff],marker:{color:'#ffd166',size:8,symbol:'circle-open',line:{color:'#ffd166',width:2}},hoverinfo:'skip'},'annot');
+    add(txt([0],[yEff+a*0.055],[`L<sub>c,eff</sub>≈${(2*zc).toFixed(2)} m @ R=0.5R<sub>max</sub>`],'#ffd166'),'annot');
     add(cv([0,0],[0,a],'#9be564',1.4,'dot'),'annot');
     add(txt([Lc*0.05],[a*0.5],[`a<sub>c</sub>=${(+a).toFixed(2)} m`],'#9be564'),'annot');
     if(gg>0)add({type:'scatter',mode:'lines+markers+text',x:[-Lc*0.25,-Lc*0.25],y:[a,a+gg],line:{color:GC('wall'),width:1.4,dash:'dot'},marker:{color:GC('wall'),size:3},text:['',`g=${(+gg).toFixed(2)} m`],textposition:'middle left',textfont:{color:GC('wall'),size:10}},'annot');
