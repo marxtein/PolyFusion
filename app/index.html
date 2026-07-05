@@ -407,6 +407,7 @@
     <span><span class="dot"></span> <span class="val">CORE ONLINE</span></span>
     <span class="userbox" id="userBox" style="display:none"><span class="uname" id="userName">—</span><span class="aff" id="userAff" style="display:none"></span><button class="unverified" id="unverifiedBadge" style="display:none" title="邮箱未验证 / Email unverified">邮箱未验证</button><button id="deleteAccountBtn">注销账户</button><button id="logoutBtn">退出</button></span>
     <button class="hbtn book" id="manualBtn" data-tour="manual" title="使用说明书 / Manual">说明书</button>
+    <button class="hbtn" id="tourBtn" title="新手引导 / Guided tour">新手引导</button>
     <button class="hbtn report" id="reportBtn" title="一键生成模拟报告 / Generate simulation report">📋 报告</button>
     <button class="hbtn" id="helpBtn">?</button>
     <button class="hbtn" id="themeTog" title="主题 / Theme">☾ Dark</button>
@@ -1310,6 +1311,7 @@ async function initAfterAuth(){
   run.onclick=runScan;preset.onchange=loadPreset;
   document.getElementById('saveAsP').onclick=savePreset;document.getElementById('delP').onclick=deletePreset;
   helpBtn.onclick=()=>document.getElementById('help').classList.add('on');
+  document.getElementById('tourBtn').onclick=startTour;
   document.getElementById('helpX').onclick=()=>document.getElementById('help').classList.remove('on');
   document.addEventListener('click',e=>{if(e.target.closest('[data-tour-start]'))startTour();if(e.target.closest('[data-tour-close]'))closeTour('skipped');});
   document.addEventListener('keydown',e=>{if(e.key==='Escape')closeTour('skipped');});

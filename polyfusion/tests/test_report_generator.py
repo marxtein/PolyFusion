@@ -493,6 +493,8 @@ def test_frontend_exposes_report_buttons_and_handlers():
     assert "capturePlotImage" in html
     # beginner guide and tour entry points exist
     assert "data-tour-start" in html
+    assert 'id="tourBtn"' in html
+    assert "document.getElementById('tourBtn').onclick=startTour" in html
     assert "function startTour" in html
     assert 'data-tour="config"' in html
     assert 'data-tour="results"' in html
