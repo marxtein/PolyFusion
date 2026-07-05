@@ -17,14 +17,9 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert 'data-mirror-view="full"' in src
     assert "const zt=Lc/2+Lth,zpad=Math.max(Lth*0.18,Lc*0.015,1e-6)" in src
     assert "const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));" in src
-    assert "const mirrorBaseS=p=>{const q=Math.max(0,Math.min(1,p)),u=0.25*q*q+0.75*Math.pow(q,8);return u*(2-u);};" in src
-    assert "const mirrorRt=1/Math.sqrt(Math.max(Rm,1e-6));" in src
-    assert "const mirrorHalfP=Math.max(1e-6,Math.min(0.999999,(Lc/2)/Math.max(zt,1e-6)));" in src
-    assert "const mirrorHalfS=Math.max(0,Math.min(1,0.5/Math.max(1-mirrorRt,1e-6)));" in src
-    assert "if(p<=mirrorHalfP)return mirrorHalfS*mirrorBaseS(p/mirrorHalfP);" in src
-    assert "return mirrorHalfS+(1-mirrorHalfS)*mirrorBaseS((p-mirrorHalfP)/Math.max(1-mirrorHalfP,1e-6));};" in src
-    assert "const mirrorBhat=z=>{const s=mirrorShapeS(z),rb=1-s+s*mirrorRt;return 1/(rb*rb);};" in src
-    assert "const mirrorBoundaryR=z=>{const s=mirrorShapeS(z);return a*(1-s+s*mirrorRt);};" in src
+    assert "const mirrorShapeS=z=>{const p=Math.max(0,Math.min(1,Math.abs(z)/Math.max(zt,1e-6))),u=0.25*p*p+0.75*Math.pow(p,8);return u*(2-u);};" in src
+    assert "const mirrorBhat=z=>{const s=mirrorShapeS(z),rt=1/Math.sqrt(Math.max(Rm,1e-6)),rb=1-s+s*rt;return 1/(rb*rb);};" in src
+    assert "const mirrorBoundaryR=z=>{const s=mirrorShapeS(z),rt=1/Math.sqrt(Math.max(Rm,1e-6));return a*(1-s+s*rt);};" in src
     assert "const mirrorHeightCut=0.5*mirrorBoundaryR(0);" in src
     assert "const mirrorThroatS=z=>mirrorEase(Math.max(0,Math.min(1,(mirrorHeightCut-mirrorBoundaryR(z))/Math.max(mirrorHeightCut-mirrorBoundaryR(zt),1e-6))));" in src
     assert "const mirrorCenterEdgeZ=()=>{if(mirrorBoundaryR(zt)>mirrorHeightCut)return zt;let lo=0,hi=zt;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(mirrorBoundaryR(mid)>mirrorHeightCut)lo=mid;else hi=mid;}return hi;};" in src
@@ -42,14 +37,16 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert "Lc*0.16" not in src
     assert "const zc=mirrorCenterEdgeZ();" in src
     assert "const dimSeg=(x1,x2,y,c,ds='dot')=>add({type:'scatter',mode:'lines+markers',x:[x1,x2],y:[y,y]," in src
-    assert "const yLc=mirrorHeightCut,yLth=Math.max(a*0.72,yLc+a*0.20);" in src
-    assert "dimSeg(-zc,zc,yLc,'#ffd166','dash');" in src
-    assert "add(cv([zc,zc],[MIRROR_VIEW==='full'?-yLc:0,mirrorBoundaryR(zc)],'#ffd166',1.5,'dot'),'annot');" in src
-    assert "add(cv([-zc,-zc],[MIRROR_VIEW==='full'?-yLc:0,mirrorBoundaryR(-zc)],'#ffd166',1.5,'dot'),'annot');" in src
+    assert "const yLc=a*0.11,yEff=mirrorHeightCut,yLth=Math.max(a*0.72,yEff+a*0.20);" in src
+    assert "dimSeg(-Lc/2,Lc/2,yLc,'#ffc247','dot');" in src
+    assert "L<sub>c</sub>=${(+Lc).toFixed(2)} m" in src
+    assert "dimSeg(Lc/2,zt,yLth,'#ff9e3d','dash');dimSeg(-zt,-Lc/2,yLth,'#ff9e3d','dash');" in src
+    assert "L<sub>th</sub>=${(+Lth).toFixed(2)} m" in src
+    assert "add(cv([-zc,zc],[yEff,yEff],'#ffd166',2.0,'dash'),'annot');" in src
+    assert "add(cv([zc,zc],[MIRROR_VIEW==='full'?-yEff:0,mirrorBoundaryR(zc)],'#ffd166',1.5,'dot'),'annot');" in src
+    assert "add(cv([-zc,-zc],[MIRROR_VIEW==='full'?-yEff:0,mirrorBoundaryR(-zc)],'#ffd166',1.5,'dot'),'annot');" in src
     assert "marker:{color:'#ffd166',size:8,symbol:'circle-open',line:{color:'#ffd166',width:2}}" in src
-    assert "L<sub>c</sub>" in src and "(2*zc).toFixed(2)" in src and "R=0.5R<sub>max</sub>" in src
-    assert "dimSeg(zc,zt,yLth,'#ff9e3d','dash');dimSeg(-zt,-zc,yLth,'#ff9e3d','dash');" in src
-    assert "L<sub>th</sub>" in src and "(zt-zc).toFixed(2)" in src
+    assert "L<sub>c,eff</sub>≈${(2*zc).toFixed(2)} m @ R=0.5R<sub>max</sub>" in src
     assert "for(let i=0;i<=220;i++){const z=zmin+(zmax-zmin)*i/220;Z.push(z);Rr.push(mirrorBoundaryR(z));}" in src
     assert "const mirrorPsiGrid=(sgn=1)=>{const nx=361,ny=181" in src
     assert "for(let i=0;i<nx;i++)row.push(mirrorPsiNorm(x[i],r));" in src
