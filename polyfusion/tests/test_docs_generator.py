@@ -23,9 +23,12 @@ def test_manual_has_all_sections(config):
     section_ids = [s["id"] for s in m["sections"]]
     assert section_ids == [
         "overview",
+        "beginner_path",
         "presets",
         "params",
         "outputs",
+        "key_metrics",
+        "scan_guide",
         "dependencies",
         "workflow",
         "notes",
@@ -76,6 +79,16 @@ def test_manual_lang_switch():
 def test_manual_default_lang_is_zh():
     m = generate_manual("tokamak")
     assert m["lang"] == "zh"
+
+
+def test_manual_includes_beginner_and_popcon_guidance():
+    zh = generate_manual("tokamak", "zh")
+    beginner = next(s for s in zh["sections"] if s["id"] == "beginner_path")
+    scan = next(s for s in zh["sections"] if s["id"] == "scan_guide")
+    metrics = next(s for s in zh["sections"] if s["id"] == "key_metrics")
+    assert any("第一次使用" in step for step in beginner["steps"])
+    assert any("最佳区判据" in step for step in scan["steps"])
+    assert any("Pwall" in step for step in metrics["steps"])
 
 
 def test_manual_unknown_config_raises():

@@ -351,6 +351,56 @@ def generate_manual(config_name: str, lang: str = "zh") -> dict:
 
     presets = list(spec.presets.keys()) if hasattr(spec.presets, "keys") else list(spec.presets)
 
+    beginner_path = (
+        [
+            "第一次使用建议先选择托卡马克和一个内置预设，直接观察默认工作点。",
+            "先不要逐项修改参数；先理解输入分组：几何决定尺度，等离子体决定密度温度，燃料/杂质决定反应与辐射，约束决定损失假设。",
+            "右侧输出先看功率与增益，再看壁负荷、密度极限、beta 或位形专属稳定性诊断。",
+            "确认单点结果后，再选择两个最想调的变量做 POPCON 扫描。",
+        ]
+        if li == 0
+        else [
+            "For a first run, choose tokamak plus a built-in preset and inspect the default operating point before editing fields.",
+            "Do not edit every parameter at once; first learn the groups: geometry sets scale, plasma sets density/temperature, fuel/impurity sets reaction and radiation, confinement sets loss assumptions.",
+            "Read power and gain first, then wall loading, density limits, beta or configuration-specific stability diagnostics.",
+            "After the single operating point makes sense, choose two important variables for a POPCON scan.",
+        ]
+    )
+
+    key_metrics = (
+        [
+            "Pfus：聚变功率，判断目标是否有足够输出。",
+            "Qfus 与 Pheat：判断外加加热需求；Q 高但 Pwall 或极限超标仍然不可直接接受。",
+            "Pwall：第一壁平均负荷，是从物理结果走向工程约束时最先检查的量之一。",
+            "密度极限、beta、安全因子或位形专属诊断：用于判断候选点是否已经越过主要运行边界。",
+            "valid 和 ignited：分别表示数值有效性与 0-D 功率账自持，不等同于工程可行。",
+        ]
+        if li == 0
+        else [
+            "Pfus: fusion power; use it to judge whether the case reaches the intended output scale.",
+            "Qfus and Pheat: external heating demand; high Q is not enough if Pwall or limits are unacceptable.",
+            "Pwall: average first-wall loading, one of the first engineering-facing quantities to inspect.",
+            "Density limits, beta, safety factor or configuration-specific diagnostics show whether the candidate exceeds major operating boundaries.",
+            "valid and ignited indicate numeric validity and 0-D power balance self-sustainment; neither proves engineering viability.",
+        ]
+    )
+
+    scan_guide = (
+        [
+            "POPCON 扫描把两个输入变量作为横纵轴，在每个网格点重新计算工作点。",
+            "等值线用于观察 Pfus、Q、Pwall 等量如何随两个变量变化；不要只看单个最佳点。",
+            "最佳区判据是用户设定的筛选条件，满足判据的区域只是候选窗口。",
+            "空洞或断裂区域通常来自无效点、越界输入或某个物理约束突然变差，应结合输出解释复查。",
+        ]
+        if li == 0
+        else [
+            "A POPCON scan uses two inputs as X/Y axes and recomputes the operating point on each grid point.",
+            "Contours show how Pfus, Q, Pwall and related quantities move with the two variables; do not judge from one best point only.",
+            "The best-region mask is a user-defined filter; passing regions are candidate windows only.",
+            "Holes or broken regions usually come from invalid points, out-of-range inputs or a suddenly failing constraint; inspect output explanations before trusting them.",
+        ]
+    )
+
     workflow = (
         [
             "选择位形与预设机型",
@@ -398,9 +448,12 @@ def generate_manual(config_name: str, lang: str = "zh") -> dict:
         "output_docs": output_docs,
         "sections": [
             {"id": "overview", "title": "位形概述" if li == 0 else "Overview", "paragraph": overview},
+            {"id": "beginner_path", "title": "新手阅读顺序" if li == 0 else "Beginner Reading Order", "steps": beginner_path},
             {"id": "presets", "title": "内置预设" if li == 0 else "Built-in Presets", "items": [{"k": p, "desc": p, "unit": ""} for p in presets]},
             {"id": "params", "title": "输入参数" if li == 0 else "Input Parameters", "groups": param_groups},
             {"id": "outputs", "title": "输出参数解读" if li == 0 else "Output Interpretation", "groups": output_groups},
+            {"id": "key_metrics", "title": "优先检查的关键量" if li == 0 else "Key Metrics to Inspect First", "steps": key_metrics},
+            {"id": "scan_guide", "title": "POPCON 扫描怎么读" if li == 0 else "How to Read POPCON Scans", "steps": scan_guide},
             {"id": "dependencies", "title": "参数如何影响结果" if li == 0 else "How Inputs Affect Outputs", "steps": config_notes},
             {"id": "workflow", "title": "操作流程" if li == 0 else "Workflow", "steps": workflow},
             {"id": "notes", "title": "注意事项" if li == 0 else "Notes", "steps": notes},

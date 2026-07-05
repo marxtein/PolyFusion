@@ -491,6 +491,12 @@ def test_frontend_exposes_report_buttons_and_handlers():
     assert "lookupReportCache" in html
     assert "saveReportCache" in html
     assert "capturePlotImage" in html
+    # beginner guide and tour entry points exist
+    assert "data-tour-start" in html
+    assert "function startTour" in html
+    assert 'data-tour="config"' in html
+    assert 'data-tour="results"' in html
+    assert "POPCON 扫描" in html
     # size-limit helper: dense arrays must be stripped before upload
     assert "function stripLargeArrays" in html
 
