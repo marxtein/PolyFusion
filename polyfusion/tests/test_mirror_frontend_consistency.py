@@ -35,7 +35,7 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert "const mirrorPsiGrid=(sgn=1)=>{const nx=361,ny=181" in src
     assert "for(let i=0;i<nx;i++)row.push(mirrorPsiNorm(x[i],r));" in src
     assert "return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()};" in src
-    assert "const mirrorContour=(sgn,start,end,size,width,grp)=>{const g=mirrorPsiGrid(sgn),c=GC('flux');" in src
+    assert "const mirrorContour=(sgn,start,end,size,width,grp)=>{const g=mirrorPsiGrid(sgn),c=GC(grp==='boundary'?'boundary':'flux');" in src
     assert "type:'contour'" in mirror_src
     assert "line:{color:c,width,smoothing:1.25}" in src
     assert "mirrorFluxLine" not in mirror_src
@@ -49,9 +49,9 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert "#168ac6" not in mirror_src
     assert "if(MIRROR_VIEW==='full')" in src
     assert "const mirrorFill=(x,y)=>add({type:'scatter',mode:'lines',x,y,line:{color:'rgba(0,0,0,0)',width:0},fill:'toself'" in src
-    assert "mirrorFill(Zb,Rb);mirrorContour(1,1,1,1,1.45,'boundary');mirrorContour(-1,1,1,1,1.45,'boundary');" in src
+    assert "mirrorFill(Zb,Rb);mirrorContour(1,1,1,1,2.6,'boundary');mirrorContour(-1,1,1,1,2.6,'boundary');" in src
     assert "mirrorContour(1,0.08,0.68,0.05,1.05,'flux');mirrorContour(-1,0.08,0.68,0.05,1.05,'flux');" in src
-    assert "mirrorFill(Zb,Rb);mirrorContour(1,1,1,1,1.45,'boundary');" in src
+    assert "mirrorFill(Zb,Rb);mirrorContour(1,1,1,1,2.6,'boundary');" in src
     assert "mirrorContour(1,0.08,0.68,0.05,1.05,'flux');" in src
     assert "BORAY-like open flux-tube field lines" in src
     assert "full view mirrors the half-plane" in src

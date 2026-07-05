@@ -1415,20 +1415,20 @@ function drawShape(){
         zb.push(row);}
       if(sgn>=0)return{x,y:yb,z:zb};
       return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()};};
-    const mirrorContour=(sgn,start,end,size,width,grp)=>{const g=mirrorPsiGrid(sgn),c=GC('flux');
+    const mirrorContour=(sgn,start,end,size,width,grp)=>{const g=mirrorPsiGrid(sgn),c=GC(grp==='boundary'?'boundary':'flux');
       return add({type:'contour',x:g.x,y:g.y,z:g.z,autocontour:false,contours:{coloring:'lines',start,end,size,showlabels:false},
         line:{color:c,width,smoothing:1.25},colorscale:[[0,c],[1,c]],showscale:false,hoverinfo:'skip'},grp);};
     const mirrorFill=(x,y)=>add({type:'scatter',mode:'lines',x,y,line:{color:'rgba(0,0,0,0)',width:0},fill:'toself',fillcolor:GP.bfill,hoverinfo:'skip'},'boundary');
     if(MIRROR_VIEW==='full'){
       const Rn=Rr.map(r=>-r),Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rn].reverse()];
-      mirrorFill(Zb,Rb);mirrorContour(1,1,1,1,1.45,'boundary');mirrorContour(-1,1,1,1,1.45,'boundary');
+      mirrorFill(Zb,Rb);mirrorContour(1,1,1,1,2.6,'boundary');mirrorContour(-1,1,1,1,2.6,'boundary');
       add(lin([zmin,zmax],[a+gg,a+gg],GC('wall'),2.2),'wall');
       add(lin([zmin,zmax],[-a-gg,-a-gg],GC('wall'),2.2),'wall');
       add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
       mirrorContour(1,0.08,0.68,0.05,1.05,'flux');mirrorContour(-1,0.08,0.68,0.05,1.05,'flux');
     }else{
       const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...Z.map(()=>0).reverse()];
-      mirrorFill(Zb,Rb);mirrorContour(1,1,1,1,1.45,'boundary');
+      mirrorFill(Zb,Rb);mirrorContour(1,1,1,1,2.6,'boundary');
       add(lin([zmin,zmax],[a+gg,a+gg],GC('wall'),2.2),'wall');
       add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
       mirrorContour(1,0.08,0.68,0.05,1.05,'flux');
