@@ -1401,22 +1401,20 @@ function drawShape(){
     const zt=LcEff/2+Lth,zpad=Math.max(Lth*0.18,LcEff*0.015,1e-6);
     const zmin=-zt-zpad,zmax=zt+zpad;
     const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));
-    let mirrorCoilA=Math.max(a+gg,a*1.05,1e-6);
-    const mirrorLoop=(s,sc,A)=>A*A/Math.pow(A*A+(s-sc)*(s-sc),1.5);
-    const mirrorPlugS=z=>{const q=Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6)));return Lth*Math.sqrt(mirrorEase(q));};
-    for(let k=0;k<18 && mirrorLoop(Lth,Lth,mirrorCoilA)/Math.max(mirrorLoop(0,Lth,mirrorCoilA),1e-12)<Rm;k++)mirrorCoilA*=0.82;
-    const mirrorS0=mirrorLoop(0,Lth,mirrorCoilA),mirrorSt=mirrorLoop(Lth,Lth,mirrorCoilA),mirrorBias=Math.max(0,(mirrorSt-Rm*mirrorS0)/Math.max(Rm-1,1e-6));
-    const mirrorBhatS=s=>(mirrorBias+mirrorLoop(s,Lth,mirrorCoilA))/Math.max(mirrorBias+mirrorS0,1e-12);
-    const mirrorVisibleB=1/(0.95*0.95);
-    const mirrorQForVisible=()=>{if(Lth<=1e-9)return 0;let lo=0,hi=1;for(let i=0;i<36;i++){const mid=(lo+hi)/2,s=Lth*Math.sqrt(mirrorEase(mid));if(mirrorBhatS(s)<mirrorVisibleB)lo=mid;else hi=mid;}return hi;};
-    const Lc=Math.max(LcEff-2*mirrorQForVisible()*Lth,LcEff*0.05,1e-6);
-    const mirrorBhat=z=>mirrorBhatS(mirrorPlugS(z));
+    const mirrorLoop=(z,zc,A)=>A*A/Math.pow(A*A+(z-zc)*(z-zc),1.5);
+    const mirrorPair=(z,A)=>mirrorLoop(z,zt,A)+mirrorLoop(z,-zt,A);
+    const mirrorVisibleR=0.75,mirrorVisibleB=1/(mirrorVisibleR*mirrorVisibleR);
+    let mirrorCoilLo=Math.max(a*0.05,1e-6),mirrorCoilHi=Math.max(a+gg,a*1.05,mirrorCoilLo*1.2);
+    const mirrorBhatFor=A=>{const s0=mirrorPair(0,A),st=mirrorPair(zt,A),bias=Math.max(0,(st-Rm*s0)/Math.max(Rm-1,1e-6));return z=>(bias+mirrorPair(z,A))/Math.max(bias+s0,1e-12);};
+    for(let k=0;k<28 && mirrorBhatFor(mirrorCoilHi)(LcEff/2)<mirrorVisibleB;k++)mirrorCoilHi*=1.25;
+    for(let k=0;k<42;k++){const mid=(mirrorCoilLo+mirrorCoilHi)/2;if(mirrorBhatFor(mid)(LcEff/2)<mirrorVisibleB)mirrorCoilLo=mid;else mirrorCoilHi=mid;}
+    const mirrorBhat=mirrorBhatFor(mirrorCoilHi);
     const mirrorB2=z=>{const h=Math.max(zt/260,1e-4);return (mirrorBhat(z+h)-2*mirrorBhat(z)+mirrorBhat(z-h))/(h*h);};
     const mirrorCurv=z=>Math.min(mirrorB2(z),0);
     const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBhat(z)-0.25*r*r*mirrorCurv(z));
     const mirrorPsiAt=(z,r)=>{const x=Math.abs(r)/Math.max(a,1e-9);return mirrorBhat(z)*x*x-0.125*a*a*mirrorCurv(z)*Math.pow(x,4);};
     const mirrorBoundaryR=z=>{let lo=0,hi=a*1.8;for(let i=0;i<42;i++){const mid=(lo+hi)/2;if(mirrorPsiAt(z,mid)<1)lo=mid;else hi=mid;}return hi;};
-    const mirrorHeightCut=0.95*mirrorBoundaryR(0);
+    const mirrorHeightCut=mirrorVisibleR*mirrorBoundaryR(0);
     const mirrorThroatS=z=>mirrorEase(Math.max(0,Math.min(1,(mirrorHeightCut-mirrorBoundaryR(z))/Math.max(mirrorHeightCut-mirrorBoundaryR(zt),1e-6))));
     const mirrorCenterEdgeZ=()=>{if(mirrorBoundaryR(zt)>mirrorHeightCut)return zt;let lo=0,hi=zt;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(mirrorBoundaryR(mid)>mirrorHeightCut)lo=mid;else hi=mid;}return hi;};
     for(let i=0;i<=220;i++){const z=zmin+(zmax-zmin)*i/220;Z.push(z);Rr.push(mirrorBoundaryR(z));}
@@ -1468,7 +1466,7 @@ function drawShape(){
     add(cv([zc,zc],[MIRROR_VIEW==='full'?-yEff:0,mirrorBoundaryR(zc)],'#ffd166',1.5,'dot'),'annot');
     add(cv([-zc,-zc],[MIRROR_VIEW==='full'?-yEff:0,mirrorBoundaryR(-zc)],'#ffd166',1.5,'dot'),'annot');
     add({type:'scatter',mode:'markers',x:[-zc,zc],y:[yEff,yEff],marker:{color:'#ffd166',size:8,symbol:'circle-open',line:{color:'#ffd166',width:2}},hoverinfo:'skip'},'annot');
-    add(txt([0],[yEff+a*0.055],[`R=0.95R<sub>max</sub>`],'#ffd166'),'annot');
+    add(txt([0],[yEff+a*0.055],[`R=0.75R<sub>max</sub>`],'#ffd166'),'annot');
     add(cv([0,0],[0,a],'#9be564',1.4,'dot'),'annot');
     add(txt([LcEff*0.05],[a*0.5],[`a<sub>c</sub>=${(+a).toFixed(2)} m`],'#9be564'),'annot');
     if(gg>0)add({type:'scatter',mode:'lines+markers+text',x:[-LcEff*0.25,-LcEff*0.25],y:[a,a+gg],line:{color:GC('wall'),width:1.4,dash:'dot'},marker:{color:GC('wall'),size:3},text:['',`g=${(+gg).toFixed(2)} m`],textposition:'middle left',textfont:{color:GC('wall'),size:10}},'annot');
