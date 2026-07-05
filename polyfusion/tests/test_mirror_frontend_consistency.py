@@ -20,9 +20,10 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert "const mirrorBProfile=z=>{const q=Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6))),u=0.5-0.5*Math.cos(Math.PI*q);return mirrorEase(u);};" in src
     assert "const mirrorCenterBow=z=>{const p=Math.max(0,Math.min(1,Math.abs(z)/Math.max(Lc/2,1e-6)));return Math.pow(Math.sin(0.5*Math.PI*p),2)*(1-mirrorBProfile(z));};" in src
     assert "const mirrorBhat=z=>1+0.18*mirrorCenterBow(z)+(Math.max(Rm,1e-6)-1)*mirrorBProfile(z);" in src
-    assert "const mirrorRadialDrop=z=>0.14*mirrorCenterBow(z)+0.30*mirrorBProfile(z);" in src
-    assert "const mirrorBzRZ=(z,r)=>{const x=Math.abs(r)/Math.max(a,1e-9),d=mirrorRadialDrop(z);return mirrorBhat(z)*Math.max(0.05,1-d*x*x+0.06*d*x*x*x*x);};" in src
-    assert "const mirrorPsiAt=(z,r)=>{const x=Math.abs(r)/Math.max(a,1e-9),d=mirrorRadialDrop(z);return mirrorBhat(z)*(x*x-0.5*d*Math.pow(x,4)+0.02*d*Math.pow(x,6));};" in src
+    assert "mirrorRadialDrop" not in mirror_src
+    assert "const mirrorB2=z=>{const h=Math.max(zt/260,1e-4);return (mirrorBhat(z+h)-2*mirrorBhat(z)+mirrorBhat(z-h))/(h*h);};" in src
+    assert "const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBhat(z)-0.25*r*r*mirrorB2(z));" in src
+    assert "const mirrorPsiAt=(z,r)=>{const x=Math.abs(r)/Math.max(a,1e-9);return mirrorBhat(z)*x*x-0.125*a*a*mirrorB2(z)*Math.pow(x,4);};" in src
     assert "const mirrorBoundaryR=z=>{let lo=0,hi=a*1.8;for(let i=0;i<42;i++){const mid=(lo+hi)/2;if(mirrorPsiAt(z,mid)<1)lo=mid;else hi=mid;}return hi;};" in src
     assert "const mirrorHeightCut=0.5*mirrorBoundaryR(0);" in src
     assert "const mirrorThroatS=z=>mirrorEase(Math.max(0,Math.min(1,(mirrorHeightCut-mirrorBoundaryR(z))/Math.max(mirrorHeightCut-mirrorBoundaryR(zt),1e-6))));" in src
