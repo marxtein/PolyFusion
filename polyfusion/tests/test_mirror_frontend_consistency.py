@@ -18,8 +18,9 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert "const zt=Lc/2+Lth,zpad=Math.max(Lth*0.18,Lc*0.015,1e-6)" in src
     assert "const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));" in src
     assert "const mirrorBProfile=z=>{const q=Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6))),u=0.5-0.5*Math.cos(Math.PI*q);return mirrorEase(u);};" in src
-    assert "const mirrorBhat=z=>1+(Math.max(Rm,1e-6)-1)*mirrorBProfile(z);" in src
-    assert "const mirrorRadialDrop=z=>0.30*mirrorBProfile(z);" in src
+    assert "const mirrorCenterBow=z=>{const p=Math.max(0,Math.min(1,Math.abs(z)/Math.max(Lc/2,1e-6)));return Math.pow(Math.sin(0.5*Math.PI*p),2)*(1-mirrorBProfile(z));};" in src
+    assert "const mirrorBhat=z=>1+0.18*mirrorCenterBow(z)+(Math.max(Rm,1e-6)-1)*mirrorBProfile(z);" in src
+    assert "const mirrorRadialDrop=z=>0.14*mirrorCenterBow(z)+0.30*mirrorBProfile(z);" in src
     assert "const mirrorBzRZ=(z,r)=>{const x=Math.abs(r)/Math.max(a,1e-9),d=mirrorRadialDrop(z);return mirrorBhat(z)*Math.max(0.05,1-d*x*x+0.06*d*x*x*x*x);};" in src
     assert "const mirrorPsiAt=(z,r)=>{const x=Math.abs(r)/Math.max(a,1e-9),d=mirrorRadialDrop(z);return mirrorBhat(z)*(x*x-0.5*d*Math.pow(x,4)+0.02*d*Math.pow(x,6));};" in src
     assert "const mirrorBoundaryR=z=>{let lo=0,hi=a*1.8;for(let i=0;i<42;i++){const mid=(lo+hi)/2;if(mirrorPsiAt(z,mid)<1)lo=mid;else hi=mid;}return hi;};" in src

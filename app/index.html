@@ -1402,8 +1402,9 @@ function drawShape(){
     const zmin=-zt-zpad,zmax=zt+zpad;
     const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));
     const mirrorBProfile=z=>{const q=Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6))),u=0.5-0.5*Math.cos(Math.PI*q);return mirrorEase(u);};
-    const mirrorBhat=z=>1+(Math.max(Rm,1e-6)-1)*mirrorBProfile(z);
-    const mirrorRadialDrop=z=>0.30*mirrorBProfile(z);
+    const mirrorCenterBow=z=>{const p=Math.max(0,Math.min(1,Math.abs(z)/Math.max(Lc/2,1e-6)));return Math.pow(Math.sin(0.5*Math.PI*p),2)*(1-mirrorBProfile(z));};
+    const mirrorBhat=z=>1+0.18*mirrorCenterBow(z)+(Math.max(Rm,1e-6)-1)*mirrorBProfile(z);
+    const mirrorRadialDrop=z=>0.14*mirrorCenterBow(z)+0.30*mirrorBProfile(z);
     const mirrorBzRZ=(z,r)=>{const x=Math.abs(r)/Math.max(a,1e-9),d=mirrorRadialDrop(z);return mirrorBhat(z)*Math.max(0.05,1-d*x*x+0.06*d*x*x*x*x);};
     const mirrorPsiAt=(z,r)=>{const x=Math.abs(r)/Math.max(a,1e-9),d=mirrorRadialDrop(z);return mirrorBhat(z)*(x*x-0.5*d*Math.pow(x,4)+0.02*d*Math.pow(x,6));};
     const mirrorBoundaryR=z=>{let lo=0,hi=a*1.8;for(let i=0;i<42;i++){const mid=(lo+hi)/2;if(mirrorPsiAt(z,mid)<1)lo=mid;else hi=mid;}return hi;};
