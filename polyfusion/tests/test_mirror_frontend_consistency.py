@@ -37,12 +37,12 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert "Lc*0.16" not in src
     assert "const zc=mirrorCenterEdgeZ();" in src
     assert "const dimSeg=(x1,x2,y,c,ds='dot')=>add({type:'scatter',mode:'lines+markers',x:[x1,x2],y:[y,y]," in src
-    assert "const yLc=a*0.11,yLth=a*0.43;" in src
+    assert "const yLc=a*0.11,yEff=mirrorHeightCut,yLth=Math.max(a*0.43,yEff+a*0.08);" in src
     assert "dimSeg(-Lc/2,Lc/2,yLc,'#ffc247','dot');" in src
     assert "L<sub>c</sub>=${(+Lc).toFixed(2)} m" in src
     assert "dimSeg(Lc/2,zt,yLth,'#ff9e3d','dash');dimSeg(-zt,-Lc/2,yLth,'#ff9e3d','dash');" in src
     assert "L<sub>th</sub>=${(+Lth).toFixed(2)} m" in src
-    assert "add(cv([-zc,zc],[a*0.20,a*0.20],'#ffd166',1.4,'dot'),'annot');" in src
+    assert "add(cv([-zc,zc],[yEff,yEff],'#ffd166',1.4,'dot'),'annot');" in src
     assert "L<sub>c,eff</sub>≈${(2*zc).toFixed(2)} m" in src
     assert "for(let i=0;i<=220;i++){const z=zmin+(zmax-zmin)*i/220;Z.push(z);Rr.push(mirrorBoundaryR(z));}" in src
     assert "const mirrorPsiGrid=(sgn=1)=>{const nx=361,ny=181" in src
