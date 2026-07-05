@@ -1401,53 +1401,33 @@ function drawShape(){
     const zt=Lc/2+Lth,zpad=Math.max(Lth*0.18,Lc*0.015,1e-6);
     const zmin=-zt-zpad,zmax=zt+zpad;
     const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));
-    const mirrorThroatS=z=>mirrorEase(Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6))));
+    const mirrorTurnIn=Math.min(Lth*0.62,Lc*0.12);
+    const mirrorThroatS=z=>mirrorEase(Math.max(0,Math.min(1,(Math.abs(z)-(Lc/2-mirrorTurnIn))/Math.max(Lth+mirrorTurnIn,1e-6))));
     const mirrorBoundaryR=z=>{const s=mirrorThroatS(z),rt=1/Math.sqrt(Math.max(Rm,1e-6));return a*(1-s+s*rt);};
     const mirrorCoreU=z=>{const q=Math.min(1,Math.abs(z)/Math.max(Lc/2,1e-6));return q*q*(3-2*q);};
     const mirrorCoreRise=Math.min(0.45,0.013*(Rm-1));
     const mirrorCoreBow=z=>1+mirrorCoreRise*(1-0.45*mirrorCoreU(z))*(1-mirrorThroatS(z));
     const mirrorPsiNorm=(z,r)=>Math.pow(r/Math.max(mirrorBoundaryR(z),1e-9),2)/mirrorCoreBow(z);
     for(let i=0;i<=220;i++){const z=zmin+(zmax-zmin)*i/220;Z.push(z);Rr.push(mirrorBoundaryR(z));}
-    const mirrorPsiGrid=(sgn=1)=>{const nx=241,ny=121,x=[],yb=[],zb=[];
-      for(let i=0;i<nx;i++)x.push(zmin+(zmax-zmin)*i/(nx-1));
-      for(let j=0;j<ny;j++){const r=a*j/(ny-1),row=[];yb.push(r);
-        for(let i=0;i<nx;i++)row.push(mirrorPsiNorm(x[i],r));
-        zb.push(row);}
-      if(sgn>=0)return{x,y:yb,z:zb};
-      return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()};};
-    const mirrorPsiContour=(sgn=1)=>{const g=mirrorPsiGrid(sgn),c=GC('flux');
-      return{type:'contour',x:g.x,y:g.y,z:g.z,autocontour:false,contours:{coloring:'lines',start:0.08,end:0.68,size:0.055,showlabels:false},line:{color:c,width:1.05},colorscale:[[0,c],[1,c]],showscale:false,hoverinfo:'skip'};};
-    const mirrorBackdrop=(sgn=1)=>{const nx=181,ny=82,x=[],yb=[],zb=[],ym=a+gg;
-      for(let i=0;i<nx;i++)x.push(zmin+(zmax-zmin)*i/(nx-1));
-      for(let j=0;j<ny;j++){const r=ym*j/(ny-1),row=[];yb.push(r);
-        for(let i=0;i<nx;i++){const zz=x[i],rb=mirrorBoundaryR(zz),rho=Math.min(1,r/Math.max(rb,1e-9));
-          row.push(2.4*r/Math.max(ym,1e-9)+0.55*(1-rho)+0.30*(1-mirrorCoreU(zz))*(1-mirrorThroatS(zz))-0.18*mirrorThroatS(zz));}
-        zb.push(row);}
-      const yy=sgn<0?yb.map(r=>-r).reverse():yb,zz=sgn<0?[...zb].reverse():zb;
-      return{type:'heatmap',x,y:yy,z:zz,colorscale:[[0,'#ffe45c'],[0.34,'#44d8dd'],[0.68,'#4276dc'],[1,'#6f55cf']],opacity:THEME==='light'?0.28:0.42,showscale:false,hoverinfo:'skip',zsmooth:'best',showlegend:false};};
-    const mirrorRay=(off,c,sgn=1)=>{const x=[],y=[];
-      for(let i=0;i<=150;i++){const u=i/150,z=-zt*0.92+1.72*zt*u,rb=mirrorBoundaryR(z);
-        const rise=a*(0.08+0.08*off)+a*(0.42+0.12*off)*Math.sin(Math.PI*Math.min(1,u*0.92))+a*(0.34+0.05*off)*u;
-        x.push(z);y.push(sgn*Math.min(rb*0.94,rise));}
-      return{type:'scatter',mode:'lines',x,y,line:{color:c,width:2.0},opacity:0.92,showlegend:false,hoverinfo:'skip'};};
+    const mirrorFluxLevels=Array.from({length:13},(_,i)=>0.08+i*0.05);
+    const mirrorFluxLine=(level,sgn=1)=>{const x=[],y=[];
+      for(let i=0;i<=360;i++){const z=zmin+(zmax-zmin)*i/360;
+        x.push(z);y.push(sgn*mirrorBoundaryR(z)*Math.sqrt(Math.max(0,level*mirrorCoreBow(z))));}
+      return cv(x,y,GC('flux'),1.05);};
     const mirrorFill=(x,y)=>add({type:'scatter',mode:'lines',x,y,line:{color:'rgba(0,0,0,0)',width:0},fill:'toself',fillcolor:GP.bfill,hoverinfo:'skip'},'boundary');
     if(MIRROR_VIEW==='full'){
       const Rn=Rr.map(r=>-r),Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rn].reverse()];
-      tr.push(mirrorBackdrop(1));tr.push(mirrorBackdrop(-1));
       add(cv(Z,Rr,GC('flux'),1.45),'boundary');add(cv(Z,Rn,GC('flux'),1.45),'boundary');mirrorFill(Zb,Rb);
       add(lin([zmin,zmax],[a+gg,a+gg],GC('wall'),2.2),'wall');
       add(lin([zmin,zmax],[-a-gg,-a-gg],GC('wall'),2.2),'wall');
       add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
-      add(mirrorPsiContour(1),'flux');add(mirrorPsiContour(-1),'flux');
-      [mirrorRay(0,'#f59e0b',1),mirrorRay(0.45,'#ef6c00',1),mirrorRay(0.9,'#168ac6',1),mirrorRay(0,'#f59e0b',-1),mirrorRay(0.45,'#ef6c00',-1),mirrorRay(0.9,'#168ac6',-1)].forEach(t=>tr.push(t));
+      mirrorFluxLevels.forEach(lv=>{add(mirrorFluxLine(lv,1),'flux');add(mirrorFluxLine(lv,-1),'flux');});
     }else{
       const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...Z.map(()=>0).reverse()];
-      tr.push(mirrorBackdrop(1));
       add(cv(Z,Rr,GC('flux'),1.45),'boundary');mirrorFill(Zb,Rb);
       add(lin([zmin,zmax],[a+gg,a+gg],GC('wall'),2.2),'wall');
       add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
-      add(mirrorPsiContour(1),'flux');
-      [mirrorRay(0,'#f59e0b',1),mirrorRay(0.45,'#ef6c00',1),mirrorRay(0.9,'#168ac6',1)].forEach(t=>tr.push(t));
+      mirrorFluxLevels.forEach(lv=>add(mirrorFluxLine(lv,1),'flux'));
     }
     const rt=mirrorBoundaryR(zt);
     add(cv([zt,zt],[MIRROR_VIEW==='full'?-rt:0,rt],'#c792ff',2.2,'dot'),'annot');
@@ -1465,7 +1445,7 @@ function drawShape(){
     lay=LAYOUT('Z [m]','R [m]');
     lay.xaxis.range=[zmin,zmax];
     lay.yaxis.range=MIRROR_VIEW==='full'?[-(a+gg)*1.75,(a+gg)*1.75]:[0,(a+gg)*1.75];
-    document.getElementById('plotMeta').innerHTML=`<span>${MIRROR_VIEW==='full'?L('BORAY-like 开放磁通管等值线；背景/射线为几何示意','BORAY-like open flux-tube contours; background/rays are visual guides'):L('BORAY-like 开放磁通管等值线；Z-R 半平面，背景/射线为几何示意','BORAY-like open flux-tube contours; Z-R half-plane with visual background/ray guides')}</span>`;
+    document.getElementById('plotMeta').innerHTML=`<span>${MIRROR_VIEW==='full'?L('BORAY-like 开放磁通管磁力线；完整视图由半平面镜像得到','BORAY-like open flux-tube field lines; full view mirrors the half-plane'):L('BORAY-like 开放磁通管磁力线；Z-R 半平面','BORAY-like open flux-tube field lines; Z-R half-plane')}</span>`;
   }else if(CUR==='frc'){
     const pc=document.getElementById('phControls');
     if(pc){const state=`frc-${FRC_VIEW}`;
