@@ -232,7 +232,7 @@ const META={
   icase:['反应类型','Reaction','','rx',''],
   R0:['大半径','major radius','m','geo','R<sub>0</sub>'],A:['环径比','aspect ratio','','geo','A'],a:['小半径','minor radius','m','geo','a'],kappa:['拉长比','elongation','','geo','κ'],
   delta:['三角形变','triangularity','','geo','δ'],g:['壁间隙','wall gap','m','geo','g'],
-  a_c:['等离子体半径','plasma radius','m','geo','a<sub>c</sub>'],L_c:['中心室长','cell length','m','geo','L<sub>c</sub>'],R_mirror:['镜比','mirror ratio','','geo','R<sub>m</sub>'],
+  a_c:['等离子体半径','plasma radius','m','geo','a<sub>c</sub>'],L_c:['有效中心室长','effective cell length','m','geo','L<sub>c</sub>'],R_mirror:['镜比','mirror ratio','','geo','R<sub>m</sub>'],
   r_s:['分离面半径','separatrix radius','m','geo','r<sub>s</sub>'],l_s:['分离面长','separatrix length','m','geo','l<sub>s</sub>'],r_w:['壁半径','wall radius','m','geo','r<sub>w</sub>'],
   r_ring:['环半径','coil radius','m','geo','r<sub>ring</sub>'],R_p:['等离子体外径','plasma outer radius','m','geo','R<sub>p</sub>'],
   Sn:['密度峰化','density peaking','','prof','S<sub>n</sub>'],ST:['温度峰化','temperature peaking','','prof','S<sub>T</sub>'],
@@ -1396,9 +1396,9 @@ function drawShape(){
         pc.querySelectorAll('.phbtn[data-mirror-view]').forEach(b=>b.onclick=()=>{MIRROR_VIEW=b.dataset.mirrorView;try{localStorage.setItem('polyfusion_mirror_view',MIRROR_VIEW)}catch(e){};pc.dataset.state='';drawShape();});
       }
     }
-    const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
-    const Lth=ft*Lc,Z=[],Rr=[];
-    const zt=Lc/2+Lth,zpad=Math.max(Lth*0.18,Lc*0.015,1e-6);
+    const LcEff=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
+    const Lth=ft*LcEff,Z=[],Rr=[];
+    const zt=LcEff/2+Lth,zpad=Math.max(Lth*0.18,LcEff*0.015,1e-6);
     const zmin=-zt-zpad,zmax=zt+zpad;
     const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));
     let mirrorCoilA=Math.max(a+gg,a*1.05,1e-6);
@@ -1406,7 +1406,11 @@ function drawShape(){
     const mirrorPlugS=z=>{const q=Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6)));return Lth*Math.sqrt(mirrorEase(q));};
     for(let k=0;k<18 && mirrorLoop(Lth,Lth,mirrorCoilA)/Math.max(mirrorLoop(0,Lth,mirrorCoilA),1e-12)<Rm;k++)mirrorCoilA*=0.82;
     const mirrorS0=mirrorLoop(0,Lth,mirrorCoilA),mirrorSt=mirrorLoop(Lth,Lth,mirrorCoilA),mirrorBias=Math.max(0,(mirrorSt-Rm*mirrorS0)/Math.max(Rm-1,1e-6));
-    const mirrorBhat=z=>(mirrorBias+mirrorLoop(mirrorPlugS(z),Lth,mirrorCoilA))/Math.max(mirrorBias+mirrorS0,1e-12);
+    const mirrorBhatS=s=>(mirrorBias+mirrorLoop(s,Lth,mirrorCoilA))/Math.max(mirrorBias+mirrorS0,1e-12);
+    const mirrorVisibleB=1/(0.95*0.95);
+    const mirrorQForVisible=()=>{if(Lth<=1e-9)return 0;let lo=0,hi=1;for(let i=0;i<36;i++){const mid=(lo+hi)/2,s=Lth*Math.sqrt(mirrorEase(mid));if(mirrorBhatS(s)<mirrorVisibleB)lo=mid;else hi=mid;}return hi;};
+    const Lc=Math.max(LcEff-2*mirrorQForVisible()*Lth,LcEff*0.05,1e-6);
+    const mirrorBhat=z=>mirrorBhatS(mirrorPlugS(z));
     const mirrorB2=z=>{const h=Math.max(zt/260,1e-4);return (mirrorBhat(z+h)-2*mirrorBhat(z)+mirrorBhat(z-h))/(h*h);};
     const mirrorCurv=z=>Math.min(mirrorB2(z),0);
     const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBhat(z)-0.25*r*r*mirrorCurv(z));
@@ -1454,20 +1458,20 @@ function drawShape(){
     const dimSeg=(x1,x2,y,c,ds='dot')=>add({type:'scatter',mode:'lines+markers',x:[x1,x2],y:[y,y],
       line:{color:c,width:1.35,dash:ds},marker:{color:c,size:7,symbol:'line-ns-open'},hoverinfo:'skip'},'annot');
     const yLc=a*0.11,yEff=mirrorHeightCut,yLth=Math.max(a*0.72,yEff+a*0.20);
-    dimSeg(-Lc/2,Lc/2,yLc,'#ffc247','dot');
-    add(txt([0],[yLc+a*0.055],[`L<sub>c</sub>=${(+Lc).toFixed(2)} m`],'#ffc247'),'annot');
+    dimSeg(-LcEff/2,LcEff/2,yLc,'#ffc247','dot');
+    add(txt([0],[yLc+a*0.055],[`L<sub>c</sub>=${(+LcEff).toFixed(2)} m`],'#ffc247'),'annot');
     if(Lth>1e-9){
-      dimSeg(Lc/2,zt,yLth,'#ff9e3d','dash');dimSeg(-zt,-Lc/2,yLth,'#ff9e3d','dash');
-      add(txt([(Lc/2+zt)/2,(-zt-Lc/2)/2],[yLth+a*0.06,yLth+a*0.06],[`L<sub>th</sub>=${(+Lth).toFixed(2)} m`,`L<sub>th</sub>`],'#ff9e3d'),'annot');
+      dimSeg(LcEff/2,zt,yLth,'#ff9e3d','dash');dimSeg(-zt,-LcEff/2,yLth,'#ff9e3d','dash');
+      add(txt([(LcEff/2+zt)/2,(-zt-LcEff/2)/2],[yLth+a*0.06,yLth+a*0.06],[`L<sub>th</sub>=${(+Lth).toFixed(2)} m`,`L<sub>th</sub>`],'#ff9e3d'),'annot');
     }
     add(cv([-zc,zc],[yEff,yEff],'#ffd166',2.0,'dash'),'annot');
     add(cv([zc,zc],[MIRROR_VIEW==='full'?-yEff:0,mirrorBoundaryR(zc)],'#ffd166',1.5,'dot'),'annot');
     add(cv([-zc,-zc],[MIRROR_VIEW==='full'?-yEff:0,mirrorBoundaryR(-zc)],'#ffd166',1.5,'dot'),'annot');
     add({type:'scatter',mode:'markers',x:[-zc,zc],y:[yEff,yEff],marker:{color:'#ffd166',size:8,symbol:'circle-open',line:{color:'#ffd166',width:2}},hoverinfo:'skip'},'annot');
-    add(txt([0],[yEff+a*0.055],[`L<sub>c,eff</sub>≈${(2*zc).toFixed(2)} m @ R=0.95R<sub>max</sub>`],'#ffd166'),'annot');
+    add(txt([0],[yEff+a*0.055],[`R=0.95R<sub>max</sub>`],'#ffd166'),'annot');
     add(cv([0,0],[0,a],'#9be564',1.4,'dot'),'annot');
-    add(txt([Lc*0.05],[a*0.5],[`a<sub>c</sub>=${(+a).toFixed(2)} m`],'#9be564'),'annot');
-    if(gg>0)add({type:'scatter',mode:'lines+markers+text',x:[-Lc*0.25,-Lc*0.25],y:[a,a+gg],line:{color:GC('wall'),width:1.4,dash:'dot'},marker:{color:GC('wall'),size:3},text:['',`g=${(+gg).toFixed(2)} m`],textposition:'middle left',textfont:{color:GC('wall'),size:10}},'annot');
+    add(txt([LcEff*0.05],[a*0.5],[`a<sub>c</sub>=${(+a).toFixed(2)} m`],'#9be564'),'annot');
+    if(gg>0)add({type:'scatter',mode:'lines+markers+text',x:[-LcEff*0.25,-LcEff*0.25],y:[a,a+gg],line:{color:GC('wall'),width:1.4,dash:'dot'},marker:{color:GC('wall'),size:3},text:['',`g=${(+gg).toFixed(2)} m`],textposition:'middle left',textfont:{color:GC('wall'),size:10}},'annot');
     add(txt([0],[(a+gg)*1.45],[`R<sub>m</sub>=B<sub>max</sub>/B<sub>min</sub>=${(+Rm).toFixed(1)} · ${L('损失锥','loss cone')} sinθ=1/√R<sub>m</sub>=${(1/Math.sqrt(Rm)).toFixed(2)}`],'#c792ff'),'annot');
     lay=LAYOUT('Z [m]','R [m]');
     lay.xaxis.range=[zmin,zmax];

@@ -13,17 +13,24 @@ INDEX = os.path.join(ROOT, "app", "index.html")
 def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     src = open(INDEX, encoding="utf-8").read()
     mirror_src = src.split("}else if(CUR==='mirror'){", 1)[1].split("}else if(CUR==='frc'){", 1)[0]
+    assert "L_c:['有效中心室长','effective cell length','m','geo','L<sub>c</sub>']" in src
     assert "let MIRROR_VIEW=(()=>{try{return localStorage.getItem('polyfusion_mirror_view')||'half'}catch(e){return'half'}})()" in src
     assert 'data-mirror-view="half"' in src
     assert 'data-mirror-view="full"' in src
-    assert "const zt=Lc/2+Lth,zpad=Math.max(Lth*0.18,Lc*0.015,1e-6)" in src
+    assert "const LcEff=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;" in src
+    assert "const Lth=ft*LcEff,Z=[],Rr=[];" in src
+    assert "const zt=LcEff/2+Lth,zpad=Math.max(Lth*0.18,LcEff*0.015,1e-6);" in src
     assert "const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));" in src
     assert "let mirrorCoilA=Math.max(a+gg,a*1.05,1e-6);" in src
     assert "const mirrorLoop=(s,sc,A)=>A*A/Math.pow(A*A+(s-sc)*(s-sc),1.5);" in src
-    assert "const mirrorPlugS=z=>{const q=Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6)));return Lth*Math.sqrt(mirrorEase(q));};" in src
     assert "for(let k=0;k<18 && mirrorLoop(Lth,Lth,mirrorCoilA)/Math.max(mirrorLoop(0,Lth,mirrorCoilA),1e-12)<Rm;k++)mirrorCoilA*=0.82;" in src
     assert "const mirrorS0=mirrorLoop(0,Lth,mirrorCoilA),mirrorSt=mirrorLoop(Lth,Lth,mirrorCoilA),mirrorBias=Math.max(0,(mirrorSt-Rm*mirrorS0)/Math.max(Rm-1,1e-6));" in src
-    assert "const mirrorBhat=z=>(mirrorBias+mirrorLoop(mirrorPlugS(z),Lth,mirrorCoilA))/Math.max(mirrorBias+mirrorS0,1e-12);" in src
+    assert "const mirrorBhatS=s=>(mirrorBias+mirrorLoop(s,Lth,mirrorCoilA))/Math.max(mirrorBias+mirrorS0,1e-12);" in src
+    assert "const mirrorVisibleB=1/(0.95*0.95);" in src
+    assert "const mirrorQForVisible=()=>{if(Lth<=1e-9)return 0;let lo=0,hi=1;for(let i=0;i<36;i++){const mid=(lo+hi)/2,s=Lth*Math.sqrt(mirrorEase(mid));if(mirrorBhatS(s)<mirrorVisibleB)lo=mid;else hi=mid;}return hi;};" in src
+    assert "const Lc=Math.max(LcEff-2*mirrorQForVisible()*Lth,LcEff*0.05,1e-6);" in src
+    assert "const mirrorPlugS=z=>{const q=Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6)));return Lth*Math.sqrt(mirrorEase(q));};" in src
+    assert "const mirrorBhat=z=>mirrorBhatS(mirrorPlugS(z));" in src
     assert "const mirrorCurv=z=>Math.min(mirrorB2(z),0);" in src
     assert "const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBhat(z)-0.25*r*r*mirrorCurv(z));" in src
     assert "const mirrorPsiAt=(z,r)=>{const x=Math.abs(r)/Math.max(a,1e-9);return mirrorBhat(z)*x*x-0.125*a*a*mirrorCurv(z)*Math.pow(x,4);};" in src
@@ -51,15 +58,15 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert "const zc=mirrorCenterEdgeZ();" in src
     assert "const dimSeg=(x1,x2,y,c,ds='dot')=>add({type:'scatter',mode:'lines+markers',x:[x1,x2],y:[y,y]," in src
     assert "const yLc=a*0.11,yEff=mirrorHeightCut,yLth=Math.max(a*0.72,yEff+a*0.20);" in src
-    assert "dimSeg(-Lc/2,Lc/2,yLc,'#ffc247','dot');" in src
-    assert "L<sub>c</sub>=${(+Lc).toFixed(2)} m" in src
-    assert "dimSeg(Lc/2,zt,yLth,'#ff9e3d','dash');dimSeg(-zt,-Lc/2,yLth,'#ff9e3d','dash');" in src
+    assert "dimSeg(-LcEff/2,LcEff/2,yLc,'#ffc247','dot');" in src
+    assert "L<sub>c</sub>=${(+LcEff).toFixed(2)} m" in src
+    assert "dimSeg(LcEff/2,zt,yLth,'#ff9e3d','dash');dimSeg(-zt,-LcEff/2,yLth,'#ff9e3d','dash');" in src
     assert "L<sub>th</sub>=${(+Lth).toFixed(2)} m" in src
     assert "add(cv([-zc,zc],[yEff,yEff],'#ffd166',2.0,'dash'),'annot');" in src
     assert "add(cv([zc,zc],[MIRROR_VIEW==='full'?-yEff:0,mirrorBoundaryR(zc)],'#ffd166',1.5,'dot'),'annot');" in src
     assert "add(cv([-zc,-zc],[MIRROR_VIEW==='full'?-yEff:0,mirrorBoundaryR(-zc)],'#ffd166',1.5,'dot'),'annot');" in src
     assert "marker:{color:'#ffd166',size:8,symbol:'circle-open',line:{color:'#ffd166',width:2}}" in src
-    assert "L<sub>c,eff</sub>≈${(2*zc).toFixed(2)} m @ R=0.95R<sub>max</sub>" in src
+    assert "R=0.95R<sub>max</sub>" in src
     assert "for(let i=0;i<=220;i++){const z=zmin+(zmax-zmin)*i/220;Z.push(z);Rr.push(mirrorBoundaryR(z));}" in src
     assert "const mirrorPsiGrid=(sgn=1)=>{const nx=361,ny=181" in src
     assert "const psi=x.map(()=>0),prevB=x.map(z=>mirrorBzRZ(z,0));let prevR=0;" in src
@@ -90,9 +97,9 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert "[0.35,0.65,0.88].forEach" not in src
 
 
-def _mirror_frontend_model(Lc: float, fth: float, Rm: float, a: float, g: float):
-    Lth = fth * Lc
-    zt = Lc / 2 + Lth
+def _mirror_frontend_model(Lc_eff: float, fth: float, Rm: float, a: float, g: float):
+    Lth = fth * Lc_eff
+    zt = Lc_eff / 2 + Lth
 
     def ease(q: float) -> float:
         return q * q * q * (10 + q * (-15 + 6 * q))
@@ -111,12 +118,32 @@ def _mirror_frontend_model(Lc: float, fth: float, Rm: float, a: float, g: float)
     st = loop(Lth, Lth, coil_a)
     bias = max(0, (st - Rm * s0) / max(Rm - 1, 1e-6))
 
+    def bhat_s(s: float) -> float:
+        return (bias + loop(s, Lth, coil_a)) / max(bias + s0, 1e-12)
+
+    if Lth <= 1e-9:
+        q_visible = 0
+    else:
+        visible_b = 1 / (0.95 * 0.95)
+        lo = 0
+        hi = 1
+        for _ in range(36):
+            mid = (lo + hi) / 2
+            s = Lth * math.sqrt(ease(mid))
+            if bhat_s(s) < visible_b:
+                lo = mid
+            else:
+                hi = mid
+        q_visible = hi
+
+    Lc = max(Lc_eff - 2 * q_visible * Lth, Lc_eff * 0.05, 1e-6)
+
     def plug_s(z: float) -> float:
         q = max(0, min(1, (abs(z) - Lc / 2) / max(Lth, 1e-6)))
         return Lth * math.sqrt(ease(q))
 
     def bhat(z: float) -> float:
-        return (bias + loop(plug_s(z), Lth, coil_a)) / max(bias + s0, 1e-12)
+        return bhat_s(plug_s(z))
 
     def b2(z: float) -> float:
         h = max(zt / 260, 1e-4)
@@ -140,7 +167,21 @@ def _mirror_frontend_model(Lc: float, fth: float, Rm: float, a: float, g: float)
                 hi = mid
         return hi
 
-    return zt, bhat, boundary_r
+    def center_edge_z() -> float:
+        height_cut = 0.95 * boundary_r(0)
+        if boundary_r(zt) > height_cut:
+            return zt
+        lo = 0
+        hi = zt
+        for _ in range(40):
+            mid = (lo + hi) / 2
+            if boundary_r(mid) > height_cut:
+                lo = mid
+            else:
+                hi = mid
+        return hi
+
+    return zt, bhat, boundary_r, center_edge_z
 
 
 def test_mirror_throat_fraction_half_stays_monotone_without_boundary_overshoot():
@@ -151,14 +192,15 @@ def test_mirror_throat_fraction_half_stays_monotone_without_boundary_overshoot()
         (1, 0.5, 35, 0.15, 0.03),
     ]
     for Lc, fth, Rm, a, g in cases:
-        zt, bhat, boundary_r = _mirror_frontend_model(Lc, fth, Rm, a, g)
+        zt, bhat, boundary_r, center_edge_z = _mirror_frontend_model(Lc, fth, Rm, a, g)
         Lth = fth * Lc
         zs = [Lc / 2 + Lth * i / 40 for i in range(41)]
         bs = [bhat(z) for z in zs]
         rs = [boundary_r(z) for z in zs]
 
         assert math.isclose(bhat(0), 1.0, rel_tol=1e-9, abs_tol=1e-9)
-        assert math.isclose(bhat(Lc / 2), 1.0, rel_tol=1e-6, abs_tol=1e-6)
+        assert math.isclose(boundary_r(Lc / 2), 0.95 * boundary_r(0), rel_tol=1.5e-2, abs_tol=1.5e-2)
         assert math.isclose(bhat(zt), Rm, rel_tol=2e-3, abs_tol=2e-3)
+        assert math.isclose(2 * center_edge_z(), Lc, rel_tol=1.5e-2, abs_tol=1.5e-2)
         assert all(bs[i] <= bs[i + 1] + 1e-9 for i in range(len(bs) - 1))
         assert all(r <= a * 1.002 for r in rs)
