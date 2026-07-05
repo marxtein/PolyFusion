@@ -17,9 +17,14 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert 'data-mirror-view="full"' in src
     assert "const zt=Lc/2+Lth,zpad=Math.max(Lth*0.18,Lc*0.015,1e-6)" in src
     assert "const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));" in src
-    assert "const mirrorBProfile=z=>{const q=Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6))),u=0.5-0.5*Math.cos(Math.PI*q);return mirrorEase(u);};" in src
-    assert "const mirrorCenterBow=z=>{const p=Math.max(0,Math.min(1,Math.abs(z)/Math.max(Lc/2,1e-6)));return Math.pow(Math.sin(0.5*Math.PI*p),2)*(1-mirrorBProfile(z));};" in src
-    assert "const mirrorBhat=z=>1+0.18*mirrorCenterBow(z)+(Math.max(Rm,1e-6)-1)*mirrorBProfile(z);" in src
+    assert "let mirrorCoilA=Math.max(a+gg,a*1.05,1e-6);" in src
+    assert "const mirrorLoop=(z,zc,A)=>A*A/Math.pow(A*A+(z-zc)*(z-zc),1.5);" in src
+    assert "const mirrorPair=(z,A)=>mirrorLoop(z,zt,A)+mirrorLoop(z,-zt,A);" in src
+    assert "for(let k=0;k<18 && mirrorPair(zt,mirrorCoilA)/Math.max(mirrorPair(0,mirrorCoilA),1e-12)<Rm;k++)mirrorCoilA*=0.82;" in src
+    assert "const mirrorS0=mirrorPair(0,mirrorCoilA),mirrorSt=mirrorPair(zt,mirrorCoilA),mirrorBias=Math.max(0,(mirrorSt-Rm*mirrorS0)/Math.max(Rm-1,1e-6));" in src
+    assert "const mirrorBhat=z=>(mirrorBias+mirrorPair(z,mirrorCoilA))/Math.max(mirrorBias+mirrorS0,1e-12);" in src
+    assert "mirrorBProfile" not in mirror_src
+    assert "mirrorCenterBow" not in mirror_src
     assert "mirrorRadialDrop" not in mirror_src
     assert "const mirrorB2=z=>{const h=Math.max(zt/260,1e-4);return (mirrorBhat(z+h)-2*mirrorBhat(z)+mirrorBhat(z-h))/(h*h);};" in src
     assert "const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBhat(z)-0.25*r*r*mirrorB2(z));" in src
