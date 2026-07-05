@@ -17,16 +17,17 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert 'data-mirror-view="full"' in src
     assert "const zt=Lc/2+Lth,zpad=Math.max(Lth*0.18,Lc*0.015,1e-6)" in src
     assert "const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));" in src
-    assert "const mirrorShapeS=z=>{const p=Math.max(0,Math.min(1,Math.abs(z)/Math.max(zt,1e-6))),u=0.25*p*p+0.75*Math.pow(p,8);return u*(2-u);};" in src
-    assert "const mirrorBhat=z=>{const s=mirrorShapeS(z),rt=1/Math.sqrt(Math.max(Rm,1e-6)),rb=1-s+s*rt;return 1/(rb*rb);};" in src
-    assert "const mirrorBoundaryR=z=>{const s=mirrorShapeS(z),rt=1/Math.sqrt(Math.max(Rm,1e-6));return a*(1-s+s*rt);};" in src
+    assert "const mirrorBProfile=z=>{const p=Math.max(0,Math.min(1,Math.abs(z)/Math.max(zt,1e-6))),u=0.5-0.5*Math.cos(Math.PI*p);return mirrorEase(u);};" in src
+    assert "const mirrorBhat=z=>1+(Math.max(Rm,1e-6)-1)*mirrorBProfile(z);" in src
+    assert "const mirrorBoundaryR=z=>a/Math.sqrt(Math.max(mirrorBhat(z),1e-9));" in src
     assert "const mirrorHeightCut=0.5*mirrorBoundaryR(0);" in src
     assert "const mirrorThroatS=z=>mirrorEase(Math.max(0,Math.min(1,(mirrorHeightCut-mirrorBoundaryR(z))/Math.max(mirrorHeightCut-mirrorBoundaryR(zt),1e-6))));" in src
     assert "const mirrorCenterEdgeZ=()=>{if(mirrorBoundaryR(zt)>mirrorHeightCut)return zt;let lo=0,hi=zt;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(mirrorBoundaryR(mid)>mirrorHeightCut)lo=mid;else hi=mid;}return hi;};" in src
     assert "const mirrorThroatCut=0.85*Math.max(Rm,1e-6);" not in src
-    assert "const mirrorCoreRise=Math.min(0.36,0.010*(Rm-1));" in src
-    assert "const mirrorPsiNorm=(z,r)=>{const rb=Math.max(mirrorBoundaryR(z),1e-9),rho=r/rb,p=Math.min(1,Math.abs(z)/Math.max(zt,1e-6)),th=mirrorThroatS(z);" in src
-    assert "const bow=1+mirrorCoreRise*Math.max(0,1-rho*rho)*(1-p*p)*(1-0.55*th);return rho*rho/bow;};" in src
+    assert "mirrorCoreRise" not in mirror_src
+    assert "const mirrorPsiNorm=(z,r)=>mirrorBhat(z)*Math.pow(r/Math.max(a,1e-9),2);" in src
+    assert "rho=r/rb" not in mirror_src
+    assert "return rho*rho" not in mirror_src
     assert "mirrorPeak" not in src
     assert "mirrorBaxis" not in src
     assert "mirrorBaxis2" not in src
