@@ -1403,16 +1403,20 @@ function drawShape(){
     const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));
     const mirrorBProfile=z=>{const q=Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6))),u=0.5-0.5*Math.cos(Math.PI*q);return mirrorEase(u);};
     const mirrorBhat=z=>1+(Math.max(Rm,1e-6)-1)*mirrorBProfile(z);
-    const mirrorBoundaryR=z=>a/Math.sqrt(Math.max(mirrorBhat(z),1e-9));
+    const mirrorRadialDrop=z=>0.30*mirrorBProfile(z);
+    const mirrorBzRZ=(z,r)=>{const x=Math.abs(r)/Math.max(a,1e-9),d=mirrorRadialDrop(z);return mirrorBhat(z)*Math.max(0.05,1-d*x*x+0.06*d*x*x*x*x);};
+    const mirrorPsiAt=(z,r)=>{const x=Math.abs(r)/Math.max(a,1e-9),d=mirrorRadialDrop(z);return mirrorBhat(z)*(x*x-0.5*d*Math.pow(x,4)+0.02*d*Math.pow(x,6));};
+    const mirrorBoundaryR=z=>{let lo=0,hi=a*1.8;for(let i=0;i<42;i++){const mid=(lo+hi)/2;if(mirrorPsiAt(z,mid)<1)lo=mid;else hi=mid;}return hi;};
     const mirrorHeightCut=0.5*mirrorBoundaryR(0);
     const mirrorThroatS=z=>mirrorEase(Math.max(0,Math.min(1,(mirrorHeightCut-mirrorBoundaryR(z))/Math.max(mirrorHeightCut-mirrorBoundaryR(zt),1e-6))));
     const mirrorCenterEdgeZ=()=>{if(mirrorBoundaryR(zt)>mirrorHeightCut)return zt;let lo=0,hi=zt;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(mirrorBoundaryR(mid)>mirrorHeightCut)lo=mid;else hi=mid;}return hi;};
-    const mirrorPsiNorm=(z,r)=>mirrorBhat(z)*Math.pow(r/Math.max(a,1e-9),2);
     for(let i=0;i<=220;i++){const z=zmin+(zmax-zmin)*i/220;Z.push(z);Rr.push(mirrorBoundaryR(z));}
     const mirrorPsiGrid=(sgn=1)=>{const nx=361,ny=181,x=[],yb=[],zb=[],rmax=a*1.05;
       for(let i=0;i<nx;i++)x.push(zmin+(zmax-zmin)*i/(nx-1));
+      const psi=x.map(()=>0),prevB=x.map(z=>mirrorBzRZ(z,0));let prevR=0;
       for(let j=0;j<ny;j++){const r=rmax*j/(ny-1),row=[];yb.push(r);
-        for(let i=0;i<nx;i++)row.push(mirrorPsiNorm(x[i],r));
+        for(let i=0;i<nx;i++){const bz=mirrorBzRZ(x[i],r);if(j>0)psi[i]+=(r-prevR)*0.5*(bz+prevB[i])*0.5*(r+prevR)/(0.5*a*a);row.push(psi[i]);prevB[i]=bz;}
+        prevR=r;
         zb.push(row);}
       if(sgn>=0)return{x,y:yb,z:zb};
       return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()};};
