@@ -21,6 +21,7 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert "const mirrorBhat=z=>{const s=mirrorShapeS(z),rt=1/Math.sqrt(Math.max(Rm,1e-6)),rb=1-s+s*rt;return 1/(rb*rb);};" in src
     assert "const mirrorThroatCut=0.85*Math.max(Rm,1e-6);" in src
     assert "const mirrorThroatS=z=>mirrorEase(Math.max(0,Math.min(1,(mirrorBhat(z)-mirrorThroatCut)/Math.max(Math.max(Rm,1e-6)-mirrorThroatCut,1e-6))));" in src
+    assert "const mirrorCenterEdgeZ=()=>{if(mirrorBhat(0)>=mirrorThroatCut)return 0;if(mirrorBhat(zt)<mirrorThroatCut)return zt;let lo=0,hi=zt;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(mirrorBhat(mid)<mirrorThroatCut)lo=mid;else hi=mid;}return hi;};" in src
     assert "const mirrorBoundaryR=z=>{const s=mirrorShapeS(z),rt=1/Math.sqrt(Math.max(Rm,1e-6));return a*(1-s+s*rt);};" in src
     assert "const mirrorCoreRise=Math.min(0.36,0.010*(Rm-1));" in src
     assert "const mirrorPsiNorm=(z,r)=>{const rb=Math.max(mirrorBoundaryR(z),1e-9),rho=r/rb,p=Math.min(1,Math.abs(z)/Math.max(zt,1e-6)),th=mirrorThroatS(z);" in src
@@ -33,6 +34,9 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert "prof=z" not in src
     assert "mirrorW=Math.max(Lth*1.35,Lc*0.16" not in src
     assert "Lc*0.16" not in src
+    assert "const zc=mirrorCenterEdgeZ();" in src
+    assert "add(cv([-zc,zc],[a*0.20,a*0.20],'#ffd166',1.4,'dot'),'annot');" in src
+    assert "L<sub>c,eff</sub>≈${(2*zc).toFixed(2)} m" in src
     assert "for(let i=0;i<=220;i++){const z=zmin+(zmax-zmin)*i/220;Z.push(z);Rr.push(mirrorBoundaryR(z));}" in src
     assert "const mirrorPsiGrid=(sgn=1)=>{const nx=361,ny=181" in src
     assert "for(let i=0;i<nx;i++)row.push(mirrorPsiNorm(x[i],r));" in src
