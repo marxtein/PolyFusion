@@ -20,7 +20,7 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert "const mirrorShapeS=z=>{const p=Math.max(0,Math.min(1,Math.abs(z)/Math.max(zt,1e-6))),u=0.25*p*p+0.75*Math.pow(p,8);return u*(2-u);};" in src
     assert "const mirrorBhat=z=>{const s=mirrorShapeS(z),rt=1/Math.sqrt(Math.max(Rm,1e-6)),rb=1-s+s*rt;return 1/(rb*rb);};" in src
     assert "const mirrorBoundaryR=z=>{const s=mirrorShapeS(z),rt=1/Math.sqrt(Math.max(Rm,1e-6));return a*(1-s+s*rt);};" in src
-    assert "const mirrorHeightCut=0.85*mirrorBoundaryR(0);" in src
+    assert "const mirrorHeightCut=0.5*mirrorBoundaryR(0);" in src
     assert "const mirrorThroatS=z=>mirrorEase(Math.max(0,Math.min(1,(mirrorHeightCut-mirrorBoundaryR(z))/Math.max(mirrorHeightCut-mirrorBoundaryR(zt),1e-6))));" in src
     assert "const mirrorCenterEdgeZ=()=>{if(mirrorBoundaryR(zt)>mirrorHeightCut)return zt;let lo=0,hi=zt;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(mirrorBoundaryR(mid)>mirrorHeightCut)lo=mid;else hi=mid;}return hi;};" in src
     assert "const mirrorThroatCut=0.85*Math.max(Rm,1e-6);" not in src
