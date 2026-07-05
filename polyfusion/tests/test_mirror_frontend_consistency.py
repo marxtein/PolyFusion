@@ -17,16 +17,14 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert 'data-mirror-view="full"' in src
     assert "const zt=Lc/2+Lth,zpad=Math.max(Lth*0.18,Lc*0.015,1e-6)" in src
     assert "const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));" in src
-    assert "const mirrorCenterHalf=Math.max(Lc/2,1e-6),mirrorThroatLen=Math.max(Lth,1e-6);" in src
-    assert "const mirrorShapeS=z=>{const az=Math.abs(z),core=mirrorEase(Math.max(0,Math.min(1,az/mirrorCenterHalf))),q=mirrorEase(Math.max(0,Math.min(1,(az-mirrorCenterHalf)/mirrorThroatLen)));" in src
-    assert "const coreSag=0.08*core*(1-q);return Math.min(1,coreSag+(1-coreSag)*q);};" in src
+    assert "const mirrorShapeS=z=>{const p=Math.max(0,Math.min(1,Math.abs(z)/Math.max(zt,1e-6))),u=0.25*p*p+0.75*Math.pow(p,8);return u*(2-u);};" in src
     assert "const mirrorBhat=z=>{const s=mirrorShapeS(z),rt=1/Math.sqrt(Math.max(Rm,1e-6)),rb=1-s+s*rt;return 1/(rb*rb);};" in src
     assert "const mirrorThroatCut=0.85*Math.max(Rm,1e-6);" in src
     assert "const mirrorThroatS=z=>mirrorEase(Math.max(0,Math.min(1,(mirrorBhat(z)-mirrorThroatCut)/Math.max(Math.max(Rm,1e-6)-mirrorThroatCut,1e-6))));" in src
     assert "const mirrorCenterEdgeZ=()=>{if(mirrorBhat(0)>=mirrorThroatCut)return 0;if(mirrorBhat(zt)<mirrorThroatCut)return zt;let lo=0,hi=zt;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(mirrorBhat(mid)<mirrorThroatCut)lo=mid;else hi=mid;}return hi;};" in src
     assert "const mirrorBoundaryR=z=>{const s=mirrorShapeS(z),rt=1/Math.sqrt(Math.max(Rm,1e-6));return a*(1-s+s*rt);};" in src
     assert "const mirrorCoreRise=Math.min(0.36,0.010*(Rm-1));" in src
-    assert "const mirrorPsiNorm=(z,r)=>{const rb=Math.max(mirrorBoundaryR(z),1e-9),rho=r/rb,p=Math.min(1,Math.abs(z)/mirrorCenterHalf),th=mirrorThroatS(z);" in src
+    assert "const mirrorPsiNorm=(z,r)=>{const rb=Math.max(mirrorBoundaryR(z),1e-9),rho=r/rb,p=Math.min(1,Math.abs(z)/Math.max(zt,1e-6)),th=mirrorThroatS(z);" in src
     assert "const bow=1+mirrorCoreRise*Math.max(0,1-rho*rho)*(1-p*p)*(1-0.55*th);return rho*rho/bow;};" in src
     assert "mirrorPeak" not in src
     assert "mirrorBaxis" not in src
