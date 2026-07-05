@@ -17,7 +17,7 @@ def test_mirror_shape_uses_boray_like_flux_grid_contours_not_hand_lines():
     assert 'data-mirror-view="full"' in src
     assert "const zt=Lc/2+Lth,zpad=Math.max(Lth*0.18,Lc*0.015,1e-6)" in src
     assert "const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));" in src
-    assert "const mirrorBProfile=z=>{const p=Math.max(0,Math.min(1,Math.abs(z)/Math.max(zt,1e-6))),u=0.5-0.5*Math.cos(Math.PI*p);return mirrorEase(u);};" in src
+    assert "const mirrorBProfile=z=>{const q=Math.max(0,Math.min(1,(Math.abs(z)-Lc/2)/Math.max(Lth,1e-6))),u=0.5-0.5*Math.cos(Math.PI*q);return mirrorEase(u);};" in src
     assert "const mirrorBhat=z=>1+(Math.max(Rm,1e-6)-1)*mirrorBProfile(z);" in src
     assert "const mirrorBoundaryR=z=>a/Math.sqrt(Math.max(mirrorBhat(z),1e-9));" in src
     assert "const mirrorHeightCut=0.5*mirrorBoundaryR(0);" in src
