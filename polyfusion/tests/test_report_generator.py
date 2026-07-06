@@ -64,7 +64,7 @@ def test_report_is_self_contained_html():
 def test_report_contains_version_stamp():
     html = generate_report(_sample_data())
     # version is non-empty (either env, git short hash, or "unknown")
-    m = re.search(r"PolyFusion · ([^ <·]+) ·", html)
+    m = re.search(r"VSC · ([^ <·]+) ·", html)
     assert m
     assert m.group(1)
 

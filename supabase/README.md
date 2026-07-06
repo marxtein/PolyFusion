@@ -1,6 +1,6 @@
 # Supabase Auth — setup, deployment, migration, and verification
 
-This directory holds the Supabase-side artifacts for the PolyFusion email-auth
+This directory holds the Supabase-side artifacts for the VSC email-auth
 migration (plan: Option C — Supabase replaces the legacy scrypt+JSON auth
 entirely). The web process talks to Supabase via the anon key only; the
 service-role key is loaded **exclusively** by the one-shot migration script.
@@ -43,9 +43,9 @@ Companion files outside this directory:
    - **Redirect URLs** allow-list: add the production origin **and**
      `http://127.0.0.1:8765` / `http://localhost:8765` for local dev.
 5. **Auth → Email Templates** — customise **Confirm signup** and **Reset
-   Password** to mention PolyFusion by name. This is an anti-phishing measure:
+   Password** to mention VSC (veloalpha system code) by name. This is an anti-phishing measure:
    the legacy migration sends a "Reset Password" email out of the blue, so the
-   template must clearly identify itself as a PolyFusion system email. Leave
+   template must clearly identify itself as a VSC system email. Leave
    `{{ .ConfirmationURL }}` / `{{ .Token }}` placeholders intact — Supabase
    injects the real link.
 6. **SQL Editor** → open `supabase/schema.sql` from this repo → **Run**. The
@@ -84,7 +84,7 @@ SUPABASE_SERVICE_ROLE_KEY=... \
   --db ~/.polyfusion/history.sqlite3
 ```
 
-If history is not important, skip the migration and PolyFusion will start from an
+If history is not important, skip the migration and VSC will start from an
 empty local history database.
 
 `requirements.txt` and the dev toolchain (`pytest`, `ruff`) are expected to be
@@ -165,8 +165,8 @@ the recovery link.
 
 **T-2 day — pre-announce** (external SMTP):
 - Collect every email from `users.json`.
-- Send: *"PolyFusion will switch its login system on T day. You will receive a
-  'Reset Password' email from PolyFusion that day — it is legitimate. Click the
+- Send: *"VSC will switch its login system on T day. You will receive a
+  'Reset Password' email from VSC that day — it is legitimate. Click the
   link inside to choose your new password."*
 
 **T day — migrate**:

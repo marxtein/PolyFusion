@@ -389,7 +389,7 @@ def _report_script(markdown_doc: str, filename: str) -> str:
     if(typeof window.POLYFUSION_SAVE_REPORT==='function'){{
       if(status)status.textContent='保存中… / Saving…';
       window.POLYFUSION_SAVE_REPORT();
-    }}else if(status){{status.textContent='请在 PolyFusion 登录后保存 / Sign in from PolyFusion to save';status.style.color='#7a1f2c';}}
+    }}else if(status){{status.textContent='请在 VSC 登录后保存 / Sign in from VSC to save';status.style.color='#7a1f2c';}}
   }};
 }})();
 </script>
@@ -433,7 +433,7 @@ def generate_report(data: dict) -> str:
     last_scan = data.get("last_scan")
     images = data.get("images") or {}
 
-    title = f"PolyFusion · {config_label} {t('模拟报告', 'Simulation Report')}"
+    title = f"VSC · {config_label} {t('模拟报告', 'Simulation Report')}"
 
     meta = (
         f"<div class='meta'>"
@@ -560,7 +560,7 @@ def generate_report(data: dict) -> str:
         f"{t('导出 Markdown', 'Export Markdown')}</button>"
         f"<span id='saveReportStatus' class='status'></span></div>{body}"
         f"<div class='sub' style='margin-top:24px;text-align:right;color:#8995a8'>"
-        f"PolyFusion · {_esc(version)} · {_esc(ts)}"
+        f"VSC · {_esc(version)} · {_esc(ts)}"
         f"</div></div>{report_script}</body></html>"
     )
     return html_doc

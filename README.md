@@ -1,9 +1,9 @@
-# PolyFusion · 多位形零维聚变系统设计平台
+# VSC (veloalpha system code) · 多位形零维聚变系统设计平台
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-polyfusion%2Ddang.onrender.com-brightgreen?style=flat-square)](https://polyfusion-dang.onrender.com/)
 [![GitHub](https://img.shields.io/github/stars/marxtein/PolyFusion?style=flat-square)](https://github.com/marxtein/PolyFusion)
 
-Multi-configuration 0-D fusion system design platform with web GUI.
+VSC (veloalpha system code) is a multi-configuration 0-D fusion system design platform with a web GUI.
 
 支持托卡马克、磁镜、场反位形（FRC）、偶极场、仿星器等多种位形的零维参数扫描与设计。
 
@@ -52,13 +52,13 @@ python app/server.py
 ## 部署到 Render（免费公网访问）
 
 1. 打开 [render.com](https://render.com)，用 GitHub 登录
-2. **New + Web Service** → 选择 `marxtein/PolyFusion` 仓库
+2. **New + Web Service** → 选择承载 VSC 的仓库（当前为 `marxtein/PolyFusion`）
 3. 配置：
    - **Runtime**: `Python 3`
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `python app/server.py`
 4. 点 **Create Web Service**
-5. 部署完成后获得公网网址（如 `https://polyfusion.onrender.com`）
+5. 部署完成后获得 Render 分配的公网网址
 
 > `app/server.py` 已适配 Render 环境（自动读取 `$PORT` 环境变量，监听 `0.0.0.0`）。
 
@@ -67,8 +67,8 @@ python app/server.py
 ## 项目结构
 
 ```
-PolyFusion/
-├── polyfusion/              # 计算核心
+VSC/
+├── polyfusion/              # 计算核心 Python 包
 │   ├── tokamak.py          # 托卡马克 0-D 求解器
 │   ├── io.py               # 输入输出接口
 │   ├── scan.py             # 二维参数扫描

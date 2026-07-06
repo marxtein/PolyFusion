@@ -540,24 +540,23 @@ class Handler(BaseHTTPRequestHandler):
             return self._handle_admin_users()
         if self.path.startswith("/api/manual"):
             return self._handle_manual()
-        if self.path == "/api/equilibria":
+        if _path_only == "/api/equilibria":
             # manifest of bundled real equilibrium files, keyed by config+preset
             mpath = os.path.join(HERE, "equilibria", "manifest.json")
             if os.path.isfile(mpath):
                 return self._send_file(mpath, cache_control="no-cache")
             return self._send(200, json.dumps({}))
-        if self.path.startswith("/equilibria/"):
-            if not REQUIRE_AUTH or self._current_user():
-                # serve a bundled equilibrium file (binary). Restrict to the two
-                # known config subdirs + a plain basename to block path traversal.
-                parts = unquote(self.path).strip("/").split("/")
-                if len(parts) == 3 and parts[1] in ("tokamak", "stellarator"):
-                    name = os.path.basename(parts[2])
-                    fpath = os.path.join(HERE, "equilibria", parts[1], name)
-                    if os.path.isfile(fpath) and os.path.commonpath(
-                        [os.path.realpath(fpath), os.path.join(HERE, "equilibria")]
-                    ) == os.path.realpath(os.path.join(HERE, "equilibria")):
-                        return self._send_file(fpath, "application/octet-stream")
+        if _path_only.startswith("/equilibria/"):
+            # serve a bundled equilibrium file (binary). Restrict to the two
+            # known config subdirs + a plain basename to block path traversal.
+            parts = unquote(_path_only).strip("/").split("/")
+            if len(parts) == 3 and parts[1] in ("tokamak", "stellarator"):
+                name = os.path.basename(parts[2])
+                fpath = os.path.join(HERE, "equilibria", parts[1], name)
+                if os.path.isfile(fpath) and os.path.commonpath(
+                    [os.path.realpath(fpath), os.path.join(HERE, "equilibria")]
+                ) == os.path.realpath(os.path.join(HERE, "equilibria")):
+                    return self._send_file(fpath, "application/octet-stream")
             return self._send(404, json.dumps({"error": "equilibrium not found"}))
         return self._send(404, json.dumps({"error": "not found"}))
 
@@ -587,8 +586,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._handle_debug_auth_register(n)
 
         if self.path == "/api/stellarator/equilibrium/preview":
-            if not self._require_auth():
-                return None
+            principal, _role = self._principal()
+            if principal is None:
+                return self._send(
+                    401,
+                    json.dumps({"error": "unauthorized", "auth_required": True}),
+                )
             if n > MAX_FILE_BYTES:
                 limit_mib = MAX_FILE_BYTES // (1024 * 1024)
                 return self._send(
@@ -1196,7 +1199,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"PolyFusion serving at http://{HOST}:{PORT}  (Ctrl+C to stop)")
+    print(f"VSC serving at http://{HOST}:{PORT}  (Ctrl+C to stop)")
     _log("start", host=HOST, port=PORT, auth_required=REQUIRE_AUTH)
     try:
         srv.serve_forever()

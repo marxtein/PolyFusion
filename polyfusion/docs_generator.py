@@ -436,7 +436,7 @@ def generate_manual(config_name: str, lang: str = "zh") -> dict:
     )
 
     config_notes = _CONFIG_DEPENDENCIES.get(config_name, [])
-    title = f"PolyFusion · {spec.label} {('使用说明' if li == 0 else 'Manual')}"
+    title = f"VSC · {spec.label} {('使用说明' if li == 0 else 'Manual')}"
     param_docs = {p: _param_row(p, lang) for p in spec.params}
     output_docs = {k: _output_row(k, lang) for k in output_keys}
     return {

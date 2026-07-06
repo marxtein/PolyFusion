@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>PolyFusion &middot; 多位形零维系统设计台</title>
+<title>VSC &middot; veloalpha system code &middot; 多位形零维系统设计台</title>
 <script>
 (()=>{const ua=navigator.userAgent||'';const coarse=matchMedia('(pointer:coarse)').matches;if(/Android|iPhone|iPod|Mobile/i.test(ua)||(coarse&&screen.width<=900))document.documentElement.classList.add('mobile-layout');})();
 </script>
@@ -375,7 +375,7 @@
 <body>
 <div id="authWall">
   <div class="card">
-    <h2>Poly<b>Fusion</b></h2>
+    <h2>VSC</h2>
     <p class="hint" id="authHint">扫描结果可生成分析报告，注册登录支持保存历史记录</p>
     <div id="authForm">
       <div class="tabs">
@@ -400,7 +400,7 @@
   </div>
 </div>
 <header>
-  <div class="brand"><span class="logo">Poly<b>Fusion</b></span><span class="sub" id="subTitle">Zero-D Reactor Design Console</span></div>
+  <div class="brand"><span class="logo">V<b>SC</b></span><span class="sub" id="subTitle">veloalpha system code</span></div>
   <div class="status">
     <span id="stCfgL">位形</span> <span class="val" id="stCfg">—</span>
     <span id="stRxL">反应</span> <span class="val" id="stRx">—</span>
@@ -602,7 +602,7 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   emailInvalid:'请输入有效的邮箱地址',emailRequired:'请输入邮箱',confirmPassword:'确认密码 Confirm password',passwordMismatch:'两次输入的密码不一致',registerFailed:'注册失败，用户名或邮箱可能已被使用',
   verifyEmailPrompt:'请查收验证邮件',verifyEmailSub:'我们已向 {{email}} 发送一封验证邮件，请点击邮件中的链接完成验证后再登录。',
   emailNotVerified:'邮箱未验证',resendVerification:'重新发送验证邮件',resendSent:'验证邮件已重新发送，请查收。',rateLimited:'请求过于频繁，请稍后再试。',
-  help:'<h3>PolyFusion 新手说明</h3><p><b>它做什么：</b>PolyFusion 用 0-D 功率平衡快速比较不同聚变位形的工作点和 POPCON 扫描窗口，适合做早期筛选，不等同于工程设计定案。</p><ol><li><b>选位形与预设</b>：先用内置机型理解典型参数范围。</li><li><b>看输入参数</b>：在输入参数栏中，将光标停留在输入框可查看该输入参数说明。</li><li><b>先读关键输出</b>：优先看 P_fus、Q、P_heat、P_wall、密度/β/安全因子等限制。</li><li><b>再做 POPCON 扫描</b>：选择两个变量作为横纵轴，观察哪些区域满足最佳区判据。</li><li><b>保存与报告</b>：可保存扫描历史、导出图像/数据，并生成含 AI 解读的完整报告。</li></ol><p><b>结果怎么看：</b>通过最佳区不代表可建堆；不通过通常提示需要调整密度、温度、磁场、几何或约束假设。</p><button class="help-tour" data-tour-start>开始 1 分钟新手向导</button><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
+  help:'<h3>VSC 新手说明</h3><p><b>它做什么：</b>VSC（veloalpha system code）用 0-D 功率平衡快速比较不同聚变位形的工作点和 POPCON 扫描窗口，适合做早期筛选，不等同于工程设计定案。</p><ol><li><b>选位形与预设</b>：先用内置机型理解典型参数范围。</li><li><b>看输入参数</b>：在输入参数栏中，将光标停留在输入框可查看该输入参数说明。</li><li><b>先读关键输出</b>：优先看 P_fus、Q、P_heat、P_wall、密度/β/安全因子等限制。</li><li><b>再做 POPCON 扫描</b>：选择两个变量作为横纵轴，观察哪些区域满足最佳区判据。</li><li><b>保存与报告</b>：可保存扫描历史、导出图像/数据，并生成含 AI 解读的完整报告。</li></ol><p><b>结果怎么看：</b>通过最佳区不代表可建堆；不通过通常提示需要调整密度、温度、磁场、几何或约束假设。</p><button class="help-tour" data-tour-start>开始 1 分钟新手向导</button><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
  en:{config:'Configuration',preset:'Preset',params:'Parameters',liveN:'live recompute',window:'Operating Window',
   contours:'Contours shown',scan:'POPCON Scan Axes',xax:'X axis',yax:'Y axis',runBtn:'▶ Run POPCON Scan',
   opPoint:'Operating Point',inputTitle:'Input Parameters',scanTitle:'Scan Results',expandAll:'Expand All',collapseAll:'Collapse All',saveP:'⬇ Save Input Params',loadP:'⬆ Load Historical Params',expScan:'⬇ Save Scan Results',expPng:'⬇ Save Scan Image',
@@ -610,8 +610,9 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   emailInvalid:'Please enter a valid email address',emailRequired:'Please enter your email',confirmPassword:'Confirm password',passwordMismatch:'Passwords do not match',registerFailed:'Registration failed. Username or email may already be in use.',
   verifyEmailPrompt:'Check your inbox',verifyEmailSub:'We sent a verification link to {{email}}. Click the link in the email to verify your address, then log in.',
   emailNotVerified:'Email unverified',resendVerification:'Resend verification email',resendSent:'Verification email resent. Please check your inbox.',rateLimited:'Too many requests. Please try again later.',
-  help:'<h3>PolyFusion Beginner Guide</h3><p><b>What it does:</b> PolyFusion uses 0-D power balance to compare fusion configurations, operating points and POPCON windows. It is for early screening, not final engineering validation.</p><ol><li><b>Choose a configuration and preset</b>: start from built-in machines to learn typical ranges.</li><li><b>Read input parameters</b>: in the input-parameter panel, focus a field to view its input explanation.</li><li><b>Inspect key outputs first</b>: start from P_fus, Q, P_heat, P_wall, density/beta/safety-factor limits.</li><li><b>Run POPCON scans</b>: choose two variables as X/Y axes and see which regions satisfy the operating-window criteria.</li><li><b>Save and report</b>: save scan history, export plots/data, and generate a full report with AI interpretation.</li></ol><p><b>How to read results:</b> passing the best-region mask does not prove viability; failing usually shows which density, temperature, field, geometry or confinement assumption needs adjustment.</p><button class="help-tour" data-tour-start>Start 1-minute guided tour</button><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
+  help:'<h3>VSC Beginner Guide</h3><p><b>What it does:</b> VSC (veloalpha system code) uses 0-D power balance to compare fusion configurations, operating points and POPCON windows. It is for early screening, not final engineering validation.</p><ol><li><b>Choose a configuration and preset</b>: start from built-in machines to learn typical ranges.</li><li><b>Read input parameters</b>: in the input-parameter panel, focus a field to view its input explanation.</li><li><b>Inspect key outputs first</b>: start from P_fus, Q, P_heat, P_wall, density/beta/safety-factor limits.</li><li><b>Run POPCON scans</b>: choose two variables as X/Y axes and see which regions satisfy the operating-window criteria.</li><li><b>Save and report</b>: save scan history, export plots/data, and generate a full report with AI interpretation.</li></ol><p><b>How to read results:</b> passing the best-region mask does not prove viability; failing usually shows which density, temperature, field, geometry or confinement assumption needs adjustment.</p><button class="help-tour" data-tour-start>Start 1-minute guided tour</button><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,LASTSCAN_INPUTS=null,VIEW='shape',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
+let PARAM_GROUP_COLLAPSED={};
 let THEME=((()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}}))();
 let FRC_VIEW=(()=>{try{return localStorage.getItem('polyfusion_frc_view')||'half'}catch(e){return'half'}})();
 let MIRROR_VIEW=(()=>{try{return localStorage.getItem('polyfusion_mirror_view')||'half'}catch(e){return'half'}})();
@@ -1151,12 +1152,15 @@ function updateHistoryControls(){
 }
 function historyStatus(msg,isErr){const e=document.getElementById('err');if(e)e.textContent=msg||'';if(isErr&&e)e.scrollIntoView({block:'nearest'});}
 function setFoldGroup(group,titleSelector,collapsed){group.classList.toggle('collapsed',collapsed);const title=group.querySelector(titleSelector);if(title)title.setAttribute('aria-expanded',String(!collapsed));}
+function paramGroupCollapsed(groupKey){return Object.prototype.hasOwnProperty.call(PARAM_GROUP_COLLAPSED,groupKey)?PARAM_GROUP_COLLAPSED[groupKey]:true;}
+function setParamGroupCollapsed(group,collapsed){if(group&&group.dataset&&group.dataset.grp)PARAM_GROUP_COLLAPSED[group.dataset.grp]=collapsed;setFoldGroup(group,'.grp-h',collapsed);}
 function setParamGroupsCollapsed(collapsed){
   ['params','window','scan'].forEach(name=>{
     const sec=document.querySelector(`.sec[data-sec="${name}"]`);
     if(sec)sec.classList.toggle('collapsed',collapsed);
   });
-  document.querySelectorAll('#params .param-grp').forEach(g=>setFoldGroup(g,'.grp-h',collapsed));
+  GROUPS.forEach(([groupKey])=>{PARAM_GROUP_COLLAPSED[groupKey]=collapsed;});
+  document.querySelectorAll('#params .param-grp').forEach(g=>setParamGroupCollapsed(g,collapsed));
 }
 function setOutputGroupsCollapsed(collapsed){document.querySelectorAll('#results .grp').forEach(g=>setFoldGroup(g,'.grp-t',collapsed));}
 function currentPresetName(){const pv=(document.getElementById('preset')||{}).value||'';return pv&&!(pv.startsWith(UMARK))?pv:null;}
@@ -1552,7 +1556,8 @@ function buildParams(){
     let a0='';
     if(gk==='geo'&&CUR==='stellarator')a0=stellAHeaderHtml();
     else if(gk==='geo'&&'R0'in VALS&&'A'in VALS)a0=`<span class="a0"><i>a</i> = ${(VALS.R0/VALS.A).toFixed(3)} m</span>`;
-    html+=`<div class="param-grp collapsed" data-grp="${gk}"><div class="grp-h" role="button" tabindex="0" aria-expanded="false"><span>${L(gz,ge)}</span>${a0}</div>`;
+    const collapsed=paramGroupCollapsed(gk);
+    html+=`<div class="param-grp${collapsed?' collapsed':''}" data-grp="${gk}"><div class="grp-h" role="button" tabindex="0" aria-expanded="${String(!collapsed)}"><span>${L(gz,ge)}</span>${a0}</div>`;
     html+=`<div class="pgrid" data-grp="${gk}">`;
     if(CUR==='stellarator'&&gk==='geo')html+=stellGeomModeHtml();
     if(CUR==='tokamak'&&gk==='geo')html+=tokGeomModeHtml();
@@ -1595,7 +1600,7 @@ function buildParams(){
   const box=document.getElementById('params');box.innerHTML=html;
   box.querySelectorAll('.grp-h').forEach(title=>{
     const group=title.closest('.param-grp');
-    title.onclick=()=>setFoldGroup(group,'.grp-h',!group.classList.contains('collapsed'));
+    title.onclick=()=>setParamGroupCollapsed(group,!group.classList.contains('collapsed'));
     title.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();title.click();}};
   });
   enforceDipoleGeometryRange();
@@ -1806,7 +1811,7 @@ function collectMissingInputs(includeScan){const missing=[];clearMissingInputs()
     document.querySelectorAll('#thresh [data-thr]').forEach(el=>{const cb=document.querySelector(`[data-thr-en="${el.dataset.thr}"]`);if(cb&&!cb.checked)return;if((el.value||'').trim()==='')missing.push(missingInput(sectionTitle('window'),'',`${el.dataset.thr} ${el.dataset.op==='ge'?'≥':'≤'}`,el));});}
   missing.forEach(markMissingInput);return missing;
 }
-function warnMissingInputs(missing){if(!missing.length)return true;const first=missing[0];const sec=first.el&&first.el.closest('.sec');if(sec)sec.classList.remove('collapsed');const pg=first.el&&first.el.closest('.param-grp');if(pg){pg.classList.remove('collapsed');const gh=pg.querySelector('.grp-h');if(gh)gh.setAttribute('aria-expanded','true');}const e=document.getElementById('err');const path=[first.section,first.group,first.label].filter(Boolean).join(' / ');if(e){e.textContent=L(`输入项为空：${path}${missing.length>1?`（另有 ${missing.length-1} 项）`:''}`,`Empty input: ${path}${missing.length>1?` (${missing.length-1} more)`:''}`);e.scrollIntoView({block:'nearest'});}if(first.el&&first.el.focus)first.el.focus();return false;}
+function warnMissingInputs(missing){if(!missing.length)return true;const first=missing[0];const sec=first.el&&first.el.closest('.sec');if(sec)sec.classList.remove('collapsed');const pg=first.el&&first.el.closest('.param-grp');if(pg)setParamGroupCollapsed(pg,false);const e=document.getElementById('err');const path=[first.section,first.group,first.label].filter(Boolean).join(' / ');if(e){e.textContent=L(`输入项为空：${path}${missing.length>1?`（另有 ${missing.length-1} 项）`:''}`,`Empty input: ${path}${missing.length>1?` (${missing.length-1} more)`:''}`);e.scrollIntoView({block:'nearest'});}if(first.el&&first.el.focus)first.el.focus();return false;}
 function validateRequiredInputs(includeScan){return warnMissingInputs(collectMissingInputs(!!includeScan));}
 function cleanStellOverrides(o){
   if(CUR!=='stellarator')return o;
@@ -2543,7 +2548,7 @@ async function generateSimulationReport(opts){
   const ee=document.getElementById('err');if(ee)ee.textContent='';
   if(!plotlyReady()){showPlotlyMissing();return;}
   if(!LASTRUN){if(ee)ee.textContent=L('请先运行一次工作点计算再生成报告。','Run an operating-point calculation before generating a report.');return;}
-  const cfgLabel=(CONFIGS&&CUR&&CONFIGS[CUR]&&CONFIGS[CUR].label)||CUR||'PolyFusion';
+  const cfgLabel=(CONFIGS&&CUR&&CONFIGS[CUR]&&CONFIGS[CUR].label)||CUR||'VSC';
   const strippedRun=stripLargeArrays(LASTRUN),strippedScan=stripLargeArrays(LASTSCAN);
   const basePayload={
     config:CUR,

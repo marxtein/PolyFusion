@@ -240,6 +240,24 @@ def test_guest_mode_history_still_requires_auth(guest_server):
     assert status == 401
 
 
+def test_guest_mode_serves_bundled_equilibrium_with_query(guest_server):
+    status, payload, hdrs = _get(guest_server, "/equilibria/tokamak/ITER.geqdsk?v=1")
+    assert status == 200
+    assert "CHEASE" in payload
+    assert hdrs.get_content_type() == "application/octet-stream"
+
+
+def test_guest_mode_stellarator_equilibrium_preview_allowed(guest_server):
+    status, payload, _ = _post(
+        guest_server,
+        "/api/stellarator/equilibrium/preview",
+        {"not": "a binary vmec file"},
+    )
+    assert status != 401
+    assert isinstance(payload, dict)
+    assert "error" in payload
+
+
 def test_guest_mode_admin_still_requires_auth(guest_server):
     status, _, _ = _get(guest_server, "/api/admin/stats")
     assert status == 401
