@@ -520,7 +520,7 @@ const META={
   icase:['反应类型','Reaction','','rx',''],
   R0:['大半径','major radius','m','geo','R<sub>0</sub>'],A:['环径比','aspect ratio','','geo','A'],a:['小半径','minor radius','m','geo','a'],kappa:['拉长比','elongation','','geo','κ'],
   delta:['三角形变','triangularity','','geo','δ'],g:['壁间隙','wall gap','m','geo','g'],
-  a_c:['等离子体半径','plasma radius','m','geo','a<sub>c</sub>'],L_c:['中心室长','cell length','m','geo','L<sub>c</sub>'],R_mirror:['镜比','mirror ratio','','geo','R<sub>m</sub>'],
+  a_c:['等离子体半径','plasma radius','m','geo','a<sub>c</sub>'],L_c:['有效中心室长','effective cell length','m','geo','L<sub>c</sub>'],R_mirror:['镜比','mirror ratio','','geo','R<sub>m</sub>'],
   r_s:['分离面半径','separatrix radius','m','geo','r<sub>s</sub>'],l_s:['分离面长','separatrix length','m','geo','l<sub>s</sub>'],r_w:['壁半径','wall radius','m','geo','r<sub>w</sub>'],
   r_ring:['环半径','coil radius','m','geo','r<sub>ring</sub>'],R_p:['等离子体外径','plasma outer radius','m','geo','R<sub>p</sub>'],
   Sn:['密度峰化','density peaking','','prof','S<sub>n</sub>'],ST:['温度峰化','temperature peaking','','prof','S<sub>T</sub>'],
@@ -613,6 +613,8 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   help:'<h3>PolyFusion Beginner Guide</h3><p><b>What it does:</b> PolyFusion uses 0-D power balance to compare fusion configurations, operating points and POPCON windows. It is for early screening, not final engineering validation.</p><ol><li><b>Choose a configuration and preset</b>: start from built-in machines to learn typical ranges.</li><li><b>Read input parameters</b>: in the input-parameter panel, focus a field to view its input explanation.</li><li><b>Inspect key outputs first</b>: start from P_fus, Q, P_heat, P_wall, density/beta/safety-factor limits.</li><li><b>Run POPCON scans</b>: choose two variables as X/Y axes and see which regions satisfy the operating-window criteria.</li><li><b>Save and report</b>: save scan history, export plots/data, and generate a full report with AI interpretation.</li></ol><p><b>How to read results:</b> passing the best-region mask does not prove viability; failing usually shows which density, temperature, field, geometry or confinement assumption needs adjustment.</p><button class="help-tour" data-tour-start>Start 1-minute guided tour</button><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,LASTSCAN_INPUTS=null,VIEW='shape',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
 let THEME=((()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}}))();
+let FRC_VIEW=(()=>{try{return localStorage.getItem('polyfusion_frc_view')||'half'}catch(e){return'half'}})();
+let MIRROR_VIEW=(()=>{try{return localStorage.getItem('polyfusion_mirror_view')||'half'}catch(e){return'half'}})();
 let AUTH_REQUIRED=false,GUEST_MODE=false,AUTH_MODE='login',AUTH_USER=null;
 let AUTH_STATE={user_id:null,user:null,email:null,email_verified:true,affiliation:null,is_admin:false,is_guest:false};
 class AuthRequiredError extends Error{constructor(m){super(m);this.name='AuthRequiredError';}}
@@ -2187,83 +2189,187 @@ function drawShape(){
         `<span>R<sub>0</sub>=${(+v.R0).toFixed(2)} m · a=${(+v.a).toFixed(2)} m · N<sub>fp</sub>=${+v.N_fp}${isFiniteNum(v.iota)?` · ι≈${(+v.iota).toFixed(2)}`:''} · ${L('后端解析磁面','backend flux surfaces')} ${sh.mode}</span>`;
     }else{document.getElementById('plotMeta').innerHTML=`<span>${L('等待后端解析磁面','waiting for backend flux surfaces')}</span>`;document.getElementById('phControls').innerHTML='';}
   }else if(CUR==='mirror'){
-    const Lc=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
-    const Lth=ft*Lc,Z=[],Rr=[];
-    const prof=z=>{const az=Math.abs(z);if(az<=Lc/2)return a;const t=Math.min((az-Lc/2)/Math.max(Lth,1e-6),1);
-      return a/Math.sqrt(1+(Rm-1)*Math.pow(Math.sin(Math.PI*t/2),2));};
-    for(let i=0;i<=160;i++){const z=-Lc/2-Lth+(Lc+2*Lth)*i/160;Z.push(z);Rr.push(prof(z));}
-    const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rr].reverse().map(r=>-r)];
-    add(lin(Zb,Rb,GC('boundary'),2.6,true),'boundary');
-    add(lin([-Lc/2-Lth,Lc/2+Lth],[a+gg,a+gg],GC('wall'),2.2),'wall');
-    add(lin([-Lc/2-Lth,Lc/2+Lth],[-(a+gg),-(a+gg)],GC('wall'),2.2),'wall');
-    [0.35,0.65,0.88].forEach(q=>{add(cv(Z,Rr.map(r=>q*r),GC('flux'),1.2,'solid'),'flux');add(cv(Z,Rr.map(r=>-q*r),GC('flux'),1.2,'solid'),'flux');});
-    const zt=Lc/2+Lth,rt=prof(zt);
-    add(cv([zt,zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
-    add(cv([-zt,-zt],[-rt,rt],'#c792ff',2.2,'dot'),'annot');
+    const pc=document.getElementById('phControls');
+    if(pc){const state=`mirror-${MIRROR_VIEW}`;
+      if(pc.dataset.state!==state){
+        pc.innerHTML=`${L('磁镜视图：','Mirror view: ')}<button class="phbtn${MIRROR_VIEW==='half'?' on':''}" data-mirror-view="half">${L('半平面','half-plane')}</button><button class="phbtn${MIRROR_VIEW==='full'?' on':''}" data-mirror-view="full">${L('完整','full')}</button>`;
+        pc.dataset.state=state;
+        pc.querySelectorAll('.phbtn[data-mirror-view]').forEach(b=>b.onclick=()=>{MIRROR_VIEW=b.dataset.mirrorView;try{localStorage.setItem('polyfusion_mirror_view',MIRROR_VIEW)}catch(e){};pc.dataset.state='';drawShape();});
+      }
+    }
+    const LcEff=v.L_c,a=v.a_c,Rm=v.R_mirror||10,ft=(v.f_throat!=null?v.f_throat:0.1),gg=v.g||0;
+    const Lth=ft*LcEff,Z=[],Rr=[];
+    const zt=LcEff/2+Lth,zpad=Math.max(Lth*0.18,LcEff*0.015,1e-6);
+    const zmin=-zt-zpad,zmax=zt+zpad;
+    const mirrorEase=q=>q*q*q*(10+q*(-15+6*q));
+    const mirrorLoop=(z,zc,A)=>A*A/Math.pow(A*A+(z-zc)*(z-zc),1.5);
+    const mirrorPair=(z,A)=>mirrorLoop(z,zt,A)+mirrorLoop(z,-zt,A);
+    const mirrorVisibleR=0.75,mirrorVisibleB=1/(mirrorVisibleR*mirrorVisibleR);
+    let mirrorCoilLo=Math.max(a*0.05,1e-6),mirrorCoilHi=Math.max(a+gg,a*1.05,mirrorCoilLo*1.2);
+    const mirrorBhatFor=A=>{const s0=mirrorPair(0,A),st=mirrorPair(zt,A),bias=Math.max(0,(st-Rm*s0)/Math.max(Rm-1,1e-6));return z=>(bias+mirrorPair(z,A))/Math.max(bias+s0,1e-12);};
+    for(let k=0;k<28 && mirrorBhatFor(mirrorCoilHi)(LcEff/2)<mirrorVisibleB;k++)mirrorCoilHi*=1.25;
+    for(let k=0;k<42;k++){const mid=(mirrorCoilLo+mirrorCoilHi)/2;if(mirrorBhatFor(mid)(LcEff/2)<mirrorVisibleB)mirrorCoilLo=mid;else mirrorCoilHi=mid;}
+    const mirrorBhat=mirrorBhatFor(mirrorCoilHi);
+    const mirrorB2=z=>{const h=Math.max(zt/260,1e-4);return (mirrorBhat(z+h)-2*mirrorBhat(z)+mirrorBhat(z-h))/(h*h);};
+    const mirrorCurv=z=>Math.min(mirrorB2(z),0);
+    const mirrorBzRZ=(z,r)=>Math.max(0.05,mirrorBhat(z)-0.25*r*r*mirrorCurv(z));
+    const mirrorPsiAt=(z,r)=>{const x=Math.abs(r)/Math.max(a,1e-9);return mirrorBhat(z)*x*x-0.125*a*a*mirrorCurv(z)*Math.pow(x,4);};
+    const mirrorBoundaryR=z=>{let lo=0,hi=a*1.8;for(let i=0;i<42;i++){const mid=(lo+hi)/2;if(mirrorPsiAt(z,mid)<1)lo=mid;else hi=mid;}return hi;};
+    const mirrorHeightCut=mirrorVisibleR*mirrorBoundaryR(0);
+    const mirrorThroatS=z=>mirrorEase(Math.max(0,Math.min(1,(mirrorHeightCut-mirrorBoundaryR(z))/Math.max(mirrorHeightCut-mirrorBoundaryR(zt),1e-6))));
+    const mirrorCenterEdgeZ=()=>{if(mirrorBoundaryR(zt)>mirrorHeightCut)return zt;let lo=0,hi=zt;for(let i=0;i<40;i++){const mid=(lo+hi)/2;if(mirrorBoundaryR(mid)>mirrorHeightCut)lo=mid;else hi=mid;}return hi;};
+    for(let i=0;i<=220;i++){const z=zmin+(zmax-zmin)*i/220;Z.push(z);Rr.push(mirrorBoundaryR(z));}
+    const mirrorPsiGrid=(sgn=1)=>{const nx=361,ny=181,x=[],yb=[],zb=[],rmax=a*1.05;
+      for(let i=0;i<nx;i++)x.push(zmin+(zmax-zmin)*i/(nx-1));
+      const psi=x.map(()=>0),prevB=x.map(z=>mirrorBzRZ(z,0));let prevR=0;
+      for(let j=0;j<ny;j++){const r=rmax*j/(ny-1),row=[];yb.push(r);
+        for(let i=0;i<nx;i++){const bz=mirrorBzRZ(x[i],r);if(j>0)psi[i]+=(r-prevR)*0.5*(bz+prevB[i])*0.5*(r+prevR)/(0.5*a*a);row.push(psi[i]);prevB[i]=bz;}
+        prevR=r;
+        zb.push(row);}
+      if(sgn>=0)return{x,y:yb,z:zb};
+      return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()};};
+    const mirrorContour=(sgn,start,end,size,width,grp)=>{const g=mirrorPsiGrid(sgn),c=GC(grp==='boundary'?'boundary':'flux');
+      return add({type:'contour',x:g.x,y:g.y,z:g.z,autocontour:false,contours:{coloring:'lines',start,end,size,showlabels:false},
+        line:{color:c,width,smoothing:1.25},colorscale:[[0,c],[1,c]],showscale:false,hoverinfo:'skip'},grp);};
+    const mirrorFill=(x,y)=>add({type:'scatter',mode:'lines',x,y,line:{color:'rgba(0,0,0,0)',width:0},fill:'toself',fillcolor:GP.bfill,hoverinfo:'skip'},'boundary');
+    if(MIRROR_VIEW==='full'){
+      const Rn=Rr.map(r=>-r),Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...[...Rn].reverse()];
+      mirrorFill(Zb,Rb);mirrorContour(1,1,1,1,2.6,'boundary');mirrorContour(-1,1,1,1,2.6,'boundary');
+      add(lin([zmin,zmax],[a+gg,a+gg],GC('wall'),2.2),'wall');
+      add(lin([zmin,zmax],[-a-gg,-a-gg],GC('wall'),2.2),'wall');
+      add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
+      mirrorContour(1,0.08,0.68,0.05,1.05,'flux');mirrorContour(-1,0.08,0.68,0.05,1.05,'flux');
+    }else{
+      const Zb=[...Z,...[...Z].reverse()],Rb=[...Rr,...Z.map(()=>0).reverse()];
+      mirrorFill(Zb,Rb);mirrorContour(1,1,1,1,2.6,'boundary');
+      add(lin([zmin,zmax],[a+gg,a+gg],GC('wall'),2.2),'wall');
+      add(cv([zmin,zmax],[0,0],GC('annot'),1.3,'dot'),'annot');
+      mirrorContour(1,0.08,0.68,0.05,1.05,'flux');
+    }
+    const rt=mirrorBoundaryR(zt);
+    add(cv([zt,zt],[MIRROR_VIEW==='full'?-rt:0,rt],'#c792ff',2.2,'dot'),'annot');
+    add(cv([-zt,-zt],[MIRROR_VIEW==='full'?-rt:0,rt],'#c792ff',2.2,'dot'),'annot');
     add({type:'scatter',mode:'markers',x:[-zt,zt],y:[0,0],marker:{color:'#36e2c4',size:10,symbol:'line-ns-open'}},'annot');
-    add(txt([-zt,zt],[-rt*1.35,rt*1.35],['B↑','B↑'],'#36e2c4'),'annot');
+    add(txt([-zt,zt],[rt*1.30,rt*1.30],['B↑','B↑'],'#36e2c4'),'annot');
     // geometry parameter labels (Task 6): L_c central-cell length, a_c radius,
     // mirror ratio R_m + loss-cone formula
-    add(cv([-Lc/2,Lc/2],[-a*0.55,-a*0.55],'#ffd166',1.4,'dot'),'annot');
-    add(txt([0],[-a*0.8],[`L<sub>c</sub>=${(+Lc).toFixed(2)} m`],'#ffd166'),'annot');
+    const zc=mirrorCenterEdgeZ();
+    const dimSeg=(x1,x2,y,c,ds='dot')=>add({type:'scatter',mode:'lines+markers',x:[x1,x2],y:[y,y],
+      line:{color:c,width:1.35,dash:ds},marker:{color:c,size:7,symbol:'line-ns-open'},hoverinfo:'skip'},'annot');
+    const yLc=a*0.11,yEff=mirrorHeightCut,yLth=Math.max(a*0.72,yEff+a*0.20);
+    dimSeg(-LcEff/2,LcEff/2,yLc,'#ffc247','dot');
+    add(txt([0],[yLc+a*0.055],[`L<sub>c</sub>=${(+LcEff).toFixed(2)} m`],'#ffc247'),'annot');
+    if(Lth>1e-9){
+      dimSeg(LcEff/2,zt,yLth,'#ff9e3d','dash');dimSeg(-zt,-LcEff/2,yLth,'#ff9e3d','dash');
+      add(txt([(LcEff/2+zt)/2,(-zt-LcEff/2)/2],[yLth+a*0.06,yLth+a*0.06],[`L<sub>th</sub>=${(+Lth).toFixed(2)} m`,`L<sub>th</sub>`],'#ff9e3d'),'annot');
+    }
+    add(cv([-zc,zc],[yEff,yEff],'#ffd166',2.0,'dash'),'annot');
+    add(cv([zc,zc],[MIRROR_VIEW==='full'?-yEff:0,mirrorBoundaryR(zc)],'#ffd166',1.5,'dot'),'annot');
+    add(cv([-zc,-zc],[MIRROR_VIEW==='full'?-yEff:0,mirrorBoundaryR(-zc)],'#ffd166',1.5,'dot'),'annot');
+    add({type:'scatter',mode:'markers',x:[-zc,zc],y:[yEff,yEff],marker:{color:'#ffd166',size:8,symbol:'circle-open',line:{color:'#ffd166',width:2}},hoverinfo:'skip'},'annot');
+    add(txt([0],[yEff+a*0.055],[`R=0.75R<sub>max</sub>`],'#ffd166'),'annot');
     add(cv([0,0],[0,a],'#9be564',1.4,'dot'),'annot');
-    add(txt([Lc*0.05],[a*0.5],[`a<sub>c</sub>=${(+a).toFixed(2)} m`],'#9be564'),'annot');
-    if(gg>0)add({type:'scatter',mode:'lines+markers+text',x:[-Lc*0.25,-Lc*0.25],y:[a,a+gg],line:{color:GC('wall'),width:1.4,dash:'dot'},marker:{color:GC('wall'),size:3},text:['',`g=${(+gg).toFixed(2)} m`],textposition:'middle left',textfont:{color:GC('wall'),size:10}},'annot');
-    add(txt([0],[(a+gg)*1.5],[`R<sub>m</sub>=B<sub>max</sub>/B<sub>min</sub>=${(+Rm).toFixed(1)} · ${L('损失锥','loss cone')} sinθ=1/√R<sub>m</sub>=${(1/Math.sqrt(Rm)).toFixed(2)}`],'#c792ff'),'annot');
-    lay=LAYOUT('z [m]',L('r [m]（径向放大）','r [m] (radial enlarged)'));
-    lay.xaxis.range=[-Lc/2-Lth*1.15,Lc/2+Lth*1.15];lay.yaxis.range=[-(a+gg)*1.75,(a+gg)*1.75];
-    document.getElementById('plotMeta').innerHTML=`<span>${L('径向放大显示磁通管收缩；壁含间隙 g；端面积为通量诊断','radial enlarged; wall includes gap g; throat area diagnostic')}</span>`;
+    add(txt([LcEff*0.05],[a*0.5],[`a<sub>c</sub>=${(+a).toFixed(2)} m`],'#9be564'),'annot');
+    if(gg>0)add({type:'scatter',mode:'lines+markers+text',x:[-LcEff*0.25,-LcEff*0.25],y:[a,a+gg],line:{color:GC('wall'),width:1.4,dash:'dot'},marker:{color:GC('wall'),size:3},text:['',`g=${(+gg).toFixed(2)} m`],textposition:'middle left',textfont:{color:GC('wall'),size:10}},'annot');
+    add(txt([0],[(a+gg)*1.45],[`R<sub>m</sub>=B<sub>max</sub>/B<sub>min</sub>=${(+Rm).toFixed(1)} · ${L('损失锥','loss cone')} sinθ=1/√R<sub>m</sub>=${(1/Math.sqrt(Rm)).toFixed(2)}`],'#c792ff'),'annot');
+    lay=LAYOUT('Z [m]','R [m]');
+    lay.xaxis.range=[zmin,zmax];
+    lay.yaxis.range=MIRROR_VIEW==='full'?[-(a+gg)*1.75,(a+gg)*1.75]:[0,(a+gg)*1.75];
+    document.getElementById('plotMeta').innerHTML=`<span>${MIRROR_VIEW==='full'?L('BORAY-like 开放磁通管磁力线；完整视图由半平面镜像得到','BORAY-like open flux-tube field lines; full view mirrors the half-plane'):L('BORAY-like 开放磁通管磁力线；Z-R 半平面','BORAY-like open flux-tube field lines; Z-R half-plane')}</span>`;
   }else if(CUR==='frc'){
-    const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.type==='frc')?LASTRUN.shape:null;
-    const fs=(v.f_shape!=null?v.f_shape:0.85),p=sh?sh.p_shape:Math.min(2/(3*Math.max(1-fs,0.017)),40);
-    const superE=(lam=1)=>{const X=[],Y=[];for(let i=0;i<=220;i++){const th=2*Math.PI*i/220,c=Math.cos(th),s=Math.sin(th);
-      const cr=Math.sign(c)*Math.pow(Math.abs(c),2/p),sr=Math.sign(s)*Math.pow(Math.abs(s),2/p);
-      X.push(lam*(v.l_s/2)*cr);Y.push(lam*v.r_s*sr);}return[X,Y];};
-    const ar=sh?[sh.separatrix.z,sh.separatrix.r]:superE(1);
-    const rn=sh?Math.abs(sh.null_points.r[0]):v.r_s/Math.SQRT2;
-    add(lin(ar[0],ar[1],GC('boundary'),2.6,true),'boundary');
-    add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
-    add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[-v.r_w,-v.r_w],GC('wall'),2.2),'wall');
-    // nested poloidal flux surfaces: real backend psi=const loops (audit docs/42
-    // P0) when a run is present, else a schematic fallback.
-    if(sh&&Array.isArray(sh.surfaces)&&sh.surfaces.length){
-      sh.surfaces.forEach(srf=>add(cv(srf.z,srf.r,GC('flux'),1.18,'solid'),'flux'));
-    }else{
-      [-1,1].forEach(sgn=>[0.30,0.48,0.66,0.84].forEach(q=>{const X=[],Y=[];for(let i=0;i<=180;i++){const th=2*Math.PI*i/180;
-          X.push((v.l_s/2)*0.78*q*Math.cos(th));Y.push(sgn*rn+sgn*(v.r_s-rn)*0.86*q*Math.sin(th));}
-        add(cv(X,Y,GC('flux'),1.18,'solid'),'flux');}));
+    const pc=document.getElementById('phControls');
+    if(pc){const state=`frc-${FRC_VIEW}`;
+      if(pc.dataset.state!==state){
+        pc.innerHTML=`${L('FRC 视图：','FRC view: ')}<button class="phbtn${FRC_VIEW==='half'?' on':''}" data-frc-view="half">${L('半平面','half-plane')}</button><button class="phbtn${FRC_VIEW==='full'?' on':''}" data-frc-view="full">${L('完整','full')}</button>`;
+        pc.dataset.state=state;
+        pc.querySelectorAll('.phbtn[data-frc-view]').forEach(b=>b.onclick=()=>{FRC_VIEW=b.dataset.frcView;try{localStorage.setItem('polyfusion_frc_view',FRC_VIEW)}catch(e){};pc.dataset.state='';drawShape();});
+      }
     }
-    // open SOL field lines outside the separatrix: real backend curves (audit
-    // docs/42 P2) when a run is present, else a schematic fallback.
-    if(sh&&Array.isArray(sh.open_lines)&&sh.open_lines.length){
-      sh.open_lines.forEach(ln=>add(cv(ln.z,ln.r,GC('open'),1.05,'dot'),'open'));
+    const rn=v.r_s/Math.SQRT2;
+    const frcShapeFactor=()=>Math.min(1,Math.max(2/3,+(v.f_shape==null?0.85:v.f_shape)));
+    const frcShapeMoment=p=>{let s=0,n=96;for(let i=0;i<=n;i++){const u=i/n,w=(i===0||i===n)?1:(i%2?4:2);
+      s+=w*Math.pow(Math.max(0,1-Math.pow(u,p)),2/p);}return s/(3*n);};
+    const frcPFromShape=fs=>{if(fs<=2/3+1e-9)return 2;if(fs>=1-1e-9)return 80;let lo=2,hi=80;
+      for(let k=0;k<42;k++){const mid=(lo+hi)/2;if(frcShapeMoment(mid)<fs)lo=mid;else hi=mid;}return(lo+hi)/2;};
+    const frcMFromShape=fs=>fs>=1-1e-9?80:Math.max(2,fs/(1-fs));
+    const sepMode=(v.sep_model==='mrr'||v.sep_model==='ma_xie')?'ma_xie':'superellipse';
+    const fs=frcShapeFactor(),shapeExp=sepMode==='ma_xie'?frcMFromShape(fs):frcPFromShape(fs);
+    const psiNearNull=0.02,psiMax=0.98,psiStep=0.07,solStart=1.16,solEnd=1.72,solStep=0.28;
+    const frcSepR=u=>{const au=Math.min(1,Math.abs(u));if(sepMode==='ma_xie')return v.r_s*Math.sqrt(Math.max(0,1-Math.pow(au,shapeExp)));
+      return v.r_s*Math.pow(Math.max(0,1-Math.pow(au,shapeExp)),1/shapeExp);};
+    const frcPsiNorm=(z,r)=>{const b=v.l_s/2,u=z/(b||1e-12),au=Math.abs(u),uc=Math.max(-1,Math.min(1,u)),rsu=frcSepR(uc);
+      let y;if(au<0.998&&rsu>1e-10)y=2*Math.max(0,1-u*u)*Math.pow(r/rsu,2);else y=(r*r)/(rn*rn+1e-12);
+      const s=Math.SQRT2*u;return Math.pow(y-1,2)+s*s*y;};
+    const frcSolPsiNorm=(z,r)=>{const b=v.l_s/2,u=Math.abs(z/(b||1e-12)),rr=Math.abs(r)/(v.r_s||1e-12);
+      return sepMode==='ma_xie'?Math.pow(u,shapeExp)+rr*rr:Math.pow(u,shapeExp)+Math.pow(rr,shapeExp);};
+    const frcSep=(sgn=1)=>{const X=[],Y=[];for(let i=0;i<=260;i++){const u=-1+2*i/260,z=(v.l_s/2)*u;
+      X.push(z);Y.push(sgn*frcSepR(u));}return[X,Y];};
+    const frcPsiGrid=(sol=false,sgn=1)=>{const nx=241,ny=121,x=[],yb=[],zb=[],xmax=(v.l_s/2)*(sol?1.15:1);
+      for(let i=0;i<nx;i++)x.push(-xmax+2*xmax*i/(nx-1));
+      const ymax=sol?Math.max(v.r_w,v.r_s*1.25):v.r_s;
+      for(let j=0;j<ny;j++){const r=ymax*j/(ny-1),row=[];yb.push(r);for(let i=0;i<nx;i++)row.push(sol?frcSolPsiNorm(x[i],r):frcPsiNorm(x[i],r));zb.push(row);}
+      if(sgn>=0)return{x,y:yb,z:zb};
+      return{x,y:yb.map(r=>-r).reverse(),z:[...zb].reverse()};};
+    const frcPsiContour=(sol=false,sgn=1,start=null,end=null,size=null)=>{const g=frcPsiGrid(sol,sgn),c=sol?GC('open'):GC('flux');
+      const cs=sol?{start:solStart,end:solEnd,size:solStep}:{start:start??psiStep,end:end??psiMax,size:size??psiStep};
+      return{type:'contour',x:g.x,y:g.y,z:g.z,autocontour:false,contours:{coloring:'lines',start:cs.start,end:cs.end,size:cs.size,showlabels:false},line:{color:c,width:1.05},colorscale:[[0,c],[1,c]],showscale:false,hoverinfo:'skip'};};
+    const addFrcFluxContours=sgn=>{add(frcPsiContour(false,sgn,psiNearNull,psiNearNull,1),'flux');add(frcPsiContour(false,sgn),'flux');};
+    const bExtY=Math.max(v.r_s*1.18,v.r_s+0.62*Math.max(0,v.r_w-v.r_s));
+    const bExtZ0=-0.42*v.l_s,bExtZ1=-0.12*v.l_s;
+    if(FRC_VIEW==='full'){
+      const up=frcSep(1),dn=frcSep(-1),ar=[[...up[0],...dn[0].reverse()],[...up[1],...dn[1].reverse()]];
+      add(lin(ar[0],ar[1],GC('boundary'),2.6,true),'boundary');
+      add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
+      add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[-v.r_w,-v.r_w],GC('wall'),2.2),'wall');
+      addFrcFluxContours(1);addFrcFluxContours(-1);
+      add(frcPsiContour(true,1),'open');add(frcPsiContour(true,-1),'open');
+      const opR=[rn,-rn],opZ=[0,0];
+      add({type:'scatter',mode:'markers+text',x:opZ,y:opR,text:[L('O 点','O-point'),L('O 点','O-point')],
+        textposition:['top center','bottom center'],textfont:{color:'#c792ff',size:10},
+        marker:{color:'#c792ff',size:9,symbol:'circle-open',line:{width:2,color:'#c792ff'}}},'annot');
+      const xpZ=[v.l_s/2,-v.l_s/2],xpR=[0,0];
+      add({type:'scatter',mode:'markers+text',x:xpZ,y:xpR,text:[L('X 点','X-point'),L('X 点','X-point')],
+        textposition:['middle right','middle left'],textfont:{color:'#ff9f43',size:10},
+        marker:{color:'#ff9f43',size:9,symbol:'x-thin',line:{width:2,color:'#ff9f43'}}},'annot');
+      add(seg(-0.05*v.l_s,0.18*v.r_s,-0.38*v.l_s,0.18*v.r_s,'#ff6b6b',L('B←','B←'),'triangle-left'),'annot');
+      add(seg(bExtZ0,bExtY,bExtZ1,bExtY,'#36e2c4',L('B_e→','B_e→')),'annot');
+      add(seg(bExtZ0,-bExtY,bExtZ1,-bExtY,'#36e2c4',L('B_e→','B_e→')),'annot');
+      add(cv([0,0],[0,v.r_s],'#9be564',1.4,'dot'),'annot');
+      add(txt([v.l_s*0.05],[v.r_s*0.5],['r<sub>s</sub>'],'#9be564'),'annot');
+      add(cv([-v.l_s/2,v.l_s/2],[v.r_s*1.04,v.r_s*1.04],'#ffd166',1.4,'dot'),'annot');
+      add(txt([0],[v.r_s*1.18],[`l<sub>s</sub>=${(+v.l_s).toFixed(2)} m`],'#ffd166'),'annot');
+      add(txt([v.l_s*0.40],[v.r_w*1.05],['r<sub>w</sub>'],GC('wall')),'annot');
+      add(txt([0],[v.r_w*1.30],[`E=l<sub>s</sub>/2r<sub>s</sub>=${v.r_s>0?(v.l_s/(2*v.r_s)).toFixed(2):'—'} · ${L('倾斜稳定','tilt')} s/E≲3-4`],'#c792ff'),'annot');
+      lay=LAYOUT('Z [m]','R [m]');
+      lay.xaxis.range=[-v.l_s/2*1.18,v.l_s/2*1.18];lay.yaxis.range=[-Math.max(v.r_w*1.42,v.r_s*1.35),Math.max(v.r_w*1.42,v.r_s*1.35)];
+      document.getElementById('plotMeta').innerHTML=`<span>${L('完整 FRC 截面；上下半径同时显示，用于检查完整分离面与内部磁面','Full FRC cross-section; both signs of radius are shown for checking the complete separatrix and internal flux surfaces')}</span>`;
     }else{
-      [-0.72,-0.48,0.48,0.72].forEach(yy=>add(cv([-v.l_s/2*1.15,-v.l_s/2*0.95,-v.l_s/2*0.72,v.l_s/2*0.72,v.l_s/2*0.95,v.l_s/2*1.15],
-        [yy*v.r_w,yy*v.r_w,yy*v.r_s*0.86,yy*v.r_s*0.86,yy*v.r_w,yy*v.r_w],GC('open'),1.05,'dot'),'open'));
+      const ar=frcSep(1);
+      const Az=ar[0],Ar=ar[1],sepFillZ=[...Az,...[...Az].reverse()],sepFillR=[...Ar,...Az.map(()=>0).reverse()];
+      add(lin(sepFillZ,sepFillR,GC('boundary'),2.6,true),'boundary');
+      add(lin([-v.l_s/2*1.15,v.l_s/2*1.15],[v.r_w,v.r_w],GC('wall'),2.2),'wall');
+      add(cv([-v.l_s/2*1.15,v.l_s/2*1.15],[0,0],GC('annot'),1.3,'dot'),'annot');
+      addFrcFluxContours(1);
+      add(frcPsiContour(true,1),'open');
+      const nullZ=Az.length?[Az[0],Az[Az.length-1]]:[-v.l_s/2,v.l_s/2];
+      add(cv(nullZ,[rn,rn],'#c792ff',1.7,'dash'),'annot');
+      add(txt([0],[rn*1.07],[L('场零点 r_s/√2','field null r_s/√2')],'#c792ff'),'annot');
+      const xpZ=[v.l_s/2,-v.l_s/2],xpR=[0,0];
+      add({type:'scatter',mode:'markers+text',x:xpZ,y:xpR,text:[L('X 点','X-point'),L('X 点','X-point')],
+        textposition:['middle right','middle left'],textfont:{color:'#ff9f43',size:10},
+        marker:{color:'#ff9f43',size:9,symbol:'x-thin',line:{width:2,color:'#ff9f43'}}},'annot');
+      add(seg(-0.05*v.l_s,0.18*v.r_s,-0.38*v.l_s,0.18*v.r_s,'#ff6b6b',L('B←','B←'),'triangle-left'),'annot');
+      add(seg(bExtZ0,bExtY,bExtZ1,bExtY,'#36e2c4',L('B_e→','B_e→')),'annot');
+      add(cv([0,0],[0,v.r_s],'#9be564',1.4,'dot'),'annot');
+      add(txt([v.l_s*0.05],[v.r_s*0.5],['r<sub>s</sub>'],'#9be564'),'annot');
+      add(cv([-v.l_s/2,v.l_s/2],[v.r_s*1.04,v.r_s*1.04],'#ffd166',1.4,'dot'),'annot');
+      add(txt([0],[v.r_s*1.18],[`l<sub>s</sub>=${(+v.l_s).toFixed(2)} m`],'#ffd166'),'annot');
+      add(txt([v.l_s*0.40],[v.r_w*1.05],['r<sub>w</sub>'],GC('wall')),'annot');
+      add(txt([0],[v.r_w*0.96],[`E=l<sub>s</sub>/2r<sub>s</sub>=${v.r_s>0?(v.l_s/(2*v.r_s)).toFixed(2):'—'} · ${L('倾斜稳定','tilt')} s/E≲3-4`],'#c792ff'),'annot');
+      lay=LAYOUT('Z [m]','R [m]');
+      lay.xaxis.range=[-v.l_s/2*1.18,v.l_s/2*1.18];lay.yaxis.range=[0,Math.max(v.r_w*1.08,v.r_s*1.35)];
+      document.getElementById('plotMeta').innerHTML=`<span>${L('BORAY/Solovev fpsi 等值线；Z-R 轴对称半平面，R=0 为对称轴，闭合磁面仅画 R≥0','BORAY/Solovev fpsi contours; Z-R axisymmetric half-plane, R=0 is the symmetry axis, closed flux surfaces are drawn for R≥0 only')}</span>`;
     }
-    // O point (magnetic axis / field null) and X points (separatrix on axis)
-    const opR=sh?sh.o_points.r:[rn,-rn],opZ=sh?sh.o_points.z:[0,0];
-    add({type:'scatter',mode:'markers+text',x:opZ,y:opR,text:[L('O 点','O-point'),L('O 点','O-point')],
-      textposition:['top center','bottom center'],textfont:{color:'#c792ff',size:10},
-      marker:{color:'#c792ff',size:9,symbol:'circle-open',line:{width:2,color:'#c792ff'}}},'annot');
-    const xpZ=sh?sh.x_points.z:[v.l_s/2,-v.l_s/2],xpR=sh?sh.x_points.r:[0,0];
-    add({type:'scatter',mode:'markers+text',x:xpZ,y:xpR,text:[L('X 点','X-point'),L('X 点','X-point')],
-      textposition:['middle right','middle left'],textfont:{color:'#ff9f43',size:10},
-      marker:{color:'#ff9f43',size:9,symbol:'x-thin',line:{width:2,color:'#ff9f43'}}},'annot');
-    // reversed internal field (the defining FRC feature): inside the field null
-    // r<r_s/sqrt2 the axial field B_z<0, i.e. points -z (left). Arrowhead must
-    // point left — head (big marker) at the left end, triangle-left symbol.
-    add(seg(-0.05*v.l_s,0.18*v.r_s,-0.38*v.l_s,0.18*v.r_s,'#ff6b6b',L('B←','B←'),'triangle-left'),'annot');
-    add(seg(-0.50*v.l_s,1.08*v.r_s,-0.15*v.l_s,1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');
-    add(seg(-0.50*v.l_s,-1.08*v.r_s,-0.15*v.l_s,-1.08*v.r_s,'#36e2c4',L('B_e→','B_e→')),'annot');
-    // geometry parameter labels (Task 6): r_s, l_s, r_w + elongation formula
-    add(cv([0,0],[0,v.r_s],'#9be564',1.4,'dot'),'annot');
-    add(txt([v.l_s*0.05],[v.r_s*0.5],['r<sub>s</sub>'],'#9be564'),'annot');
-    add(cv([-v.l_s/2,v.l_s/2],[v.r_s*1.04,v.r_s*1.04],'#ffd166',1.4,'dot'),'annot');
-    add(txt([0],[v.r_s*1.18],[`l<sub>s</sub>=${(+v.l_s).toFixed(2)} m`],'#ffd166'),'annot');
-    add(txt([v.l_s*0.40],[v.r_w*1.05],['r<sub>w</sub>'],GC('wall')),'annot');
-    add(txt([0],[v.r_w*1.30],[`E=l<sub>s</sub>/2r<sub>s</sub>=${v.r_s>0?(v.l_s/(2*v.r_s)).toFixed(2):'—'} · ${L('倾斜稳定','tilt')} s/E≲3-4`],'#c792ff'),'annot');
-    document.getElementById('plotMeta').innerHTML=`<span>${L('分离面来自后端几何；二维内面是中面磁通锚定拟合，非完整二维平衡；壁 r_w','separatrix from backend; inner 2-D surfaces are a midplane-flux-anchored fit, not a full 2-D equilibrium; wall r_w')}</span>`;
   }else if(CUR==='dipole'){
     const Lin=(v.L_in_fac!=null?v.L_in_fac:1.5)*v.r_ring;
     const sh=(LASTRUN&&LASTRUN.shape&&LASTRUN.shape.type==='dipole')?LASTRUN.shape:null;
