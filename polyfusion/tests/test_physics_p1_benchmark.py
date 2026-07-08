@@ -10,8 +10,10 @@ Run: python polyfusion/tests/test_physics_p1_benchmark.py
    - P_ei sign/zero behaviour.
 2. IMPURITY Mavrin fits:
    - CROSS-VALIDATION: helium is fully stripped at high Te, so Mavrin's
-     total cooling rate must agree with our independent bremsstrahlung
-     constant 5.34e-37*Z^2*sqrt(Te) to ~10% (two unrelated sources);
+     total cooling rate must agree with our independent Xie-2024
+     electron-ion bremsstrahlung term to order-unity fit accuracy;
+   - Xie-2024 bremsstrahlung keeps electron-ion Gaunt factors species-resolved,
+     so p-B departs from the legacy scalar-Zeff estimate more than D-T;
    - W at 10 keV ~ 1.3e-31 W m^3 (literature magnitude);
    - net-line clamp >= 0 everywhere; Ar line >> brems at 2 keV.
 3. RINGFIELD (finite current loop):
@@ -35,6 +37,10 @@ from polyfusion.twotemp import (
     p_ei_exchange,
 )
 from polyfusion.impurity import lz_total, lz_line_net, atomic_number  # noqa: E402
+from polyfusion.bremsstrahlung import (  # noqa: E402
+    brems_ei_cooling_xie2024,
+    brems_power_density_xie2024,
+)
 from polyfusion.ringfield import ellipk_e, psi_norm, b_eq, u_spec, v_enc  # noqa: E402
 
 PASS = True
@@ -71,16 +77,26 @@ def main():
     ok(p_ei_exchange(1e20, 15.0, 10.0, 1, 2) > 0, "P_ei > 0 when ions hotter")
 
     # ---------------- 2. Mavrin impurity cooling ----------------
-    # tolerance widens with Te: our solvers' relativistic brems corrections sit
-    # OUTSIDE the 5.34e-37 constant, while Mavrin's fit absorbs them, so the
-    # naive constant overshoots Mavrin by ~20% at 30 keV (expected, not a bug)
-    for Te, tol in ((5.0, 0.12), (10.0, 0.12), (30.0, 0.30)):
-        ours = 5.34e-37 * 4 * math.sqrt(Te)
+    # tolerance widens with Te: Mavrin is a total impurity cooling fit while the
+    # Xie kernel below subtracts only the electron-ion bremsstrahlung share.
+    for Te, tol in ((5.0, 0.12), (10.0, 0.16), (30.0, 0.30)):
+        ours = float(brems_ei_cooling_xie2024(Te, atomic_number("He")))
         mav = float(lz_total("He", Te))
         ok(
             abs(mav - ours) / ours < tol,
-            f"He cross-check at Te={Te}: Mavrin {mav:.3e} vs brems {ours:.3e} (<{tol:.0%})",
+            f"He cross-check at Te={Te}: Mavrin {mav:.3e} vs Xie e-i brems {ours:.3e} (<{tol:.0%})",
         )
+    dt10 = float(brems_power_density_xie2024(1e20, 10.0, [(0.5e20, 1), (0.5e20, 1)]))
+    dt10_legacy = 5.34e-37 * 1e40 * math.sqrt(10.0) * (
+        1.0 + 0.7936 * (10.0 / 511.0) + 1.874 * (10.0 / 511.0) ** 2 + 3 / math.sqrt(2) * (10.0 / 511.0)
+    )
+    pb50 = float(brems_power_density_xie2024(1e20, 50.0, [(0.5e20, 1), (0.1e20, 5)]))
+    pb50_legacy = 5.34e-37 * 1e40 * math.sqrt(50.0) * (
+        3.0 + 0.7936 * (50.0 / 511.0) + 1.874 * (50.0 / 511.0) ** 2 + 3 / math.sqrt(2) * (50.0 / 511.0)
+    )
+    ok(1.00 < dt10 / dt10_legacy < 1.06, f"Xie D-T/legacy brems ratio at 10 keV = {dt10 / dt10_legacy:.3f}")
+    ok(pb50 / pb50_legacy > dt10 / dt10_legacy + 0.04, f"species-resolved p-B ratio = {pb50 / pb50_legacy:.3f} > D-T ratio")
+
     w10 = float(lz_total("W", 10.0))
     ok(5e-32 < w10 < 5e-31, f"W cooling at 10 keV = {w10:.2e} W m^3 (lit ~1e-31)")
     Te_grid = np.geomspace(0.15, 90, 200)
@@ -91,7 +107,7 @@ def main():
             f"{sp}: net line cooling finite and >= 0 over 0.15-90 keV",
         )
     ar2 = float(lz_line_net("Ar", 2.0))
-    arb = 5.34e-37 * atomic_number("Ar") ** 2 * math.sqrt(2.0)
+    arb = float(brems_ei_cooling_xie2024(2.0, atomic_number("Ar")))
     ok(
         ar2 > 2 * arb,
         f"Ar at 2 keV: line/brems = {ar2 / arb:.1f} (line radiation dominates)",

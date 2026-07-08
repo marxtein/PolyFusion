@@ -47,8 +47,9 @@ import numpy as np
 
 from dataclasses import replace as _dc_replace
 
-from ..constants import QE, MU0, MEC2
+from ..constants import QE, MU0
 from ..reactivity import reactivity
+from ..bremsstrahlung import brems_power_profile_xie2024, ion_species_from_mix
 from ..tokamak import (
     _REACTIONS,
     twotemp_diagnostics,
@@ -1521,6 +1522,7 @@ def solve_stellarator(
     Zeff = (
         (n10 * Z1**2 + n20 * Z2**2) / (1 + d12) + nHe0 * ZHe**2 + nimp0 * Zimp**2
     ) / ne0
+    brems_species = ion_species_from_mix(rx, ni0, f1, fHe, fimp, Zimp)
     M = (x1 * rx["A1"] + x2 * rx["A2"]) / (1 + d12)
 
     # --- profiles + reactivity integral (identical to funsc) ---
@@ -1535,23 +1537,8 @@ def solve_stellarator(
     Pfus = rx["Y"] / (1 + d12) * n10 * n20 * Phi * Vp * 1e-6
     Pn = Pfus * (1 - rx["fion"])
 
-    # --- radiation (identical to funsc; a_vol = volume-equivalent radius) ---
-    # NB grouping follows the JS/golden reference (tokamak.py): Zeff multiplies
-    # only the leading e-i term; MATLAB groups the relativistic corrections
-    # inside Zeff (~1% at Zeff~2) — documented in docs/27.
-    Pbrem = (
-        5.34e-37
-        * ne0**2
-        * math.sqrt(Te0)
-        * (
-            Zeff * (1 / (1 + 2 * Sn + 0.5 * ST))
-            + 0.7936 / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
-            + 1.874 / (1 + 2 * Sn + 2.5 * ST) * (Te0 / MEC2) ** 2
-            + 3 / math.sqrt(2) / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
-        )
-        * 1e-6
-        * Vp
-    )
+    # --- radiation (profile-weighted Xie 2024 bremsstrahlung) ---
+    Pbrem = brems_power_profile_xie2024(ne0, Te0, brems_species, Sn, ST, Vp, rho, drho)
     neff = ne0 / 1e20 / (1 + Sn)
     Teff = Te0 * float(np.sum((1 - rho**2) ** ST)) * drho
     # field-inhomogeneity factor <(|B|/B0)^2.5>_V for the cyclotron-loss term.
