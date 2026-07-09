@@ -117,6 +117,24 @@ def _get(server, path, headers=None):
     return status, payload, hdrs
 
 
+def _get_raw(server, path, headers=None):
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{_port(server)}{path}",
+        method="GET",
+        headers=dict(headers or {}),
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            raw = resp.read()
+            status = resp.status
+            hdrs = resp.headers
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        status = exc.code
+        hdrs = exc.headers
+    return status, raw, hdrs
+
+
 def _cookies_from_headers(hdrs) -> dict[str, str]:
     out: dict[str, str] = {}
     for key, val in hdrs.items():
@@ -245,6 +263,16 @@ def test_guest_mode_serves_bundled_equilibrium_with_query(guest_server):
     assert status == 200
     assert "CHEASE" in payload
     assert hdrs.get_content_type() == "application/octet-stream"
+
+
+def test_guest_mode_serves_configuration_icon_asset(guest_server):
+    status, payload, hdrs = _get_raw(
+        guest_server,
+        "/assets/config-icons/tokamak.png",
+    )
+    assert status == 200
+    assert payload.startswith(b"\x89PNG")
+    assert hdrs.get_content_type() == "image/png"
 
 
 def test_guest_mode_stellarator_equilibrium_preview_allowed(guest_server):

@@ -462,6 +462,14 @@ class Handler(BaseHTTPRequestHandler):
             if os.path.isfile(fpath):
                 return self._send_file(fpath)
             return self._send(404, json.dumps({"error": "vendor asset not found"}))
+        if self.path.startswith("/assets/config-icons/"):
+            name = os.path.basename(unquote(self.path))
+            if not name.endswith((".png", ".svg")):
+                return self._send(404, json.dumps({"error": "asset not found"}))
+            fpath = os.path.join(HERE, "assets", "config-icons", name)
+            if os.path.isfile(fpath):
+                return self._send_file(fpath)
+            return self._send(404, json.dumps({"error": "asset not found"}))
         if self.path == "/api/meta":
             return self._send(
                 200,

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>VSC &middot; veloalpha system code &middot; 多位形零维系统设计台</title>
+<title>VSC &middot; veloalpha system code &middot; 多位形聚变装置零维系统设计台</title>
 <script>
 (()=>{const ua=navigator.userAgent||'';const coarse=matchMedia('(pointer:coarse)').matches;if(/Android|iPhone|iPod|Mobile/i.test(ua)||(coarse&&screen.width<=900))document.documentElement.classList.add('mobile-layout');})();
 </script>
@@ -63,9 +63,11 @@
   .cfg{display:flex;align-items:center;gap:8px;padding:8px 9px;border:1px solid var(--line2);border-radius:var(--r);
     background:var(--panel);color:var(--mut);cursor:pointer;transition:.16s;font-size:12px;font-weight:500}
   .cfg:hover{color:var(--fg);background:var(--panel2)}
-  .cfg .ic{width:20px;height:20px;flex:0 0 20px;opacity:.7}
+  .cfg .ic{width:34px;height:24px;flex:0 0 34px;opacity:.82;display:flex;align-items:center;justify-content:center}
+  .cfg .ic img{width:100%;height:100%;object-fit:contain;display:block;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+  [data-theme="dark"] .cfg .ic img{filter:invert(1) drop-shadow(0 1px 1px rgba(0,0,0,.35))}
   .cfg.on{color:var(--btn-ink);background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:var(--amber);box-shadow:var(--glow);font-weight:700}
-  .cfg.on .ic *{stroke:var(--btn-ink)!important}.cfg:nth-child(5){grid-column:1/-1}
+  .cfg.on .ic{opacity:.95}.cfg.on .ic img{filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}.cfg:nth-child(5){grid-column:1/-1}
   select,input,textarea{width:100%;padding:7px 9px;background:var(--ink2);color:var(--fg);border:1px solid var(--line2);
     border-radius:6px;font:13px/1.2 "JetBrains Mono",monospace;transition:.15s;outline:none}
   select:focus,input:focus,textarea:focus{border-color:var(--amber);box-shadow:0 0 0 1px rgba(255,176,46,.25)}select{cursor:pointer}
@@ -590,15 +592,11 @@ const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','Pth',
   ['几何·后验 Geometry·Posterior',['aspect_geom','aspect_vol','a_vol','A_flux','Vp_geom','Sp_geom','Sw_geom','C_sec_mean','C_wall_mean','geom_volume_ratio','geom_wall_ratio','shaf_shift','cyclotron_B25_factor','fnavg','fTavg','fpavg','nbar_geom','Te_line_geom','Ti_line_geom']],
   ['等离子体 Plasma',['ne0','ni0','nbar','n_Sudo','Vp','Sp','Sw','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','L_ax','L_in','A_throat','flux_p','G1','G2','GB','GB25','p_shape','f_shape_calc','geom_weighted','sep_model','m_shape','lambda_ii','coll_ratio','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
 const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_m','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','nbar_geom_o_nbar','beta_o_limit','beta_soft_limit']);
-const SCHEMA={tokamak:'<path d="M40 8C20 8 16 24 16 32 16 40 20 56 40 56 30 50 28 40 28 32 28 24 30 14 40 8Z"/>',
-  mirror:'<path d="M10 20Q32 30 54 20M10 44Q32 34 54 44"/><circle cx="12" cy="32" r="8"/><circle cx="52" cy="32" r="8"/>',
-  frc:'<ellipse cx="32" cy="32" rx="20" ry="11"/><ellipse cx="32" cy="32" rx="11" ry="6"/>',
-  dipole:'<rect x="27" y="29" width="10" height="6" rx="2"/><ellipse cx="32" cy="32" rx="22" ry="14"/>',
-  stellarator:'<ellipse cx="32" cy="32" rx="22" ry="12"/><path d="M12 32Q22 20 32 32T52 32"/>'};
+const CONFIG_ICON={tokamak:'/assets/config-icons/tokamak.png',mirror:'/assets/config-icons/mirror.png',frc:'/assets/config-icons/frc.png',dipole:'/assets/config-icons/dipole.png',stellarator:'/assets/config-icons/stellarator.png'};
 const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'参数 Parameters',liveN:'编辑即重算',window:'最佳区判据 Operating Window',
   contours:'显示等值线 Contours',scan:'POPCON 扫描轴 Scan Axes',xax:'横轴',yax:'纵轴',runBtn:'▶ 运行 POPCON 扫描',
   opPoint:'工作点 Operating Point',inputTitle:'输入参数',scanTitle:'扫描结果',expandAll:'全部展开',collapseAll:'全部折叠',saveP:'⬇ 保存输入参数',loadP:'⬆ 加载历史参数',expScan:'⬇ 保存扫描结果',expPng:'⬇ 保存扫描图像',
-  tabShape:'几何/磁面 Geometry',tabProf:'剖面 Profiles',sub:'多位形零维系统设计台',cfgL:'位形',rxL:'反应',
+  tabShape:'几何/磁面 Geometry',tabProf:'剖面 Profiles',sub:'多位形聚变装置零维系统设计台',cfgL:'位形',rxL:'反应',
   emailInvalid:'请输入有效的邮箱地址',emailRequired:'请输入邮箱',confirmPassword:'确认密码 Confirm password',passwordMismatch:'两次输入的密码不一致',registerFailed:'注册失败，用户名或邮箱可能已被使用',
   verifyEmailPrompt:'请查收验证邮件',verifyEmailSub:'我们已向 {{email}} 发送一封验证邮件，请点击邮件中的链接完成验证后再登录。',
   emailNotVerified:'邮箱未验证',resendVerification:'重新发送验证邮件',resendSent:'验证邮件已重新发送，请查收。',rateLimited:'请求过于频繁，请稍后再试。',
@@ -606,7 +604,7 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
  en:{config:'Configuration',preset:'Preset',params:'Parameters',liveN:'live recompute',window:'Operating Window',
   contours:'Contours shown',scan:'POPCON Scan Axes',xax:'X axis',yax:'Y axis',runBtn:'▶ Run POPCON Scan',
   opPoint:'Operating Point',inputTitle:'Input Parameters',scanTitle:'Scan Results',expandAll:'Expand All',collapseAll:'Collapse All',saveP:'⬇ Save Input Params',loadP:'⬆ Load Historical Params',expScan:'⬇ Save Scan Results',expPng:'⬇ Save Scan Image',
-  tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Reactor Design Console',cfgL:'CONFIG',rxL:'FUEL',
+  tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Multi-Configuration Fusion Device Design Console',cfgL:'CONFIG',rxL:'FUEL',
   emailInvalid:'Please enter a valid email address',emailRequired:'Please enter your email',confirmPassword:'Confirm password',passwordMismatch:'Passwords do not match',registerFailed:'Registration failed. Username or email may already be in use.',
   verifyEmailPrompt:'Check your inbox',verifyEmailSub:'We sent a verification link to {{email}}. Click the link in the email to verify your address, then log in.',
   emailNotVerified:'Email unverified',resendVerification:'Resend verification email',resendSent:'Verification email resent. Please check your inbox.',rateLimited:'Too many requests. Please try again later.',
@@ -1344,7 +1342,7 @@ async function initAfterAuth(){
 function buildConfigPick(){
   const pick=document.getElementById('configPick');
   pick.innerHTML=Object.keys(CONFIGS).map(n=>
-    `<button class="cfg ${n===CUR?'on':''}" data-c="${n}"><span class="ic"><svg viewBox="0 0 64 64" fill="none" stroke="#ffb02e" stroke-width="2">${SCHEMA[n]||''}</svg></span>${cfgL(n)}</button>`).join('');
+    `<button class="cfg ${n===CUR?'on':''}" data-c="${n}"><span class="ic"><img src="${CONFIG_ICON[n]||''}" alt="" loading="lazy" decoding="async"></span>${cfgL(n)}</button>`).join('');
   pick.querySelectorAll('.cfg').forEach(b=>b.onclick=()=>selectConfig(b.dataset.c));
 }
 function setLang(l){LANG=l;try{localStorage.setItem('polyfusion_lang',l);}catch(e){}
@@ -1853,8 +1851,14 @@ function jumpToSec(name){
   const sec=document.querySelector(`.sec[data-sec="${name}"]`);
   if(!sec)return;
   sec.classList.remove('collapsed');
-  const secTitle=sec.querySelector('.sec-t');
-  if(secTitle)secTitle.scrollIntoView({behavior:'smooth',block:'start'});
+  const col=sec.closest('.col');
+  const title=sec.querySelector('.sec-t')||sec;
+  if(col&&col.scrollHeight>col.clientHeight){
+    const offset=title.getBoundingClientRect().top-col.getBoundingClientRect().top+col.scrollTop-10;
+    col.scrollTo({top:Math.max(0,offset),behavior:'smooth'});
+    return;
+  }
+  title.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function applyRun(r){
   r._geom_mode=CUR==='stellarator'?stellGeomMode():null;LASTRUN=r;const box=document.getElementById('results');
