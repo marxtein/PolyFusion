@@ -416,3 +416,199 @@ def test_parse_session_cookie_none_when_absent():
 
 def test_parse_session_cookie_rejects_garbage():
     assert auth.parse_session_cookie("polyfusion_session=<script>") is None
+
+
+# ---------------------------------------------------------------------------
+# SMTP verification path (POLYFUSION_REQUIRE_EMAIL_CONFIRMATION=1 + SMTP on)
+# ---------------------------------------------------------------------------
+
+
+def _smtp_env(monkeypatch, tmp_path):
+    """Activate the SMTP verification path with a fresh local DB."""
+    monkeypatch.setenv("POLYFUSION_REQUIRE_EMAIL_CONFIRMATION", "1")
+    monkeypatch.setenv("POLYFUSION_SMTP_ENABLED", "1")
+    monkeypatch.setenv("POLYFUSION_LOCAL_AUTH_DB", str(tmp_path / "auth.sqlite3"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://vsc.example.cn")
+    monkeypatch.setenv("POLYFUSION_SMTP_HOST", "smtp.example.cn")
+    monkeypatch.setenv("POLYFUSION_SMTP_PORT", "465")
+    monkeypatch.setenv("POLYFUSION_SMTP_USER", "veloalpha@mail.example.cn")
+    monkeypatch.setenv("POLYFUSION_SMTP_PASSWORD", "test-pwd")
+
+
+def test_smtp_register_sends_email_and_leaves_unverified(fake, monkeypatch, tmp_path):
+    _smtp_env(monkeypatch, tmp_path)
+    captured = []
+
+    def stub_sender(to_email, verify_url, **kwargs):
+        captured.append((to_email, verify_url))
+
+    monkeypatch.setattr(auth.email_send, "send_verification_email", stub_sender)
+
+    result = auth.register("bob", "bob@example.com", "password1", "password1")
+
+    assert result["email_verification_sent"] is True
+    assert len(captured) == 1
+    assert captured[0][0] == "bob@example.com"
+    assert "token=" in captured[0][1]
+    assert "vsc.example.cn" in captured[0][1]
+    # The new row must start unverified.
+    with auth._local_conn() as conn:
+        row = conn.execute(
+            "SELECT email_verified FROM local_users WHERE email = ?",
+            ("bob@example.com",),
+        ).fetchone()
+    assert dict(row)["email_verified"] == 0
+
+
+def test_smtp_register_rolls_back_on_email_failure(fake, monkeypatch, tmp_path):
+    _smtp_env(monkeypatch, tmp_path)
+
+    def raising_sender(*args, **kwargs):
+        raise auth.email_send.EmailSendError("smtp boom")
+
+    monkeypatch.setattr(auth.email_send, "send_verification_email", raising_sender)
+
+    with pytest.raises(auth.AuthError):
+        auth.register("carol", "carol@example.com", "password1", "password1")
+
+    # No orphan row should remain.
+    with auth._local_conn() as conn:
+        row = conn.execute(
+            "SELECT user_id FROM local_users WHERE email = ?",
+            ("carol@example.com",),
+        ).fetchone()
+    assert row is None
+
+
+def test_smtp_verify_email_token_success_flips_flag(fake, monkeypatch, tmp_path):
+    _smtp_env(monkeypatch, tmp_path)
+    issued = []
+
+    def capture(to_email, verify_url, **kwargs):
+        issued.append(verify_url)
+
+    monkeypatch.setattr(auth.email_send, "send_verification_email", capture)
+    auth.register("dave", "dave@example.com", "password1", "password1")
+    token = issued[0].split("token=", 1)[1]
+
+    result = auth.verify_email_token(token)
+
+    assert result["ok"] is True
+    assert result["reason"] == "success"
+    with auth._local_conn() as conn:
+        row = conn.execute(
+            "SELECT email_verified, verify_token_jti FROM local_users WHERE email = ?",
+            ("dave@example.com",),
+        ).fetchone()
+    rec = dict(row)
+    assert rec["email_verified"] == 1
+    assert rec["verify_token_jti"] is None
+
+
+def test_smtp_verify_email_token_already_verified(fake, monkeypatch, tmp_path):
+    _smtp_env(monkeypatch, tmp_path)
+    issued = []
+
+    def capture(to_email, verify_url, **kwargs):
+        issued.append(verify_url)
+
+    monkeypatch.setattr(auth.email_send, "send_verification_email", capture)
+    auth.register("erin", "erin@example.com", "password1", "password1")
+    token = issued[0].split("token=", 1)[1]
+    first = auth.verify_email_token(token)
+    second = auth.verify_email_token(token)
+    assert first["reason"] == "success"
+    assert second["reason"] == "already_verified"
+    assert second["ok"] is True
+
+
+def test_smtp_verify_email_token_expired(fake, monkeypatch, tmp_path):
+    _smtp_env(monkeypatch, tmp_path)
+    issued = []
+
+    def capture(to_email, verify_url, **kwargs):
+        issued.append(verify_url)
+
+    monkeypatch.setattr(auth.email_send, "send_verification_email", capture)
+    auth.register("frank", "frank@example.com", "password1", "password1")
+
+    # Backdate the issued token by minting an expired one with the same jti.
+    with auth._local_conn() as conn:
+        row = auth._local_row_by_email(conn, "frank@example.com")
+        jti = row["verify_token_jti"]
+        now = int(time.time())
+        expired_token = pyjwt.encode(
+            {
+                "iss": auth._LOCAL_VERIFY_ISSUER,
+                "provider": auth._LOCAL_VERIFY_PROVIDER,
+                "sub": row["user_id"],
+                "email": "frank@example.com",
+                "jti": jti,
+                "purpose": "verify-email",
+                "iat": now - 2 * auth._LOCAL_VERIFY_TTL,
+                "exp": now - auth._LOCAL_VERIFY_TTL,
+            },
+            auth._local_secret(conn),
+            algorithm="HS256",
+        )
+
+    result = auth.verify_email_token(expired_token)
+    assert result["ok"] is False
+    assert result["reason"] == "expired"
+    with auth._local_conn() as conn:
+        row = conn.execute(
+            "SELECT email_verified FROM local_users WHERE email = ?",
+            ("frank@example.com",),
+        ).fetchone()
+    assert dict(row)["email_verified"] == 0
+
+
+def test_smtp_verify_email_token_purpose_mismatch_rejected(fake, monkeypatch, tmp_path):
+    _smtp_env(monkeypatch, tmp_path)
+    # Mint a SESSION token (provider=local, not local-verify) and try to use
+    # it as a verify token — must be rejected.
+    with auth._local_conn() as conn:
+        secret = auth._local_secret(conn)
+    session_token = pyjwt.encode(
+        {
+            "iss": auth._LOCAL_AUTH_ISSUER,
+            "provider": "local",
+            "sub": "local-whatever",
+            "email": "x@example.com",
+            "iat": int(time.time()),
+            "exp": int(time.time()) + 3600,
+        },
+        secret,
+        algorithm="HS256",
+    )
+    result = auth.verify_email_token(session_token)
+    assert result["ok"] is False
+    assert result["reason"] == "invalid"
+
+
+def test_smtp_login_unverified_user_returns_session_marked_unverified(
+    fake, monkeypatch, tmp_path
+):
+    _smtp_env(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        auth.email_send,
+        "send_verification_email",
+        lambda *a, **k: None,
+    )
+    auth.register("grace", "grace@example.com", "password1", "password1")
+    access, refresh, user = auth.login("grace@example.com", "password1")
+    assert access
+    assert user["email_verified"] is False
+
+
+def test_smtp_resend_verification_is_noop_for_missing_user(fake, monkeypatch, tmp_path):
+    _smtp_env(monkeypatch, tmp_path)
+    sent = []
+    monkeypatch.setattr(
+        auth.email_send,
+        "send_verification_email",
+        lambda *a, **k: sent.append(a),
+    )
+    # Missing user — must not raise, must not send.
+    auth.resend_verification("nobody@example.com")
+    assert sent == []

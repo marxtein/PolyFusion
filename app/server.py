@@ -131,6 +131,57 @@ _RUN_PRESET_CACHE_LOCK = threading.Lock()
 # responsive (matches the equilibrium import ceiling's order of magnitude).
 MAX_REPORT_BYTES = 20 * 1024 * 1024
 
+
+def _verify_email_page(title: str, heading: str, body: str) -> str:
+    return (
+        "<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        f"<title>{title}</title><style>"
+        "body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;"
+        "color:#1e293b;margin:0;padding:0}"
+        ".wrap{max-width:480px;margin:64px auto;padding:32px;text-align:center}"
+        "h1{font-size:22px;margin:0 0 16px}p{line-height:1.6;margin:0 0 12px}"
+        "a.btn{display:inline-block;margin-top:12px;padding:10px 22px;background:"
+        "#2563eb;color:#fff;border-radius:8px;text-decoration:none;font-weight:600}"
+        ".hint{font-size:13px;color:#64748b;margin-top:24px}"
+        "</style></head><body><div class='wrap'>"
+        f"<h1>{heading}</h1>{body}</div></body></html>"
+    )
+
+
+_VERIFY_EMAIL_HTML = {
+    "success": _verify_email_page(
+        "邮箱验证 - PolyFusion",
+        "邮箱验证成功",
+        "<p>您的邮箱已验证，现在可以登录 PolyFusion。</p>"
+        "<a class='btn' href='/'>返回 PolyFusion</a>",
+    ),
+    "already_verified": _verify_email_page(
+        "邮箱已验证 - PolyFusion",
+        "邮箱已验证",
+        "<p>该邮箱已通过验证，请直接登录。</p>"
+        "<a class='btn' href='/'>返回 PolyFusion</a>",
+    ),
+    "expired": _verify_email_page(
+        "链接已过期 - PolyFusion",
+        "验证链接已过期",
+        "<p>请登录后在页面顶部点击“邮箱未验证”重新发送验证邮件。</p>"
+        "<a class='btn' href='/'>返回 PolyFusion</a>",
+    ),
+    "invalid": _verify_email_page(
+        "链接无效 - PolyFusion",
+        "验证链接无效",
+        "<p>该链接可能已失效或被替换，请重新发起验证。</p>"
+        "<a class='btn' href='/'>返回 PolyFusion</a>",
+    ),
+    "rate_limited": _verify_email_page(
+        "请求过多 - PolyFusion",
+        "请稍后再试",
+        "<p>您尝试过于频繁，请稍候再点击邮件中的链接。</p>"
+        "<a class='btn' href='/'>返回 PolyFusion</a>",
+    ),
+}
+
 # Optional JSONL request log for AI/automated testing.
 #   POLYFUSION_LOG=              -> silent (default)
 #   POLYFUSION_LOG=1|true|stdout -> stdout
@@ -604,6 +655,8 @@ class Handler(BaseHTTPRequestHandler):
                 ) == os.path.realpath(os.path.join(HERE, "equilibria")):
                     return self._send_file(fpath, "application/octet-stream")
             return self._send(404, json.dumps({"error": "equilibrium not found"}))
+        if _path_only == "/api/auth/verify-email":
+            return self._handle_auth_verify_email()
         return self._send(404, json.dumps({"error": "not found"}))
 
     # ---- POST -------------------------------------------------------------
@@ -1229,6 +1282,36 @@ class Handler(BaseHTTPRequestHandler):
         except AuthError as e:
             return self._send(400, json.dumps({"error": str(e)}))
         return self._send(200, json.dumps({"ok": True}))
+
+    def _handle_auth_verify_email(self):
+        # Email-link clicks arrive as GET. Rate-limit generously (users
+        # double-click, mail clients pre-fetch). Outcome is rendered as a
+        # minimal HTML page — JSON would be useless in a mail client's browser.
+        from urllib.parse import parse_qs, urlparse
+
+        client_ip = _client_ip(self.headers)
+        if not _check_rate_limit(f"verify-email:{client_ip}", 20, 60):
+            return self._send(
+                429, _VERIFY_EMAIL_HTML["rate_limited"], ctype="text/html"
+            )
+        qs = parse_qs(urlparse(self.path).query)
+        token_values = qs.get("token") or []
+        token = token_values[0] if token_values else ""
+        if not token:
+            return self._send(400, _VERIFY_EMAIL_HTML["invalid"], ctype="text/html")
+        try:
+            result = auth_mod.verify_email_token(token)
+        except Exception:
+            return self._send(500, _VERIFY_EMAIL_HTML["invalid"], ctype="text/html")
+        reason = result.get("reason") if isinstance(result, dict) else "invalid"
+        page_map = {
+            "success": _VERIFY_EMAIL_HTML["success"],
+            "already_verified": _VERIFY_EMAIL_HTML["already_verified"],
+            "expired": _VERIFY_EMAIL_HTML["expired"],
+            "invalid": _VERIFY_EMAIL_HTML["invalid"],
+        }
+        page = page_map.get(reason, _VERIFY_EMAIL_HTML["invalid"])
+        return self._send(200, page, ctype="text/html")
 
     def _handle_manual(self):
         # /api/manual?config=tokamak&lang=zh  — public so docs render pre-login

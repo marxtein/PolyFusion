@@ -49,6 +49,8 @@ from typing import Optional
 from supabase import Client, create_client
 from supabase_auth.errors import AuthApiError, AuthRetryableError
 
+from polyfusion import email_send
+
 # Optional dependency: only needed for local JWT verification in production.
 try:  # pragma: no cover - exercised in tests via monkeypatched secret path
     import jwt as _pyjwt
@@ -84,7 +86,11 @@ _TEST_SECRET_ENV = "POLYFUSION_TEST_JWT_SECRET"
 _EMAIL_CONFIRM_ENV = "POLYFUSION_REQUIRE_EMAIL_CONFIRMATION"
 _LOCAL_AUTH_DB_ENV = "POLYFUSION_LOCAL_AUTH_DB"
 _LOCAL_AUTH_ISSUER = "polyfusion-local-auth"
+_LOCAL_VERIFY_ISSUER = "polyfusion-local-auth-verify"
+_LOCAL_VERIFY_PROVIDER = "local-verify"
+_LOCAL_VERIFY_TTL = 86_400  # 24 hours
 _LOCAL_AUTH_ITERATIONS = 210_000
+_PUBLIC_BASE_URL_ENV = "PUBLIC_BASE_URL"
 
 
 class AuthError(Exception):
@@ -134,6 +140,21 @@ def _local_conn() -> sqlite3.Connection:
         )
         """
     )
+    # Idempotent schema migrations for the SMTP verification path. Adding a
+    # column with ALTER TABLE only runs if the column is missing, so existing
+    # huawei/dev databases upgrade transparently on first connect. The default
+    # is 1 because pre-migration rows were all created under the no-confirm
+    # local path and must stay verified; new SMTP-path registrations insert
+    # email_verified=0 explicitly.
+    existing_cols = {
+        row["name"] for row in conn.execute("PRAGMA table_info(local_users)")
+    }
+    if "email_verified" not in existing_cols:
+        conn.execute(
+            "ALTER TABLE local_users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1"
+        )
+    if "verify_token_jti" not in existing_cols:
+        conn.execute("ALTER TABLE local_users ADD COLUMN verify_token_jti TEXT")
     conn.commit()
     return conn
 
@@ -159,12 +180,33 @@ def _hash_password(password: str, salt: bytes) -> str:
     ).hex()
 
 
+def _local_email_verified(row: sqlite3.Row) -> bool:
+    """Read the ``email_verified`` column with None/missing-safe default.
+
+    Rows created before the SMTP migration (or under the no-confirm local
+    path) default to verified so existing users are not locked out.
+    """
+    try:
+        return bool(row["email_verified"])
+    except (IndexError, KeyError):
+        return True
+
+
+def smtp_verification_active() -> bool:
+    """True when the in-app SMTP verification path should be used.
+
+    Requires both email confirmation and SMTP to be enabled; otherwise the
+    no-confirm local path or the Supabase path applies.
+    """
+    return email_confirmation_required() and email_send.smtp_enabled()
+
+
 def _local_user_dict(row: sqlite3.Row) -> dict:
     return {
         "user_id": row["user_id"],
         "username": row["username"],
         "email": row["email"],
-        "email_verified": True,
+        "email_verified": _local_email_verified(row),
         "affiliation": row["affiliation"],
         "is_admin": False,
         "auth_provider": "local",
@@ -209,6 +251,275 @@ def _local_register(
         "email_verification_sent": False,
         "auth_provider": "local",
     }
+
+
+def _public_base_url() -> str:
+    """Public base URL for verification links.
+
+    Reads ``PUBLIC_BASE_URL``; falls back to localhost so dev/test flows do
+    not need it set. The server may override this per-request by setting the
+    env var before dispatching to ``register``.
+    """
+    raw = (os.environ.get(_PUBLIC_BASE_URL_ENV) or "").strip().rstrip("/")
+    return raw or "http://localhost:8765"
+
+
+def _build_verify_url(token: str) -> str:
+    return f"{_public_base_url()}/api/auth/verify-email?token={token}"
+
+
+def _local_issue_verify_token(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
+    """Mint a short-lived HS256 JWT bound to ``(user_id, jti)``.
+
+    ``provider`` is ``local-verify`` (distinct from session tokens' ``local``)
+    so ``_local_claims`` rejects verify tokens if presented as session tokens.
+    The ``jti`` is also stored on the user row so a successful verify can
+    invalidate any outstanding tokens for that user (single-use semantics).
+    """
+    if _pyjwt is None:
+        raise AuthError("service unavailable")
+    jti = secrets.token_urlsafe(16)
+    conn.execute(
+        "UPDATE local_users SET verify_token_jti = ? WHERE user_id = ?",
+        (jti, row["user_id"]),
+    )
+    conn.commit()
+    now = int(time.time())
+    return _pyjwt.encode(
+        {
+            "iss": _LOCAL_VERIFY_ISSUER,
+            "provider": _LOCAL_VERIFY_PROVIDER,
+            "sub": row["user_id"],
+            "email": row["email"],
+            "jti": jti,
+            "purpose": "verify-email",
+            "iat": now,
+            "exp": now + _LOCAL_VERIFY_TTL,
+        },
+        _local_secret(conn),
+        algorithm="HS256",
+    )
+
+
+def _local_row_by_id(conn: sqlite3.Connection, user_id: str) -> Optional[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM local_users WHERE user_id = ?", (user_id,)
+    ).fetchone()
+
+
+def _local_row_by_email(conn: sqlite3.Connection, email: str) -> Optional[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM local_users WHERE email = ?", (email,)
+    ).fetchone()
+
+
+def _local_register_with_verification(
+    username: str,
+    email: str,
+    password: str,
+    *,
+    affiliation: str | None = None,
+    sender: email_send.Sender | None = None,
+) -> dict:
+    """Register a local user and dispatch a verification email via SMTP.
+
+    On any email-delivery failure the freshly-inserted row is deleted so the
+    caller can surface a clean error and the user can retry without an orphan
+    account blocking the email.
+    """
+    salt = secrets.token_bytes(16)
+    user_id = f"local-{uuid.uuid4()}"
+    try:
+        with _local_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO local_users(
+                    user_id, username, email, salt, password_hash,
+                    affiliation, created_at, email_verified
+                ) VALUES(?, ?, ?, ?, ?, ?, ?, 0)
+                """,
+                (
+                    user_id,
+                    username,
+                    email,
+                    salt.hex(),
+                    _hash_password(password, salt),
+                    affiliation,
+                    time.time(),
+                ),
+            )
+            row = _local_row_by_id(conn, user_id)
+            if row is None:
+                raise AuthError("registration failed")
+            token = _local_issue_verify_token(conn, row)
+    except AuthError:
+        raise
+    except sqlite3.IntegrityError as exc:
+        raise AuthError("registration failed") from exc
+    except sqlite3.Error as exc:
+        raise AuthError("service unavailable") from exc
+
+    verify_url = _build_verify_url(token)
+    try:
+        email_send.send_verification_email(email, verify_url, sender=sender)
+    except email_send.EmailSendError as exc:
+        # Roll back the orphan row so the user can retry without an
+        # unverified account blocking the email.
+        with _local_conn() as conn:
+            conn.execute("DELETE FROM local_users WHERE user_id = ?", (user_id,))
+            conn.commit()
+        raise AuthError("verification email could not be sent") from exc
+    return {
+        "user_id": user_id,
+        "username": username,
+        "email": email,
+        "email_verification_sent": True,
+        "auth_provider": "local",
+    }
+
+
+def verify_email_token(token: str) -> dict:
+    """Validate a verify-email JWT and flip the user's verified flag.
+
+    Returns ``{"ok": bool, "already_verified": bool, "user_id": str | None,
+    "reason": str}``. Reasons: ``"success"`` / ``"already_verified"`` /
+    ``"expired"`` / ``"invalid"``.
+    """
+    if not token or _pyjwt is None:
+        return {
+            "ok": False,
+            "already_verified": False,
+            "user_id": None,
+            "reason": "invalid",
+        }
+    try:
+        unverified = _pyjwt.decode(token, options={"verify_signature": False})
+    except Exception:
+        return {
+            "ok": False,
+            "already_verified": False,
+            "user_id": None,
+            "reason": "invalid",
+        }
+    if (
+        unverified.get("provider") != _LOCAL_VERIFY_PROVIDER
+        or unverified.get("iss") != _LOCAL_VERIFY_ISSUER
+        or unverified.get("purpose") != "verify-email"
+    ):
+        return {
+            "ok": False,
+            "already_verified": False,
+            "user_id": None,
+            "reason": "invalid",
+        }
+    user_id = unverified.get("sub") or ""
+    jti = unverified.get("jti") or ""
+    if not user_id or not jti:
+        return {
+            "ok": False,
+            "already_verified": False,
+            "user_id": None,
+            "reason": "invalid",
+        }
+    try:
+        with _local_conn() as conn:
+            row = _local_row_by_id(conn, user_id)
+            if row is None:
+                return {
+                    "ok": False,
+                    "already_verified": False,
+                    "user_id": None,
+                    "reason": "invalid",
+                }
+            try:
+                claims = _pyjwt.decode(
+                    token,
+                    _local_secret(conn),
+                    algorithms=["HS256"],
+                    issuer=_LOCAL_VERIFY_ISSUER,
+                    options={"verify_aud": False},
+                )
+            except getattr(_pyjwt, "ExpiredSignatureError", ()):
+                return {
+                    "ok": False,
+                    "already_verified": False,
+                    "user_id": user_id,
+                    "reason": "expired",
+                }
+            except _pyjwt.PyJWTError:
+                return {
+                    "ok": False,
+                    "already_verified": False,
+                    "user_id": user_id,
+                    "reason": "invalid",
+                }
+            if claims.get("jti") != jti:
+                return {
+                    "ok": False,
+                    "already_verified": False,
+                    "user_id": user_id,
+                    "reason": "invalid",
+                }
+            if bool(row["email_verified"]):
+                return {
+                    "ok": True,
+                    "already_verified": True,
+                    "user_id": user_id,
+                    "reason": "already_verified",
+                }
+            stored_jti = (
+                row["verify_token_jti"] if "verify_token_jti" in row.keys() else None
+            )
+            if stored_jti != jti:
+                return {
+                    "ok": False,
+                    "already_verified": False,
+                    "user_id": user_id,
+                    "reason": "invalid",
+                }
+            conn.execute(
+                "UPDATE local_users SET email_verified = 1, verify_token_jti = NULL "
+                "WHERE user_id = ?",
+                (user_id,),
+            )
+            conn.commit()
+    except sqlite3.Error:
+        return {
+            "ok": False,
+            "already_verified": False,
+            "user_id": user_id,
+            "reason": "invalid",
+        }
+    return {
+        "ok": True,
+        "already_verified": False,
+        "user_id": user_id,
+        "reason": "success",
+    }
+
+
+def _local_resend_verification(
+    email: str, *, sender: email_send.Sender | None = None
+) -> None:
+    """Mint a fresh verify token and re-send the email.
+
+    Anti-enumeration: silently no-ops when the user is missing or already
+    verified, mirroring Supabase's opaque behavior.
+    """
+    try:
+        with _local_conn() as conn:
+            row = _local_row_by_email(conn, email)
+            if row is None or bool(row["email_verified"]):
+                return
+            token = _local_issue_verify_token(conn, row)
+    except sqlite3.Error:
+        # Treat DB failure as "user not found" to avoid leaking state.
+        return
+    verify_url = _build_verify_url(token)
+    try:
+        email_send.send_verification_email(email, verify_url, sender=sender)
+    except email_send.EmailSendError as exc:
+        raise AuthError("verification email could not be sent") from exc
 
 
 def _local_issue_session(
@@ -292,7 +603,7 @@ def _local_get_user(access_token: str) -> Optional[dict]:
 
 def is_local_token(access_token: Optional[str]) -> bool:
     return bool(
-        not email_confirmation_required()
+        (not email_confirmation_required() or smtp_verification_active())
         and access_token
         and _local_claims(access_token) is not None
     )
@@ -439,7 +750,7 @@ def verify_jwt(token: str) -> Optional[dict]:
         except Exception:
             pass
 
-    if not email_confirmation_required():
+    if not email_confirmation_required() or smtp_verification_active():
         local = _local_claims(token)
         if local is not None:
             return local
@@ -569,6 +880,14 @@ def register(
             affiliation=affiliation.strip() if affiliation else None,
         )
 
+    if smtp_verification_active():
+        return _local_register_with_verification(
+            username,
+            email,
+            password,
+            affiliation=affiliation.strip() if affiliation else None,
+        )
+
     client = supabase_client()
     try:
         data = {"username": username}
@@ -673,7 +992,7 @@ def login(email: str, password: str) -> tuple[str, str, dict]:
     email = validate_email(email)
     if not isinstance(password, str) or not password:
         raise AuthError("invalid credentials")
-    if not email_confirmation_required():
+    if not email_confirmation_required() or smtp_verification_active():
         local = _local_login(email, password)
         if local is not None:
             return local
@@ -700,7 +1019,9 @@ def logout(access_token: Optional[str], refresh_token: Optional[str] = None) -> 
     """
     if not access_token:
         return
-    if not email_confirmation_required() and _local_claims(access_token) is not None:
+    if (
+        not email_confirmation_required() or smtp_verification_active()
+    ) and _local_claims(access_token) is not None:
         return
     client = supabase_client()
     try:
@@ -714,7 +1035,7 @@ def get_user(access_token: Optional[str]) -> Optional[dict]:
     """Return the public-shape user dict for ``access_token`` or ``None``."""
     if not access_token:
         return None
-    if not email_confirmation_required():
+    if not email_confirmation_required() or smtp_verification_active():
         local = _local_get_user(access_token)
         if local is not None:
             return local
@@ -730,12 +1051,15 @@ def get_user(access_token: Optional[str]) -> Optional[dict]:
 
 
 def resend_verification(email: str) -> None:
-    """Trigger a new signup confirmation email via Supabase.
+    """Trigger a new signup confirmation email.
 
-    Raises ``AuthError`` on network/service failure. A missing user is not an
-    error here (Supabase is opaque by design to avoid enumeration).
+    Dispatches to the SMTP local path when active, otherwise to Supabase.
+    A missing user is not an error on either path (anti-enumeration).
     """
     email = validate_email(email)
+    if smtp_verification_active():
+        _local_resend_verification(email)
+        return
     client = supabase_client()
     try:
         client.auth.resend({"email": email, "type": "signup"})

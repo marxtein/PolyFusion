@@ -357,3 +357,120 @@ def test_auth_mutation_rate_limit_unchanged(guest_server):
     )
     assert status == 429
     assert payload == {"error": "rate limit exceeded"}
+
+
+# ---------------------------------------------------------------------------
+# GET /api/auth/verify-email — SMTP verification landing page
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def smtp_server(monkeypatch, tmp_path):
+    """Server with the SMTP verification path active and a capturing sender."""
+    monkeypatch.setattr(srv, "REQUIRE_AUTH", True)
+    monkeypatch.setattr(srv, "GUEST_MODE", True)
+    monkeypatch.setenv("POLYFUSION_REQUIRE_EMAIL_CONFIRMATION", "1")
+    monkeypatch.setenv("POLYFUSION_SMTP_ENABLED", "1")
+    monkeypatch.setenv("POLYFUSION_LOCAL_AUTH_DB", str(tmp_path / "auth.sqlite3"))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://vsc.example.cn")
+    monkeypatch.setenv("POLYFUSION_SMTP_HOST", "smtp.example.cn")
+    monkeypatch.setenv("POLYFUSION_SMTP_PORT", "465")
+    monkeypatch.setenv("POLYFUSION_SMTP_USER", "veloalpha@mail.example.cn")
+    monkeypatch.setenv("POLYFUSION_SMTP_PASSWORD", "test-pwd")
+
+    from polyfusion import auth as auth_mod
+    from polyfusion import email_send
+
+    sent: list[str] = []
+
+    def fake_send(to_email, verify_url, **kwargs):
+        sent.append(verify_url)
+
+    monkeypatch.setattr(email_send, "send_verification_email", fake_send)
+    monkeypatch.setattr(auth_mod.email_send, "send_verification_email", fake_send)
+    srv._RATE_LIMIT.clear()
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    server.captured_verify_urls = sent  # type: ignore[attr-defined]
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+        srv._RATE_LIMIT.clear()
+
+
+def _register_for_verify(server, email="verify@example.com"):
+    """Trigger a signup that issues a verification email; return the token."""
+    status, payload, _ = _post(
+        server,
+        "/api/auth/register",
+        {
+            "username": "verify_user",
+            "email": email,
+            "password": "password1",
+            "password2": "password1",
+        },
+    )
+    assert status == 200, payload
+    assert server.captured_verify_urls, "verification email was not dispatched"
+    return server.captured_verify_urls[-1].split("token=", 1)[1]
+
+
+def test_verify_email_success_renders_html(smtp_server):
+    token = _register_for_verify(smtp_server)
+    status, body, hdrs = _get(smtp_server, f"/api/auth/verify-email?token={token}")
+    assert status == 200
+    assert isinstance(body, str)
+    assert "text/html" in hdrs.get("Content-Type", "")
+    assert "验证成功" in body
+
+
+def test_verify_email_garbage_token_renders_invalid(smtp_server):
+    status, body, _ = _get(smtp_server, "/api/auth/verify-email?token=not-a-jwt")
+    assert status == 200
+    assert isinstance(body, str)
+    assert "无效" in body
+
+
+def test_verify_email_missing_token_returns_400(smtp_server):
+    status, body, _ = _get(smtp_server, "/api/auth/verify-email")
+    assert status == 400
+    assert isinstance(body, str)
+    assert "无效" in body
+
+
+def test_verify_email_expired_token_renders_expired(smtp_server, monkeypatch):
+    """An expired JWT (still well-formed) must surface the expired branch."""
+    import time
+
+    import jwt as pyjwt
+
+    token = _register_for_verify(smtp_server)
+    # Recover jti + secret to mint a backdated token with the same identity.
+    from polyfusion import auth as auth_mod
+
+    unverified = pyjwt.decode(token, options={"verify_signature": False})
+    with auth_mod._local_conn() as conn:
+        secret = auth_mod._local_secret(conn)
+    now = int(time.time())
+    expired = pyjwt.encode(
+        {
+            "iss": auth_mod._LOCAL_VERIFY_ISSUER,
+            "provider": auth_mod._LOCAL_VERIFY_PROVIDER,
+            "sub": unverified["sub"],
+            "email": unverified["email"],
+            "jti": unverified["jti"],
+            "purpose": "verify-email",
+            "iat": now - 2 * auth_mod._LOCAL_VERIFY_TTL,
+            "exp": now - auth_mod._LOCAL_VERIFY_TTL,
+        },
+        secret,
+        algorithm="HS256",
+    )
+    status, body, _ = _get(smtp_server, f"/api/auth/verify-email?token={expired}")
+    assert status == 200
+    assert isinstance(body, str)
+    assert "过期" in body
