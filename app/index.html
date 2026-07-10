@@ -7,7 +7,6 @@
 <script>
 (()=>{const ua=navigator.userAgent||'';const coarse=matchMedia('(pointer:coarse)').matches;if(/Android|iPhone|iPod|Mobile/i.test(ua)||(coarse&&screen.width<=900))document.documentElement.classList.add('mobile-layout');})();
 </script>
-<script src="/vendor/plotly-2.32.0.min.js"></script>
 <style>
   :root{--ink:#080b12;--ink2:#0b0f18;--panel:#0e1320;--panel2:#11182a;--line:#1b2334;--line2:#26324a;
     --fg:#e9eef7;--mut:#7c8aa6;--dim:#4b566c;--amber:#ffb02e;--amber-d:#cf8a16;--teal:#36e2c4;--red:#ff5d73;--r:8px;
@@ -617,6 +616,7 @@ const T={zh:{config:'位形',preset:'机型预设',params:'参数',liveN:'编辑
   emailNotVerified:'Email unverified',resendVerification:'Resend verification email',resendSent:'Verification email resent. Please check your inbox.',rateLimited:'Too many requests. Please try again later.',
   help:'<h3>VSC Beginner Guide</h3><p><b>What it does:</b> VSC (veloalpha system code) uses 0-D power balance to compare fusion configurations, operating points and POPCON windows. It is for early screening, not final engineering validation.</p><ol><li><b>Choose a configuration and preset</b>: start from built-in machines to learn typical ranges.</li><li><b>Read input parameters</b>: in the input-parameter panel, focus a field to view its input explanation.</li><li><b>Inspect key outputs first</b>: start from P_fus, Q, P_heat, P_wall, density/beta/safety-factor limits.</li><li><b>Run POPCON scans</b>: choose two variables as X/Y axes and see which regions satisfy the operating-window criteria.</li><li><b>Save and report</b>: save scan history, export plots/data, and generate a full report with AI interpretation.</li></ol><p><b>How to read results:</b> passing the best-region mask does not prove viability; failing usually shows which density, temperature, field, geometry or confinement assumption needs adjustment.</p><button class="help-tour" data-tour-start>Start 1-minute guided tour</button><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,LASTSCAN_INPUTS=null,VIEW='shape',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
+let PRESET_LOAD_TOKEN=0,RECOMPUTE_TOKEN=0,VIEW_RENDER_TOKEN=0,PLOTLY_LOAD=null;
 let PARAM_GROUP_COLLAPSED={};
 let THEME=((()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}}))();
 let FRC_VIEW=(()=>{try{return localStorage.getItem('polyfusion_frc_view')||'half'}catch(e){return'half'}})();
@@ -1295,8 +1295,9 @@ async function init(){
   // Auth bootstrap: gate the whole app behind a login wall when the backend
   // requires it. /api/meta reports auth_required and stays public so we can
   // probe it before the user has a session.
+  let meta=null;
   try{
-    const meta=await jget('/api/meta');
+    meta=await jget('/api/meta');
     AUTH_REQUIRED=!!meta.auth_required;
     GUEST_MODE=!!meta.guest_mode;
   }catch(e){AUTH_REQUIRED=false;GUEST_MODE=false;}
@@ -1308,11 +1309,11 @@ async function init(){
       else{showAuthWall();return;}
     }else{applyAuthState(me);}
   }
-  await initAfterAuth();
+  await initAfterAuth(meta);
 }
 
-async function initAfterAuth(){
-  CONFIGS=(await jget('/api/meta')).configs;
+async function initAfterAuth(meta){
+  CONFIGS=(meta&&meta.configs)?meta.configs:(await jget('/api/meta')).configs;
   try{EQMAN=await jget('/api/equilibria');}catch(e){EQMAN={};}
   buildConfigPick();
   document.getElementById('cfgN').textContent=Object.keys(CONFIGS).length+' '+L('种','cfgs');
@@ -1353,7 +1354,7 @@ async function initAfterAuth(){
   document.getElementById('expScan').onclick=exportScanResults;
   expPng.onclick=exportPlotImage;
   applyLang();
-  selectConfig(Object.keys(CONFIGS)[0]);
+  selectConfig(Object.keys(CONFIGS)[0],{deferRun:true});
 }
 function buildConfigPick(){
   const pick=document.getElementById('configPick');
@@ -1420,7 +1421,19 @@ function renderTour(){
   card.querySelectorAll('[data-tour-nav]').forEach(b=>b.onclick=()=>{const nav=b.dataset.tourNav;if(nav==='skip')return closeTour('skipped');if(nav==='back'){TOUR_STEP--;return renderTour();}TOUR_STEP++;return renderTour();});
   tour.classList.add('on');
 }
-function selectConfig(name){
+function schedulePresetLoad(configName,presetName){
+  const run=()=>{if(CUR===configName&&preset.value===presetName)loadPreset();};
+  if(window.requestIdleCallback)requestIdleCallback(run,{timeout:1200});
+  else setTimeout(run,300);
+}
+function renderInitialRunPlaceholder(){
+  const plot=document.getElementById('plot');
+  if(plot&&!plot.dataset.state)plot.innerHTML=`<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#4b566c;font-size:13px;text-align:center;padding:24px">${L('正在准备默认工作点…','Preparing default operating point…')}</div>`;
+  const results=document.getElementById('results');
+  if(results&&!LASTRUN)results.innerHTML=`<div class="hint">${L('默认工作点将在页面可见后加载。','The default operating point will load after the page is visible.')}</div>`;
+}
+function selectConfig(name,opts){
+  opts=opts||{};
   clearScanHistoryState();
   CUR=name;const m=CONFIGS[name];
   // drop stellarator-only phase state so it can't bleed into another config's view
@@ -1436,7 +1449,8 @@ function selectConfig(name){
   bindScanAxisExplanations();
   document.getElementById('stCfg').textContent=cfgL(name);
   PLOTSEL=new Set(m.contour_spec.filter(c=>c.on).map(c=>c.f));
-  loadPreset();
+  if(opts.deferRun){renderInitialRunPlaceholder();schedulePresetLoad(name,preset.value||'');}
+  else loadPreset();
 }
 function refreshCyclotronScanAxes(){
   if(!['mirror','frc','dipole'].includes(CUR))return;
@@ -1452,6 +1466,7 @@ function refreshCyclotronScanAxes(){
   reset(ykey,m.scan_defaults.ykey,ymin,ymax);
 }
 async function loadPreset(){
+  const token=++PRESET_LOAD_TOKEN,configAtStart=CUR;
   clearScanHistoryState();
   updateDelState();updateEqQuick();
   const pv=preset.value||'';
@@ -1466,10 +1481,11 @@ async function loadPreset(){
     if(CUR==='stellarator'){migrateStellRadius();STELL_STASH={};VALS._geom_mode=inferStellGeomMode();stashStellGeom();normalizeStellBoundaryIota();}
     enforceFrcShapeRange();enforceFrcWallOutside();enforceDipoleGeometryRange();
     refreshCyclotronScanAxes();buildParams();buildThresh();buildPlotOpts();fitScanRanges();
-    await recompute();setView(VIEW);
+    const ok=await recompute();if(ok!==false)setView(VIEW);
     return;
   }
-  const r=await jpost('/api/run',{config:CUR,preset:pv});
+  const r=await jpost('/api/run',{config:configAtStart,preset:pv});
+  if(token!==PRESET_LOAD_TOKEN||CUR!==configAtStart||preset.value!==pv)return;
   VALS=Object.assign({},r.inputs);
   migrateTauC();
   migrateCyclotronB();
@@ -1846,7 +1862,7 @@ function cleanStellOverrides(o){
   return o;
 }
 function clean(){const o={};for(const k in VALS){const v=VALS[k];if(k==='icase')o[k]=+v;else if(k==='imp_name'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='sep_model'){if(typeof v==='string'&&v)o[k]=v;}else if(k==='tauE_scaling'){if(typeof v==='string'&&v)o[k]=v;}else if(OPAQUE_PARAMS.has(k)&&isPlainObject(v))o[k]=v;else if(Array.isArray(v)){const a=v.filter(x=>typeof x==='number'&&isFinite(x));if(a.length)o[k]=a;}else if(typeof v==='number'&&isFinite(v))o[k]=v;}return cleanStellOverrides(o);}
-async function recompute(){if(!validateRequiredInputs(false))return;const r=await jpost('/api/run',{config:CUR,overrides:clean()});const ok=applyRun(r);if(ok&&VIEW!=='popcon')setView(VIEW);}
+async function recompute(){if(!validateRequiredInputs(false))return false;const token=++RECOMPUTE_TOKEN,configAtStart=CUR,body=clean();const r=await jpost('/api/run',{config:configAtStart,overrides:body});if(token!==RECOMPUTE_TOKEN||CUR!==configAtStart)return false;const ok=applyRun(r);if(ok&&VIEW!=='popcon')setView(VIEW);return ok;}
 const LIVEBAR_FIELDS=[['lbPfus','Pfus','hot'],['lbQ','Qfus','hot'],['lbH98','H98','cool'],['lbBetaN','betaN',''],['lbPwall','Pwall','warn'],['lbTauE','tau_E','cool']];
 function updateLiveBar(o){
   for(const[id,key,cls]of LIVEBAR_FIELDS){
@@ -1909,12 +1925,16 @@ function applyRun(r){
   return true;
 }
 function fmt(v){if(v==null||typeof v!=='number'||!isFinite(v))return '—';const a=Math.abs(v);if(a!==0&&(a<1e-2||a>=1e5))return v.toExponential(3);return v.toFixed(a<1?4:3);}
-function setView(v){VIEW=v;document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
+async function setView(v){VIEW=v;document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));
   // the φ phase bar belongs ONLY to the stellarator geometry view; clear it for
   // every other view/config (POPCON, profiles, or any non-stellarator) so it
   // can't linger after switching tabs or configs. drawShape rebuilds it for
   // stellarator+shape.
   if(!(CUR==='stellarator'&&v==='shape')){const pc=document.getElementById('phControls');if(pc){pc.innerHTML='';pc.dataset.state='';}}
+  const token=++VIEW_RENDER_TOKEN;
+  if(!plotlyReady())showPlotLoading();
+  try{await ensurePlotly();}catch(e){if(token===VIEW_RENDER_TOKEN)showPlotlyMissing();return;}
+  if(token!==VIEW_RENDER_TOKEN||VIEW!==v)return;
   if(v==='popcon')drawPopcon();else if(v==='shape')drawShape();else drawProfiles();resizePlotSoon();}
 // luminance + readable(): on the light theme some contour colours (e.g. the
 // near-white nbar palette) vanish on the pale plot/panel; darken any too-light
@@ -1934,6 +1954,22 @@ const LAYOUT=(xt,yt)=>{const c=plotTheme(),mobile=isMobileLayout();return{paper_
   margin:{l:64,r:16,t:10,b:mobile?118:88},xaxis:{title:{text:xt,font:{family:'Chakra Petch',size:13,color:c.title},standoff:mobile?18:12},automargin:true,gridcolor:c.grid,zeroline:false,linecolor:c.axis},
   yaxis:{title:{text:yt,font:{family:'Chakra Petch',size:13,color:c.title}},automargin:true,gridcolor:c.grid,zeroline:false,linecolor:c.axis},showlegend:true,legend:{orientation:'h',x:.5,xanchor:'center',y:mobile?-.38:-.26,yanchor:'top',font:{size:10,color:c.legend}}};};
 function plotlyReady(){return !!(window.Plotly&&Plotly.react&&Plotly.downloadImage);}
+function ensurePlotly(){
+  if(plotlyReady())return Promise.resolve();
+  if(PLOTLY_LOAD)return PLOTLY_LOAD;
+  PLOTLY_LOAD=new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    script.src='/vendor/plotly-2.32.0.min.js';script.async=true;
+    script.onload=()=>plotlyReady()?resolve():reject(new Error('Plotly unavailable'));
+    script.onerror=()=>reject(new Error('Plotly failed to load'));
+    document.head.appendChild(script);
+  });
+  return PLOTLY_LOAD;
+}
+function showPlotLoading(){
+  const pe=document.getElementById('plot');
+  if(pe)pe.innerHTML=`<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#4b566c;font-size:13px;text-align:center;padding:24px">${L('正在加载绘图库…','Loading plot library…')}</div>`;
+}
 let plotResizePending=false;
 function resizePlotSoon(){
   if(plotResizePending||!window.Plotly||!Plotly.Plots||!Plotly.Plots.resize)return;
@@ -1959,7 +1995,7 @@ function showPlotlyMissing(){
 }
 async function exportPlotImage(){
   const ee=document.getElementById('err');if(ee)ee.textContent='';
-  if(!plotlyReady()){showPlotlyMissing();return;}
+  try{await ensurePlotly();}catch(e){showPlotlyMissing();return;}
   const gd=document.getElementById('plot');
   if(!gd||!gd.data||!gd.data.length){if(ee)ee.textContent=L('当前没有可保存的图像：请先生成 POPCON、几何或剖面图。','No plot to save yet: generate a POPCON, geometry, or profile plot first.');return;}
   const stamp=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
@@ -2556,7 +2592,7 @@ async function capturePlotImage(maxW, maxH){
   // Grab the rendered plot as a base64 PNG data URI. Returns null when the
   // plot is empty (Plotly purged or never drawn) so callers can skip that
   // section gracefully instead of embedding a broken image.
-  if(!plotlyReady())return null;
+  try{await ensurePlotly();}catch(e){return null;}
   const gd=document.getElementById('plot');
   if(!gd||!gd.data||!gd.data.length)return null;
   const w=Math.min(maxW||1200,Math.max(640,Math.round(gd.clientWidth||900)));
@@ -2569,7 +2605,7 @@ async function capturePlotImage(maxW, maxH){
 async function generateSimulationReport(opts){
   opts=opts||{};
   const ee=document.getElementById('err');if(ee)ee.textContent='';
-  if(!plotlyReady()){showPlotlyMissing();return;}
+  try{await ensurePlotly();}catch(e){showPlotlyMissing();return;}
   if(!LASTRUN){if(ee)ee.textContent=L('请先运行一次工作点计算再生成报告。','Run an operating-point calculation before generating a report.');return;}
   const cfgLabel=(CONFIGS&&CUR&&CONFIGS[CUR]&&CONFIGS[CUR].label)||CUR||'VSC';
   const strippedRun=stripLargeArrays(LASTRUN),strippedScan=stripLargeArrays(LASTSCAN);
@@ -2606,12 +2642,12 @@ async function generateSimulationReport(opts){
   try{
     for(const v of views){
       if(v==='popcon'&&!LASTSCAN)continue;
-      setView(v);
+      await setView(v);
       await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
       const uri=await capturePlotImage(1200,900);
       if(uri)images[v]=uri;
     }
-  }finally{setView(origView);}
+  }finally{await setView(origView);}
   const payload=Object.assign({},basePayload,{images,timestamp:new Date().toISOString()});
   try{
     const r=await fetch('/api/report',{
