@@ -1044,7 +1044,7 @@ async function requestResend(email){
   try{
     const r=await fetch('/api/auth/resend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:target}),credentials:'same-origin'});
     if(r.status===429){
-      if(msg){msg.textContent=L('rateLimited','Too many requests. Please try again later.');msg.className='vpMsg err';}
+      if(msg){msg.textContent=L('请求过于频繁，请稍后再试','Too many requests. Please try again later.');msg.className='vpMsg err';}
       return;
     }
     if(!r.ok){
@@ -1088,13 +1088,14 @@ async function doAuth(){
     const r=await fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),credentials:'same-origin'});
     const data=await r.json().catch(()=>({error:'bad response'}));
     if(!r.ok){
-      if(r.status===429){err.textContent=L('rateLimited','Too many requests. Please try again later.');return;}
+      if(r.status===429){err.textContent=L('请求过于频繁，请稍后再试','Too many requests. Please try again later.');return;}
       if(isReg&&r.status===400){
         const msg=(data.error||'').toLowerCase();
-        if(msg.includes('email')){err.textContent=L('emailInvalid','Please enter a valid email address');}
+        if(msg.includes('could not be sent')){err.textContent=L('验证邮件发送失败，请稍后重试或更换邮箱','Verification email could not be sent. Please try again later or use a different address.');}
+        else if(msg.includes('invalid email')){err.textContent=L('请输入有效的邮箱地址','Please enter a valid email address');}
         else if(msg.includes('password')&&(msg.includes('match')||msg.includes('not match'))){err.textContent=L('两次输入的密码不一致','Passwords do not match');}
         else if(msg.includes('short')){err.textContent=data.error||L('密码长度不足','Password too short');}
-        else{err.textContent=L('registerFailed','Registration failed. Username or email may already be in use.');}
+        else{err.textContent=L('注册失败，用户名或邮箱可能已被使用','Registration failed. Username or email may already be in use.');}
       }else{err.textContent=data.error||(r.status===401?'invalid credentials':'failed');}
       return;
     }
