@@ -16,6 +16,8 @@ like ``config``, ``preset``, ``valid``, ``Qfus``, ``n_invalid``.
 
 from __future__ import annotations
 
+import copy
+import gzip
 import json
 import mimetypes
 import os
@@ -122,6 +124,8 @@ GUEST_COMPUTE_LIMIT = 20
 USER_COMPUTE_LIMIT = 60
 _RATE_LIMIT: dict[str, tuple[int, float]] = {}
 _RATE_LIMIT_LOCK = threading.Lock()
+_RUN_PRESET_CACHE: dict[tuple[str, str], dict] = {}
+_RUN_PRESET_CACHE_LOCK = threading.Lock()
 
 # Report bodies carry 1-3 base64 PNGs; cap at 20 MiB to keep the service
 # responsive (matches the equilibrium import ceiling's order of magnitude).
@@ -279,6 +283,27 @@ def _client_ip(headers) -> str:
     return headers.get("X-Real-Ip") or "unknown"
 
 
+def _compressible_type(ctype: str) -> bool:
+    base = (ctype or "").split(";", 1)[0].lower()
+    return base.startswith("text/") or base in {
+        "application/javascript",
+        "application/json",
+        "application/xml",
+        "image/svg+xml",
+    }
+
+
+def _run_case_cached(config: str, preset: str) -> dict:
+    key = (config, preset)
+    with _RUN_PRESET_CACHE_LOCK:
+        cached = _RUN_PRESET_CACHE.get(key)
+        if cached is not None:
+            return copy.deepcopy(cached)
+        out = run_case({}, preset=preset, config=config)
+        _RUN_PRESET_CACHE[key] = copy.deepcopy(out)
+        return out
+
+
 def _floatify(d: dict) -> dict:
     """Coerce incoming numerics to float (keep icase int).
 
@@ -359,10 +384,21 @@ class Handler(BaseHTTPRequestHandler):
         set_cookie=None,
     ):
         data = body if isinstance(body, bytes) else body.encode("utf-8")
+        send_data = data
+        use_gzip = (
+            len(data) >= 1024
+            and "gzip" in (self.headers.get("Accept-Encoding") or "").lower()
+            and _compressible_type(ctype)
+        )
+        if use_gzip:
+            send_data = gzip.compress(data, compresslevel=6)
         self.send_response(code)
         self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Content-Length", str(len(send_data)))
         self.send_header("Cache-Control", cache_control)
+        if use_gzip:
+            self.send_header("Content-Encoding", "gzip")
+            self.send_header("Vary", "Accept-Encoding")
         if set_cookie:
             # ``set_cookie`` may be a single string or a list of strings; emit
             # one Set-Cookie header per entry so both auth cookies can be
@@ -372,13 +408,15 @@ class Handler(BaseHTTPRequestHandler):
                 if c:
                     self.send_header("Set-Cookie", c)
         self.end_headers()
-        self.wfile.write(data)
+        self.wfile.write(send_data)
         _log(
             "http",
             method=getattr(self, "command", "?"),
             path=self.path,
             status=code,
-            bytes=len(data),
+            bytes=len(send_data),
+            raw_bytes=len(data),
+            gzip=use_gzip,
             duration_ms=round(
                 (time.time() - getattr(self, "_t0", time.time())) * 1000, 3
             ),
@@ -728,11 +766,13 @@ class Handler(BaseHTTPRequestHandler):
                 out = {"config": "tokamak", "eq": eqdsk.equilibrium_geometry(g)}
                 self._api_summary = {"config": "tokamak", "kind": "eqdsk"}
             elif self.path == "/api/run":
-                out = run_case(
-                    _floatify(req.get("overrides")),
-                    preset=req.get("preset"),
-                    config=req.get("config", "tokamak"),
-                )
+                config = req.get("config", "tokamak")
+                preset = req.get("preset")
+                overrides = req.get("overrides")
+                if preset and not overrides:
+                    out = _run_case_cached(config, preset)
+                else:
+                    out = run_case(_floatify(overrides), preset=preset, config=config)
                 outs = out.get("outputs") or {}
                 self._api_summary = {
                     "config": out.get("config"),
