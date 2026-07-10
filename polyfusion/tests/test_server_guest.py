@@ -382,17 +382,26 @@ def smtp_server(monkeypatch, tmp_path):
     from polyfusion import email_send
 
     sent: list[str] = []
+    reset_sent: list[str] = []
 
     def fake_send(to_email, verify_url, **kwargs):
         sent.append(verify_url)
 
+    def fake_send_reset(to_email, reset_url, **kwargs):
+        reset_sent.append(reset_url)
+
     monkeypatch.setattr(email_send, "send_verification_email", fake_send)
     monkeypatch.setattr(auth_mod.email_send, "send_verification_email", fake_send)
+    monkeypatch.setattr(email_send, "send_password_reset_email", fake_send_reset)
+    monkeypatch.setattr(
+        auth_mod.email_send, "send_password_reset_email", fake_send_reset
+    )
     srv._RATE_LIMIT.clear()
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     server.captured_verify_urls = sent  # type: ignore[attr-defined]
+    server.captured_reset_urls = reset_sent  # type: ignore[attr-defined]
     try:
         yield server
     finally:
@@ -474,3 +483,82 @@ def test_verify_email_expired_token_renders_expired(smtp_server, monkeypatch):
     assert status == 200
     assert isinstance(body, str)
     assert "过期" in body
+
+
+def test_password_request_reset_route_sends_vsc_link(smtp_server):
+    _register_for_verify(smtp_server, email="reset-route@example.com")
+    status, payload, _ = _post(
+        smtp_server,
+        "/api/auth/password/request-reset",
+        {"email": "reset-route@example.com"},
+    )
+    assert status == 200
+    assert payload == {"ok": True}
+    assert smtp_server.captured_reset_urls
+    assert smtp_server.captured_reset_urls[-1].startswith(
+        "http://vsc.example.cn/vsc/?reset_token="
+    )
+
+
+def test_password_reset_route_updates_local_password(smtp_server):
+    _register_for_verify(smtp_server, email="reset-flow@example.com")
+    status, _, _ = _post(
+        smtp_server,
+        "/api/auth/password/request-reset",
+        {"email": "reset-flow@example.com"},
+    )
+    assert status == 200
+    token = smtp_server.captured_reset_urls[-1].split("reset_token=", 1)[1]
+
+    status, payload, _ = _post(
+        smtp_server,
+        "/api/auth/password/reset",
+        {"token": token, "password": "newpass1", "password2": "newpass1"},
+    )
+    assert status == 200
+    assert payload == {"ok": True}
+
+    status, payload, _ = _post(
+        smtp_server,
+        "/api/auth/login",
+        {"email": "reset-flow@example.com", "password": "newpass1"},
+    )
+    assert status == 200
+    assert payload == {"ok": True, "user": "verify_user"}
+
+
+def test_password_change_route_requires_current_password(smtp_server):
+    _register_for_verify(smtp_server, email="change-route@example.com")
+    status, _, hdrs = _post(
+        smtp_server,
+        "/api/auth/login",
+        {"email": "change-route@example.com", "password": "password1"},
+    )
+    assert status == 200
+    cookie = hdrs.get("Set-Cookie", "").split(";", 1)[0]
+
+    status, payload, _ = _post(
+        smtp_server,
+        "/api/auth/password/change",
+        {
+            "current_password": "wrongpass",
+            "password": "newpass1",
+            "password2": "newpass1",
+        },
+        headers={"Cookie": cookie},
+    )
+    assert status == 400
+    assert payload == {"error": "invalid credentials"}
+
+    status, payload, _ = _post(
+        smtp_server,
+        "/api/auth/password/change",
+        {
+            "current_password": "password1",
+            "password": "newpass1",
+            "password2": "newpass1",
+        },
+        headers={"Cookie": cookie},
+    )
+    assert status == 200
+    assert payload == {"ok": True}

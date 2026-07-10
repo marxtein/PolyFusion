@@ -89,6 +89,8 @@ _LOCAL_AUTH_ISSUER = "polyfusion-local-auth"
 _LOCAL_VERIFY_ISSUER = "polyfusion-local-auth-verify"
 _LOCAL_VERIFY_PROVIDER = "local-verify"
 _LOCAL_VERIFY_TTL = 86_400  # 24 hours
+_LOCAL_RESET_PROVIDER = "local-password-reset"
+_LOCAL_RESET_TTL = 3_600  # 1 hour
 _LOCAL_AUTH_ITERATIONS = 210_000
 _PUBLIC_BASE_URL_ENV = "PUBLIC_BASE_URL"
 
@@ -155,6 +157,8 @@ def _local_conn() -> sqlite3.Connection:
         )
     if "verify_token_jti" not in existing_cols:
         conn.execute("ALTER TABLE local_users ADD COLUMN verify_token_jti TEXT")
+    if "reset_token_jti" not in existing_cols:
+        conn.execute("ALTER TABLE local_users ADD COLUMN reset_token_jti TEXT")
     conn.commit()
     return conn
 
@@ -268,6 +272,10 @@ def _build_verify_url(token: str) -> str:
     return f"{_public_base_url()}/api/auth/verify-email?token={token}"
 
 
+def _build_password_reset_url(token: str) -> str:
+    return f"{_public_base_url()}/vsc/?reset_token={token}"
+
+
 def _local_issue_verify_token(conn: sqlite3.Connection, row: sqlite3.Row) -> str:
     """Mint a short-lived HS256 JWT bound to ``(user_id, jti)``.
 
@@ -295,6 +303,34 @@ def _local_issue_verify_token(conn: sqlite3.Connection, row: sqlite3.Row) -> str
             "purpose": "verify-email",
             "iat": now,
             "exp": now + _LOCAL_VERIFY_TTL,
+        },
+        _local_secret(conn),
+        algorithm="HS256",
+    )
+
+
+def _local_issue_password_reset_token(
+    conn: sqlite3.Connection, row: sqlite3.Row
+) -> str:
+    if _pyjwt is None:
+        raise AuthError("service unavailable")
+    jti = secrets.token_urlsafe(16)
+    conn.execute(
+        "UPDATE local_users SET reset_token_jti = ? WHERE user_id = ?",
+        (jti, row["user_id"]),
+    )
+    conn.commit()
+    now = int(time.time())
+    return _pyjwt.encode(
+        {
+            "iss": _LOCAL_VERIFY_ISSUER,
+            "provider": _LOCAL_RESET_PROVIDER,
+            "sub": row["user_id"],
+            "email": row["email"],
+            "jti": jti,
+            "purpose": "reset-password",
+            "iat": now,
+            "exp": now + _LOCAL_RESET_TTL,
         },
         _local_secret(conn),
         algorithm="HS256",
@@ -520,6 +556,115 @@ def _local_resend_verification(
         email_send.send_verification_email(email, verify_url, sender=sender)
     except email_send.EmailSendError as exc:
         raise AuthError("verification email could not be sent") from exc
+
+
+def _local_request_password_reset(
+    email: str, *, sender: email_send.Sender | None = None
+) -> None:
+    try:
+        with _local_conn() as conn:
+            row = _local_row_by_email(conn, email)
+            if row is None:
+                return
+            token = _local_issue_password_reset_token(conn, row)
+    except sqlite3.Error:
+        return
+    reset_url = _build_password_reset_url(token)
+    try:
+        email_send.send_password_reset_email(email, reset_url, sender=sender)
+    except email_send.EmailSendError as exc:
+        raise AuthError("password reset email could not be sent") from exc
+
+
+def _local_reset_password(token: str, password: str, password2: str) -> dict:
+    validate_password(password)
+    if password2 != password:
+        raise AuthError("passwords do not match")
+    if not token or _pyjwt is None:
+        raise AuthError("invalid reset link")
+    try:
+        unverified = _pyjwt.decode(token, options={"verify_signature": False})
+    except Exception as exc:
+        raise AuthError("invalid reset link") from exc
+    if (
+        unverified.get("provider") != _LOCAL_RESET_PROVIDER
+        or unverified.get("iss") != _LOCAL_VERIFY_ISSUER
+        or unverified.get("purpose") != "reset-password"
+    ):
+        raise AuthError("invalid reset link")
+    user_id = unverified.get("sub") or ""
+    jti = unverified.get("jti") or ""
+    if not user_id or not jti:
+        raise AuthError("invalid reset link")
+    try:
+        with _local_conn() as conn:
+            row = _local_row_by_id(conn, user_id)
+            if row is None:
+                raise AuthError("invalid reset link")
+            try:
+                claims = _pyjwt.decode(
+                    token,
+                    _local_secret(conn),
+                    algorithms=["HS256"],
+                    issuer=_LOCAL_VERIFY_ISSUER,
+                    options={"verify_aud": False},
+                )
+            except getattr(_pyjwt, "ExpiredSignatureError", ()) as exc:
+                raise AuthError("reset link expired") from exc
+            except _pyjwt.PyJWTError as exc:
+                raise AuthError("invalid reset link") from exc
+            if claims.get("jti") != jti:
+                raise AuthError("invalid reset link")
+            stored_jti = (
+                row["reset_token_jti"] if "reset_token_jti" in row.keys() else None
+            )
+            if stored_jti != jti:
+                raise AuthError("invalid reset link")
+            salt = secrets.token_bytes(16)
+            conn.execute(
+                "UPDATE local_users SET salt = ?, password_hash = ?, "
+                "reset_token_jti = NULL WHERE user_id = ?",
+                (salt.hex(), _hash_password(password, salt), user_id),
+            )
+            conn.commit()
+            return {"ok": True, "email": row["email"]}
+    except AuthError:
+        raise
+    except sqlite3.Error as exc:
+        raise AuthError("service unavailable") from exc
+
+
+def _local_change_password(
+    access_token: str, current_password: str, password: str, password2: str
+) -> dict:
+    validate_password(password)
+    if password2 != password:
+        raise AuthError("passwords do not match")
+    if not isinstance(current_password, str) or not current_password:
+        raise AuthError("invalid credentials")
+    claims = _local_claims(access_token)
+    if claims is None:
+        raise AuthError("unauthorized")
+    try:
+        with _local_conn() as conn:
+            row = _local_row_by_id(conn, claims.get("sub") or "")
+            if row is None:
+                raise AuthError("unauthorized")
+            expected = _hash_password(current_password, bytes.fromhex(row["salt"]))
+            if not hmac.compare_digest(expected, row["password_hash"]):
+                raise AuthError("invalid credentials")
+            salt = secrets.token_bytes(16)
+            conn.execute(
+                "UPDATE local_users SET salt = ?, password_hash = ?, "
+                "reset_token_jti = NULL WHERE user_id = ?",
+                (salt.hex(), _hash_password(password, salt), row["user_id"]),
+            )
+            conn.commit()
+            return {"ok": True}
+    except AuthError:
+        raise
+    except sqlite3.Error as exc:
+        raise AuthError("service unavailable") from exc
 
 
 def _local_issue_session(
@@ -1065,6 +1210,36 @@ def resend_verification(email: str) -> None:
         client.auth.resend({"email": email, "type": "signup"})
     except Exception as exc:
         raise _translate_supabase_error(exc) from exc
+
+
+def request_password_reset(email: str) -> None:
+    email = validate_email(email)
+    if smtp_verification_active():
+        _local_request_password_reset(email)
+        return
+    client = supabase_client()
+    try:
+        client.auth.reset_password_for_email(email)
+    except Exception as exc:
+        raise _translate_supabase_error(exc) from exc
+
+
+def reset_password(token: str, password: str, password2: str) -> dict:
+    if smtp_verification_active():
+        return _local_reset_password(token, password, password2)
+    raise AuthError("password reset unavailable")
+
+
+def change_password(
+    access_token: Optional[str], current_password: str, password: str, password2: str
+) -> dict:
+    if not access_token:
+        raise AuthError("unauthorized")
+    if smtp_verification_active() and _local_claims(access_token) is not None:
+        return _local_change_password(
+            access_token, current_password, password, password2
+        )
+    raise AuthError("password change unavailable")
 
 
 def validate_session(

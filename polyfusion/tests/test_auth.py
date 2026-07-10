@@ -612,3 +612,96 @@ def test_smtp_resend_verification_is_noop_for_missing_user(fake, monkeypatch, tm
     # Missing user — must not raise, must not send.
     auth.resend_verification("nobody@example.com")
     assert sent == []
+
+
+def test_smtp_request_password_reset_sends_one_hour_link(fake, monkeypatch, tmp_path):
+    _smtp_env(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        auth.email_send, "send_verification_email", lambda *a, **k: None
+    )
+    auth.register("resetuser", "reset@example.com", "password1", "password1")
+    sent = []
+
+    def capture(to_email, reset_url, **kwargs):
+        sent.append((to_email, reset_url))
+
+    monkeypatch.setattr(auth.email_send, "send_password_reset_email", capture)
+
+    auth.request_password_reset("reset@example.com")
+
+    assert sent
+    assert sent[0][0] == "reset@example.com"
+    assert "/vsc/?reset_token=" in sent[0][1]
+    token = sent[0][1].split("reset_token=", 1)[1]
+    claims = pyjwt.decode(token, options={"verify_signature": False})
+    assert claims["provider"] == auth._LOCAL_RESET_PROVIDER
+    assert claims["purpose"] == "reset-password"
+    assert claims["exp"] - claims["iat"] == auth._LOCAL_RESET_TTL
+
+
+def test_smtp_reset_password_token_updates_password(fake, monkeypatch, tmp_path):
+    _smtp_env(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        auth.email_send, "send_verification_email", lambda *a, **k: None
+    )
+    auth.register("resetok", "resetok@example.com", "password1", "password1")
+    sent = []
+    monkeypatch.setattr(
+        auth.email_send,
+        "send_password_reset_email",
+        lambda to_email, reset_url, **kwargs: sent.append(reset_url),
+    )
+    auth.request_password_reset("resetok@example.com")
+    token = sent[0].split("reset_token=", 1)[1]
+
+    result = auth.reset_password(token, "newpass1", "newpass1")
+
+    assert result["ok"] is True
+    with pytest.raises(auth.AuthError, match="invalid credentials"):
+        auth.login("resetok@example.com", "password1")
+    access, _, user = auth.login("resetok@example.com", "newpass1")
+    assert access
+    assert user["email"] == "resetok@example.com"
+    with auth._local_conn() as conn:
+        row = auth._local_row_by_email(conn, "resetok@example.com")
+    assert row["reset_token_jti"] is None
+
+
+def test_smtp_reset_password_expired_token_rejected(fake, monkeypatch, tmp_path):
+    _smtp_env(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        auth.email_send, "send_verification_email", lambda *a, **k: None
+    )
+    auth.register("resetexp", "resetexp@example.com", "password1", "password1")
+    with auth._local_conn() as conn:
+        row = auth._local_row_by_email(conn, "resetexp@example.com")
+        token = auth._local_issue_password_reset_token(conn, row)
+        claims = pyjwt.decode(token, options={"verify_signature": False})
+        expired = pyjwt.encode(
+            {**claims, "iat": int(time.time()) - 7200, "exp": int(time.time()) - 3600},
+            auth._local_secret(conn),
+            algorithm="HS256",
+        )
+
+    with pytest.raises(auth.AuthError, match="reset link expired"):
+        auth.reset_password(expired, "newpass1", "newpass1")
+    auth.login("resetexp@example.com", "password1")
+
+
+def test_smtp_change_password_requires_current_password(fake, monkeypatch, tmp_path):
+    _smtp_env(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        auth.email_send, "send_verification_email", lambda *a, **k: None
+    )
+    auth.register("changeuser", "change@example.com", "password1", "password1")
+    access, _, _ = auth.login("change@example.com", "password1")
+
+    with pytest.raises(auth.AuthError, match="invalid credentials"):
+        auth.change_password(access, "wrongpass", "newpass1", "newpass1")
+
+    assert auth.change_password(access, "password1", "newpass1", "newpass1") == {
+        "ok": True
+    }
+    with pytest.raises(auth.AuthError, match="invalid credentials"):
+        auth.login("change@example.com", "password1")
+    auth.login("change@example.com", "newpass1")

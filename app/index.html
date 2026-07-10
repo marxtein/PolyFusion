@@ -218,6 +218,9 @@
   #authWall .verifyPanel .vpBack{display:block;margin-top:10px;background:transparent;border:0;color:var(--dim);
     font-size:11px;cursor:pointer;text-decoration:underline;padding:0}
   #authWall .verifyPanel .vpBack:hover{color:var(--mut)}
+  #authWall .authLinks{display:flex;justify-content:center;margin-top:10px}
+  #authWall .authLinks button,#authWall .linkBtn{background:transparent;border:0;color:var(--dim);cursor:pointer;font-size:12px;text-decoration:underline}
+  #authWall .authLinks button:hover,#authWall .linkBtn:hover{color:var(--mut)}
   .userbox .unverified{margin-left:2px;padding:1px 6px;border-radius:10px;font-size:9.5px;font-weight:700;
     letter-spacing:.04em;color:var(--btn-ink);background:var(--amber);cursor:pointer;border:0;line-height:1.4}
   .userbox .unverified:hover{filter:brightness(1.08)}
@@ -393,6 +396,33 @@
       <div class="fld" id="authPass2Wrap" style="display:none"><label>确认密码</label><input id="authPass2" type="password" autocomplete="new-password" placeholder="确认密码"></div>
       <div class="authErr" id="authErr"></div>
       <button class="submit" id="authSubmit">登录</button>
+      <div class="authLinks"><button id="forgotPasswordBtn" type="button">忘记密码？</button></div>
+    </div>
+    <div class="verifyPanel" id="resetRequestPanel">
+      <div class="vpTitle" id="rrTitle">重置密码</div>
+      <div class="vpSub" id="rrSub">输入注册邮箱，我们会发送 1 小时有效的重置链接。</div>
+      <div class="fld"><label>邮箱</label><input id="resetEmail" type="email" autocomplete="email" placeholder="邮箱"></div>
+      <div class="vpMsg" id="rrMsg"></div>
+      <button class="resend" id="rrSubmit">发送重置邮件</button>
+      <button class="vpBack" id="rrBack">返回登录</button>
+    </div>
+    <div class="verifyPanel" id="resetPasswordPanel">
+      <div class="vpTitle" id="rpTitle">设置新密码</div>
+      <div class="vpSub" id="rpSub">请输入新密码。</div>
+      <div class="fld"><label>新密码</label><input id="resetPass" type="password" autocomplete="new-password"></div>
+      <div class="fld"><label>确认新密码</label><input id="resetPass2" type="password" autocomplete="new-password"></div>
+      <div class="vpMsg" id="rpMsg"></div>
+      <button class="resend" id="rpSubmit">更新密码</button>
+      <button class="vpBack" id="rpBack">返回登录</button>
+    </div>
+    <div class="verifyPanel" id="changePasswordPanel">
+      <div class="vpTitle" id="cpTitle">修改密码</div>
+      <div class="fld"><label>当前密码</label><input id="changePassOld" type="password" autocomplete="current-password"></div>
+      <div class="fld"><label>新密码</label><input id="changePassNew" type="password" autocomplete="new-password"></div>
+      <div class="fld"><label>确认新密码</label><input id="changePassNew2" type="password" autocomplete="new-password"></div>
+      <div class="vpMsg" id="cpMsg"></div>
+      <button class="resend" id="cpSubmit">更新密码</button>
+      <button class="vpBack" id="cpBack">取消</button>
     </div>
     <div class="verifyPanel" id="verifyPanel">
       <div class="vpTitle" id="vpTitle">请查收验证邮件</div>
@@ -406,7 +436,7 @@
 <header>
   <div class="brand"><span class="logo">V<b>SC</b></span><span class="sub" id="subTitle"><span id="subTitleZh">多位形聚变装置零维系统设计台</span><span id="subTitleEn">Zero-D Multi-Configuration Fusion Device Design Console</span></span></div>
   <div class="status">
-    <span class="userbox" id="userBox" style="display:none"><span class="uname" id="userName">—</span><span class="aff" id="userAff" style="display:none"></span><button class="unverified" id="unverifiedBadge" style="display:none" title="邮箱未验证 / Email unverified">邮箱未验证</button><button id="deleteAccountBtn">注销账户</button><button id="logoutBtn">退出</button></span>
+    <span class="userbox" id="userBox" style="display:none"><span class="uname" id="userName">—</span><span class="aff" id="userAff" style="display:none"></span><button class="unverified" id="unverifiedBadge" style="display:none" title="邮箱未验证 / Email unverified">邮箱未验证</button><button id="changePasswordBtn">修改密码</button><button id="deleteAccountBtn">注销账户</button><button id="logoutBtn">退出</button></span>
     <button class="hbtn book" id="manualBtn" data-tour="manual" title="使用说明书 / Manual">说明书</button>
     <button class="hbtn report" id="reportBtn" title="一键生成模拟报告 / Generate simulation report">📋 报告</button>
     <button class="hbtn" id="helpBtn">?</button>
@@ -947,11 +977,16 @@ function updateDelState(){const b=document.getElementById('delP');if(b)b.disable
 function showAuthWall(){
   const w=document.getElementById('authWall');if(!w)return;
   w.classList.add('on');
-  hideVerifyEmailPanel();
+  hideAuthPanels();
   setAuthMode(AUTH_MODE||'login');
   const e=document.getElementById('authEmail');if(e)setTimeout(()=>e.focus(),50);
 }
 function hideAuthWall(){document.getElementById('authWall').classList.remove('on');}
+function hideAuthPanels(){
+  ['verifyPanel','resetRequestPanel','resetPasswordPanel','changePasswordPanel'].forEach(id=>{const p=document.getElementById(id);if(p)p.classList.remove('on');});
+  const form=document.getElementById('authForm');if(form)form.style.display='';
+  ['vpMsg','rrMsg','rpMsg','cpMsg'].forEach(id=>{const m=document.getElementById(id);if(m){m.textContent='';m.className='vpMsg';}});
+}
 function guestIdentity(){return{user_id:'__guest__',user:'__guest__',email:null,email_verified:false,affiliation:null,is_admin:false};}
 function applyAuthState(me){
   const raw=me||{};
@@ -964,19 +999,21 @@ function applyAuthState(me){
   const badge=document.getElementById('unverifiedBadge');
   const logout=document.getElementById('logoutBtn');
   const delAccount=document.getElementById('deleteAccountBtn');
-  if(!user){if(box)box.style.display='none';if(badge)badge.style.display='none';if(aff)aff.style.display='none';if(delAccount)delAccount.style.display='none';updateHistoryControls();return;}
+  const changePass=document.getElementById('changePasswordBtn');
+  if(!user){if(box)box.style.display='none';if(badge)badge.style.display='none';if(aff)aff.style.display='none';if(delAccount)delAccount.style.display='none';if(changePass)changePass.style.display='none';updateHistoryControls();return;}
   if(box){box.style.display='inline-flex';box.classList.toggle('guest',isGuest);document.getElementById('userName').textContent=isGuest?L('访客 Guest','Guest'):user;box.title=[raw.email,raw.affiliation].filter(Boolean).join(' · ');}
   if(aff){
     const parts=[];if(raw.is_admin)parts.push('ADMIN');if(raw.affiliation)parts.push(raw.affiliation);
     aff.textContent=parts.join(' · ');aff.style.display=parts.length&&!isGuest?'':'none';
   }
   if(delAccount){delAccount.style.display=isGuest?'none':'';delAccount.textContent=L('注销账户','Delete account');delAccount.onclick=doDeleteAccount;}
+  if(changePass){changePass.style.display=isGuest?'none':'';changePass.textContent=L('修改密码','Change password');changePass.onclick=showChangePasswordPanel;}
   if(logout){logout.textContent=isGuest?L('登录','Login'):L('退出','Logout');logout.onclick=isGuest?()=>showAuthWall():doLogout;}
   const unverified=(raw.email_verified===false)&&!isGuest;
   if(badge){
     badge.style.display=unverified?'':'none';
-    badge.textContent=L('emailNotVerified','Email unverified');
-    badge.title=L('emailNotVerified','Email unverified');
+    badge.textContent=L('邮箱未验证','Email unverified');
+    badge.title=L('邮箱未验证','Email unverified');
     badge.onclick=unverified&&raw.email?()=>requestResend(raw.email):null;
   }
   updateHistoryControls();
@@ -1018,17 +1055,17 @@ function showVerifyEmailPanel(email){
   w.classList.add('on');
   const form=document.getElementById('authForm');if(form)form.style.display='none';
   const vp=document.getElementById('verifyPanel');if(vp){vp.classList.add('on');vp.dataset.email=email||'';}
-  const title=document.getElementById('vpTitle');if(title)title.textContent=L('verifyEmailPrompt','Check your inbox');
+  const title=document.getElementById('vpTitle');if(title)title.textContent=L('请查收验证邮件','Check your inbox');
   const sub=document.getElementById('vpSub');
   if(sub){
-    const tpl=L('verifyEmailSub','We sent a verification link to {{email}}. Click the link in the email to verify your address, then log in.');
+    const tpl=L('我们已向 {{email}} 发送一封验证邮件，请点击邮件中的链接完成验证后再登录。','We sent a verification link to {{email}}. Click the link in the email to verify your address, then log in.');
     const safe=(email||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
     sub.innerHTML=tpl.replace('{{email}}','<span class="vpEmail">'+safe+'</span>');
   }
   const msg=document.getElementById('vpMsg');if(msg){msg.textContent='';msg.className='vpMsg';}
   const resendBtn=document.getElementById('vpResend');
   if(resendBtn){
-    resendBtn.textContent=L('resendVerification','Resend verification email');
+    resendBtn.textContent=L('重新发送验证邮件','Resend verification email');
     resendBtn.disabled=false;
     resendBtn.onclick=()=>requestResend(email);
   }
@@ -1052,18 +1089,82 @@ async function requestResend(email){
       if(msg){msg.textContent=(data&&data.error)||L('发送失败，请稍后再试','Failed to send. Please try again later.');msg.className='vpMsg err';}
       return;
     }
-    if(msg){msg.textContent=L('resendSent','Verification email resent. Please check your inbox.');msg.className='vpMsg ok';}
+    if(msg){msg.textContent=L('验证邮件已重新发送，请查收。','Verification email resent. Please check your inbox.');msg.className='vpMsg ok';}
   }catch(e){
     if(msg){msg.textContent=(e&&e.message)||String(e);msg.className='vpMsg err';}
   }finally{
     if(resendBtn)resendBtn.disabled=false;
   }
 }
-function hideVerifyEmailPanel(){
-  const vp=document.getElementById('verifyPanel');if(!vp)return;
-  vp.classList.remove('on');
-  const form=document.getElementById('authForm');if(form)form.style.display='';
-  const msg=document.getElementById('vpMsg');if(msg){msg.textContent='';msg.className='vpMsg';}
+function hideVerifyEmailPanel(){hideAuthPanels();}
+function showResetRequestPanel(){
+  const w=document.getElementById('authWall');if(w)w.classList.add('on');
+  hideAuthPanels();
+  const form=document.getElementById('authForm');if(form)form.style.display='none';
+  const p=document.getElementById('resetRequestPanel');if(p)p.classList.add('on');
+  const e=document.getElementById('resetEmail');const authEmail=document.getElementById('authEmail');
+  if(e){e.value=(authEmail&&authEmail.value||'').trim();setTimeout(()=>e.focus(),50);}
+}
+async function requestPasswordReset(){
+  const email=(document.getElementById('resetEmail').value||'').trim();
+  const msg=document.getElementById('rrMsg');const btn=document.getElementById('rrSubmit');
+  if(!email){if(msg){msg.textContent=L('请输入邮箱','Please enter your email');msg.className='vpMsg err';}return;}
+  if(btn)btn.disabled=true;
+  try{
+    const r=await fetch('/api/auth/password/request-reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email}),credentials:'same-origin'});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok){throw new Error(data.error||'failed');}
+    if(msg){msg.textContent=L('如果该邮箱已注册，重置链接已发送，请查收邮件。','If that address is registered, a reset link has been sent.');msg.className='vpMsg ok';}
+  }catch(e){if(msg){msg.textContent=(e&&e.message)||String(e);msg.className='vpMsg err';}}
+  finally{if(btn)btn.disabled=false;}
+}
+function showResetPasswordPanel(token){
+  const w=document.getElementById('authWall');if(w)w.classList.add('on');
+  hideAuthPanels();
+  const form=document.getElementById('authForm');if(form)form.style.display='none';
+  const p=document.getElementById('resetPasswordPanel');if(p){p.classList.add('on');p.dataset.token=token||'';}
+  const pass=document.getElementById('resetPass');if(pass)setTimeout(()=>pass.focus(),50);
+}
+async function resetPasswordFromToken(){
+  const panel=document.getElementById('resetPasswordPanel');
+  const token=panel&&panel.dataset.token||'';
+  const password=document.getElementById('resetPass').value||'';
+  const password2=document.getElementById('resetPass2').value||'';
+  const msg=document.getElementById('rpMsg');const btn=document.getElementById('rpSubmit');
+  if(password!==password2){if(msg){msg.textContent=L('两次输入的密码不一致','Passwords do not match');msg.className='vpMsg err';}return;}
+  if(btn)btn.disabled=true;
+  try{
+    const r=await fetch('/api/auth/password/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,password,password2}),credentials:'same-origin'});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok){throw new Error(data.error||'failed');}
+    if(msg){msg.textContent=L('密码已更新，请使用新密码登录。','Password updated. Please log in with the new password.');msg.className='vpMsg ok';}
+    document.getElementById('resetPass').value='';document.getElementById('resetPass2').value='';
+    try{history.replaceState(null,'',location.pathname);}catch(e){}
+  }catch(e){if(msg){msg.textContent=(e&&e.message)||String(e);msg.className='vpMsg err';}}
+  finally{if(btn)btn.disabled=false;}
+}
+function showChangePasswordPanel(){
+  const w=document.getElementById('authWall');if(w)w.classList.add('on');
+  hideAuthPanels();
+  const form=document.getElementById('authForm');if(form)form.style.display='none';
+  const p=document.getElementById('changePasswordPanel');if(p)p.classList.add('on');
+  const old=document.getElementById('changePassOld');if(old)setTimeout(()=>old.focus(),50);
+}
+async function changePassword(){
+  const current_password=document.getElementById('changePassOld').value||'';
+  const password=document.getElementById('changePassNew').value||'';
+  const password2=document.getElementById('changePassNew2').value||'';
+  const msg=document.getElementById('cpMsg');const btn=document.getElementById('cpSubmit');
+  if(password!==password2){if(msg){msg.textContent=L('两次输入的密码不一致','Passwords do not match');msg.className='vpMsg err';}return;}
+  if(btn)btn.disabled=true;
+  try{
+    const r=await fetch('/api/auth/password/change',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_password,password,password2}),credentials:'same-origin'});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok){throw new Error(data.error||'failed');}
+    if(msg){msg.textContent=L('密码已更新。','Password updated.');msg.className='vpMsg ok';}
+    ['changePassOld','changePassNew','changePassNew2'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  }catch(e){if(msg){msg.textContent=(e&&e.message)||String(e);msg.className='vpMsg err';}}
+  finally{if(btn)btn.disabled=false;}
 }
 async function doAuth(){
   const isReg=AUTH_MODE==='register';
@@ -1302,6 +1403,8 @@ async function init(){
     AUTH_REQUIRED=!!meta.auth_required;
     GUEST_MODE=!!meta.guest_mode;
   }catch(e){AUTH_REQUIRED=false;GUEST_MODE=false;}
+  const resetToken=new URLSearchParams(location.search).get('reset_token');
+  if(resetToken){showResetPasswordPanel(resetToken);return;}
   if(AUTH_REQUIRED){
     let me=null;
     try{me=await jget('/api/auth/me');}catch(e){if(!GUEST_MODE){showAuthWall();return;}}
@@ -2881,8 +2984,16 @@ function bindOutputExplanations(box){box.querySelectorAll('[data-out]').forEach(
   el('atabLogin').onclick=()=>setAuthMode('login');
   el('atabReg').onclick=()=>setAuthMode('register');
   el('authSubmit').onclick=doAuth;
+  el('forgotPasswordBtn').onclick=showResetRequestPanel;
+  el('rrSubmit').onclick=requestPasswordReset;
+  el('rrBack').onclick=()=>{hideAuthPanels();setAuthMode('login');};
+  el('rpSubmit').onclick=resetPasswordFromToken;
+  el('rpBack').onclick=()=>{hideAuthPanels();setAuthMode('login');};
+  el('cpSubmit').onclick=changePassword;
+  el('cpBack').onclick=hideAuthWall;
   el('logoutBtn').onclick=doLogout;
   el('deleteAccountBtn').onclick=doDeleteAccount;
+  el('changePasswordBtn').onclick=showChangePasswordPanel;
   el('authPass').addEventListener('keydown',e=>{if(e.key==='Enter'){if(AUTH_MODE==='register'&&el('authPass2'))el('authPass2').focus();else doAuth();}});
   el('authPass2').addEventListener('keydown',e=>{if(e.key==='Enter'){if(AUTH_MODE==='register'&&el('authAff'))el('authAff').focus();else doAuth();}});
   el('authAff').addEventListener('keydown',e=>{if(e.key==='Enter')doAuth();});

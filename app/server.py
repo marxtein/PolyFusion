@@ -151,34 +151,33 @@ def _verify_email_page(title: str, heading: str, body: str) -> str:
 
 _VERIFY_EMAIL_HTML = {
     "success": _verify_email_page(
-        "邮箱验证 - PolyFusion",
+        "邮箱验证 - VSC",
         "邮箱验证成功",
-        "<p>您的邮箱已验证，现在可以登录 PolyFusion。</p>"
-        "<a class='btn' href='/'>返回 PolyFusion</a>",
+        "<p>您的邮箱已验证，现在可以登录 VSC。</p>"
+        "<a class='btn' href='/vsc/'>返回 VSC</a>",
     ),
     "already_verified": _verify_email_page(
-        "邮箱已验证 - PolyFusion",
+        "邮箱已验证 - VSC",
         "邮箱已验证",
-        "<p>该邮箱已通过验证，请直接登录。</p>"
-        "<a class='btn' href='/'>返回 PolyFusion</a>",
+        "<p>该邮箱已通过验证，请直接登录。</p><a class='btn' href='/vsc/'>返回 VSC</a>",
     ),
     "expired": _verify_email_page(
-        "链接已过期 - PolyFusion",
+        "链接已过期 - VSC",
         "验证链接已过期",
         "<p>请登录后在页面顶部点击“邮箱未验证”重新发送验证邮件。</p>"
-        "<a class='btn' href='/'>返回 PolyFusion</a>",
+        "<a class='btn' href='/vsc/'>返回 VSC</a>",
     ),
     "invalid": _verify_email_page(
-        "链接无效 - PolyFusion",
+        "链接无效 - VSC",
         "验证链接无效",
         "<p>该链接可能已失效或被替换，请重新发起验证。</p>"
-        "<a class='btn' href='/'>返回 PolyFusion</a>",
+        "<a class='btn' href='/vsc/'>返回 VSC</a>",
     ),
     "rate_limited": _verify_email_page(
-        "请求过多 - PolyFusion",
+        "请求过多 - VSC",
         "请稍后再试",
         "<p>您尝试过于频繁，请稍候再点击邮件中的链接。</p>"
-        "<a class='btn' href='/'>返回 PolyFusion</a>",
+        "<a class='btn' href='/vsc/'>返回 VSC</a>",
     ),
 }
 
@@ -681,6 +680,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._handle_auth_delete()
         if self.path == "/api/auth/resend":
             return self._handle_auth_resend(n)
+        if self.path == "/api/auth/password/request-reset":
+            return self._handle_auth_password_request_reset(n)
+        if self.path == "/api/auth/password/reset":
+            return self._handle_auth_password_reset(n)
+        if self.path == "/api/auth/password/change":
+            return self._handle_auth_password_change(n)
         if self.path == "/api/debug/auth/register":
             return self._handle_debug_auth_register(n)
 
@@ -1281,6 +1286,61 @@ class Handler(BaseHTTPRequestHandler):
             auth_mod.resend_verification(email)
         except AuthError as e:
             return self._send(400, json.dumps({"error": str(e)}))
+        return self._send(200, json.dumps({"ok": True}))
+
+    def _handle_auth_password_request_reset(self, n: int):
+        client_ip = _client_ip(self.headers)
+        if not _check_rate_limit(client_ip, _RATE_LIMIT_MAX, _RATE_LIMIT_WINDOW):
+            return self._send(429, json.dumps({"error": "rate limit exceeded"}))
+        try:
+            req = json.loads(self.rfile.read(n) or b"{}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+        email = (req.get("email") or "").strip()
+        try:
+            auth_mod.request_password_reset(email)
+        except AuthError as e:
+            return self._send(400, json.dumps({"error": str(e)}))
+        return self._send(200, json.dumps({"ok": True}))
+
+    def _handle_auth_password_reset(self, n: int):
+        client_ip = _client_ip(self.headers)
+        if not _check_rate_limit(client_ip, _RATE_LIMIT_MAX, _RATE_LIMIT_WINDOW):
+            return self._send(429, json.dumps({"error": "rate limit exceeded"}))
+        try:
+            req = json.loads(self.rfile.read(n) or b"{}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+        token = req.get("token") or ""
+        password = req.get("password") or ""
+        password2 = req.get("password2") or ""
+        try:
+            auth_mod.reset_password(token, password, password2)
+        except AuthError as e:
+            return self._send(400, json.dumps({"error": str(e)}))
+        return self._send(200, json.dumps({"ok": True}))
+
+    def _handle_auth_password_change(self, n: int):
+        client_ip = _client_ip(self.headers)
+        if not _check_rate_limit(client_ip, _RATE_LIMIT_MAX, _RATE_LIMIT_WINDOW):
+            return self._send(429, json.dumps({"error": "rate limit exceeded"}))
+        try:
+            req = json.loads(self.rfile.read(n) or b"{}")
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            return self._send(400, json.dumps({"error": f"bad json: {e}"}))
+        access = getattr(self, "_access_token", None) or auth_mod.parse_session_cookie(
+            self.headers.get("Cookie")
+        )
+        try:
+            auth_mod.change_password(
+                access,
+                req.get("current_password") or "",
+                req.get("password") or "",
+                req.get("password2") or "",
+            )
+        except AuthError as e:
+            status = 401 if str(e) == "unauthorized" else 400
+            return self._send(status, json.dumps({"error": str(e)}))
         return self._send(200, json.dumps({"ok": True}))
 
     def _handle_auth_verify_email(self):
