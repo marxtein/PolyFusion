@@ -268,11 +268,11 @@ def test_guest_mode_serves_bundled_equilibrium_with_query(guest_server):
 def test_guest_mode_serves_configuration_icon_asset(guest_server):
     status, payload, hdrs = _get_raw(
         guest_server,
-        "/assets/config-icons/tokamak.png",
+        "/assets/config-icons/tokamak.svg",
     )
     assert status == 200
-    assert payload.startswith(b"\x89PNG")
-    assert hdrs.get_content_type() == "image/png"
+    assert payload.startswith((b"<?xml", b"<svg"))
+    assert hdrs.get_content_type() == "image/svg+xml"
 
 
 def test_guest_mode_stellarator_equilibrium_preview_allowed(guest_server):

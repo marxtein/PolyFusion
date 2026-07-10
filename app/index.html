@@ -36,9 +36,10 @@
     border-bottom:1px solid var(--line2);background:var(--hdr-grad);backdrop-filter:blur(6px)}
   .brand .logo{font-weight:700;letter-spacing:.14em;font-size:16px;text-shadow:0 0 16px rgba(255,176,46,.35)}
   .brand .logo b{color:var(--amber)}
-  .brand .sub{font-size:10.5px;letter-spacing:.2em;color:var(--mut);text-transform:uppercase;margin-left:9px}
+  .brand .sub{display:inline-flex;flex-direction:column;gap:1px;vertical-align:middle;font-size:10.5px;line-height:1.05;letter-spacing:.2em;color:var(--mut);text-transform:uppercase;margin-left:9px}
+  .brand .sub span{display:block}
+  :root[lang="zh"] #subTitleEn,:root[lang="en"] #subTitleZh{display:none}
   .status{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:11px;color:var(--mut);letter-spacing:.07em}
-  .status .val{color:var(--fg)}
   .dot{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal);animation:pulse 2.4s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
   .hbtn{font-family:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;font-size:11px;letter-spacing:.06em;color:var(--mut);background:var(--panel2);
@@ -65,6 +66,8 @@
   .cfg:hover{color:var(--fg);background:var(--panel2)}
   .cfg .ic{width:34px;height:24px;flex:0 0 34px;opacity:.82;display:flex;align-items:center;justify-content:center}
   .cfg .ic img{width:100%;height:100%;object-fit:contain;display:block;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+  .cfg[data-c="frc"] .ic img{transform:scaleY(1.34) scaleX(1.12)}
+  .cfg[data-c="stellarator"] .ic img{transform:scaleY(1.2)}
   [data-theme="dark"] .cfg .ic img{filter:invert(1) drop-shadow(0 1px 1px rgba(0,0,0,.35))}
   .cfg.on{color:var(--btn-ink);background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:var(--amber);box-shadow:var(--glow);font-weight:700}
   .cfg.on .ic{opacity:.95}.cfg.on .ic img{filter:drop-shadow(0 1px 1px rgba(0,0,0,.25))}.cfg:nth-child(5){grid-column:1/-1}
@@ -139,6 +142,7 @@
   .grp.collapsed .kv{display:none}
   .kv{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;border-bottom:1px solid rgba(27,35,52,.5)}
   .kv .k{font-size:12.5px;color:var(--mut)}.kv .v{font-family:"JetBrains Mono";font-size:13px;color:var(--fg);font-weight:500}
+  .kv .expr{color:var(--dim);font-size:10.5px;margin-left:6px;font-family:"JetBrains Mono"}
   .kv .v .u{color:var(--dim);font-size:9.5px;margin-left:2px}
   .kv.hot .v{color:var(--amber)}.kv.cool .v{color:var(--teal)}.kv.warn .v{color:var(--red)}
   .exports{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
@@ -235,6 +239,7 @@
   .livebar .lb:last-child{border-right:0}
   .livebar .lb .k{font-size:10.5px;color:var(--dim);font-family:"JetBrains Mono",monospace}
   .livebar .lb .v{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--fg);font-weight:600}
+  .livebar .lb.meta .v{color:var(--amber)}
   .livebar .lb .u{font-size:9px;color:var(--dim)}
   .livebar .lb.hot .v{color:var(--amber)}
   .livebar .lb.cool .v{color:var(--teal)}
@@ -328,7 +333,6 @@
   html.mobile-layout body::before{position:absolute;min-height:100%}
   html.mobile-layout header{height:auto;min-height:52px;align-items:flex-start;flex-wrap:wrap;gap:8px 12px;padding:10px 12px}
   html.mobile-layout .status{margin-left:0;flex:1 1 100%;display:flex;gap:7px;overflow-x:auto;white-space:nowrap;padding-bottom:1px;letter-spacing:.03em;scrollbar-width:none}
-  html.mobile-layout .status>span:nth-child(1),html.mobile-layout .status>span:nth-child(2),html.mobile-layout .status>span:nth-child(3),html.mobile-layout .status>span:nth-child(4),html.mobile-layout .status>span:nth-child(5){display:none}
   html.mobile-layout .wrap{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;grid-template-areas:"input" "plot" "output";height:auto;min-height:0;overflow:visible}
   html.mobile-layout .col{overflow:visible}
   html.mobile-layout .left{grid-area:input;border:0;padding:12px}
@@ -346,7 +350,6 @@
     .brand{min-width:0;flex:1 1 210px}.brand .logo{font-size:15px;letter-spacing:.11em}.brand .sub{display:block;margin:2px 0 0;font-size:9px;letter-spacing:.14em}
     .status{margin-left:0;flex:1 1 100%;display:flex;gap:7px;overflow-x:auto;white-space:nowrap;padding-bottom:1px;letter-spacing:.03em;scrollbar-width:none}
     .status::-webkit-scrollbar,.livebar::-webkit-scrollbar,.quicknav::-webkit-scrollbar,.tabs::-webkit-scrollbar,.plotbar::-webkit-scrollbar{display:none}
-    .status>span:nth-child(1),.status>span:nth-child(2),.status>span:nth-child(3),.status>span:nth-child(4),.status>span:nth-child(5){display:none}
     .hbtn{min-height:36px;padding:7px 10px;font-size:11px;flex:0 0 auto}.userbox{min-height:36px;max-width:100%;flex:0 0 auto}
     .livebar{height:auto;min-height:34px;padding:8px 10px;font-size:11px;scrollbar-width:none}.livebar .lb-label{display:none}.livebar .lb{padding:0 9px}
     .wrap{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;grid-template-areas:"input" "plot" "output";height:auto;min-height:0;overflow:visible}.col{overflow:visible}.left{grid-area:input;border:0;padding:12px}.right{grid-area:output;border:0;border-top:1px solid var(--line);padding:12px}
@@ -381,16 +384,16 @@
     <p class="hint" id="authHint">扫描结果可生成分析报告，注册登录支持保存历史记录</p>
     <div id="authForm">
       <div class="tabs">
-        <div class="atab on" id="atabLogin">登录 Login</div>
-        <div class="atab" id="atabReg">注册 Register</div>
+        <div class="atab on" id="atabLogin">登录</div>
+        <div class="atab" id="atabReg">注册</div>
       </div>
-      <div class="fld" id="authUserWrap" style="display:none"><label>用户名 Username</label><input id="authUser" type="text" autocomplete="username"></div>
-      <div class="fld" id="authEmailWrap"><label>邮箱 Email</label><input id="authEmail" type="email" autocomplete="email" placeholder="邮箱 Email"></div>
-      <div class="fld" id="authAffWrap" style="display:none"><label>单位 Affiliation <span>(可选)</span></label><input id="authAff" list="affiliationOptions" type="text" autocomplete="organization" placeholder="ASIPP / 清华大学 / PPPL"><datalist id="affiliationOptions"><option value="ASIPP"><option value="SWIP"><option value="清华大学"><option value="北京大学"><option value="MIT"><option value="PPPL"></datalist></div>
-      <div class="fld"><label>密码 Password</label><input id="authPass" type="password" autocomplete="current-password"></div>
-      <div class="fld" id="authPass2Wrap" style="display:none"><label>确认密码 Confirm password</label><input id="authPass2" type="password" autocomplete="new-password" placeholder="确认密码 Confirm password"></div>
+      <div class="fld" id="authUserWrap" style="display:none"><label>用户名</label><input id="authUser" type="text" autocomplete="username"></div>
+      <div class="fld" id="authEmailWrap"><label>邮箱</label><input id="authEmail" type="email" autocomplete="email" placeholder="邮箱"></div>
+      <div class="fld" id="authAffWrap" style="display:none"><label>单位 <span>(可选)</span></label><input id="authAff" list="affiliationOptions" type="text" autocomplete="organization" placeholder="ASIPP / 清华大学 / PPPL"><datalist id="affiliationOptions"><option value="ASIPP"><option value="SWIP"><option value="清华大学"><option value="北京大学"><option value="MIT"><option value="PPPL"></datalist></div>
+      <div class="fld"><label>密码</label><input id="authPass" type="password" autocomplete="current-password"></div>
+      <div class="fld" id="authPass2Wrap" style="display:none"><label>确认密码</label><input id="authPass2" type="password" autocomplete="new-password" placeholder="确认密码"></div>
       <div class="authErr" id="authErr"></div>
-      <button class="submit" id="authSubmit">登录 Login</button>
+      <button class="submit" id="authSubmit">登录</button>
     </div>
     <div class="verifyPanel" id="verifyPanel">
       <div class="vpTitle" id="vpTitle">请查收验证邮件</div>
@@ -402,11 +405,8 @@
   </div>
 </div>
 <header>
-  <div class="brand"><span class="logo">V<b>SC</b></span><span class="sub" id="subTitle">veloalpha system code</span></div>
+  <div class="brand"><span class="logo">V<b>SC</b></span><span class="sub" id="subTitle"><span id="subTitleZh">多位形聚变装置零维系统设计台</span><span id="subTitleEn">Zero-D Multi-Configuration Fusion Device Design Console</span></span></div>
   <div class="status">
-    <span id="stCfgL">位形</span> <span class="val" id="stCfg">—</span>
-    <span id="stRxL">反应</span> <span class="val" id="stRx">—</span>
-    <span><span class="dot"></span> <span class="val">CORE ONLINE</span></span>
     <span class="userbox" id="userBox" style="display:none"><span class="uname" id="userName">—</span><span class="aff" id="userAff" style="display:none"></span><button class="unverified" id="unverifiedBadge" style="display:none" title="邮箱未验证 / Email unverified">邮箱未验证</button><button id="deleteAccountBtn">注销账户</button><button id="logoutBtn">退出</button></span>
     <button class="hbtn book" id="manualBtn" data-tour="manual" title="使用说明书 / Manual">说明书</button>
     <button class="hbtn report" id="reportBtn" title="一键生成模拟报告 / Generate simulation report">📋 报告</button>
@@ -418,6 +418,8 @@
 </header>
 <div class="livebar" id="livebar">
   <span class="lb-label">LIVE</span>
+  <span class="lb meta"><span class="k" id="stCfgL">位形</span><span class="v" id="stCfg">—</span></span>
+  <span class="lb meta"><span class="k" id="stRxL">反应</span><span class="v" id="stRx">—</span></span>
   <span class="lb empty" id="lbPfus"><span class="sym">P<sub>fus</sub></span><span class="v">—</span><span class="u">MW</span></span>
   <span class="lb empty" id="lbQ"><span class="sym">Q<sub>fus</sub></span><span class="v">—</span></span>
   <span class="lb empty" id="lbH98"><span class="sym">H<sub>98</sub></span><span class="v">—</span></span>
@@ -430,21 +432,21 @@
     <div class="col-title" data-t="inputTitle">输入参数</div>
     <div class="fold-actions"><button id="expandInputs" data-t="expandAll">全部展开</button><button id="collapseInputs" data-t="collapseAll">全部折叠</button></div>
     <div class="quicknav" id="quicknav">
-      <a data-jump="config">① 位形</a>
-      <a data-jump="preset">② 预设</a>
-      <a data-jump="params">③ 参数</a>
-      <a data-jump="window">④ 判据</a>
-      <a data-jump="scan">⑤ 扫描</a>
-      <a data-jump="contours">⑥ 等值线</a>
-      <a data-jump="results">⑦ 结果</a>
+      <a data-jump="config" data-t="navConfig">① 位形</a>
+      <a data-jump="preset" data-t="navPreset">② 预设</a>
+      <a data-jump="params" data-t="navParams">③ 参数</a>
+      <a data-jump="window" data-t="navWindow">④ 判据</a>
+      <a data-jump="scan" data-t="navScan">⑤ 扫描</a>
+      <a data-jump="contours" data-t="navContours">⑥ 等值线</a>
+      <a data-jump="results" data-t="navResults">⑦ 结果</a>
     </div>
-    <div class="sec" data-sec="config" data-tour="config"><p class="sec-t" data-t="config">位形 Configuration <span class="n" id="cfgN"></span></p><div id="configPick" class="configs"></div></div>
-    <div class="sec" data-sec="preset" data-tour="preset"><p class="sec-t" data-t="preset">机型预设 Preset</p><select id="preset"></select>
+    <div class="sec" data-sec="config" data-tour="config"><p class="sec-t" data-t="config">位形 <span class="n" id="cfgN"></span></p><div id="configPick" class="configs"></div></div>
+    <div class="sec" data-sec="preset" data-tour="preset"><p class="sec-t" data-t="preset">机型预设</p><select id="preset"></select>
       <div class="exports" style="margin-top:6px"><button id="saveAsP">★ 另存为预设</button><button id="delP" disabled>✕ 删除预设</button></div>
       <div id="eqQuick"></div></div>
-    <div class="sec collapsed" data-sec="params" data-tour="params"><p class="sec-t" data-t="params">参数 Parameters <span class="n" data-t="liveN">编辑即重算</span></p><div id="params"></div></div>
-    <div class="sec collapsed" data-sec="window"><p class="sec-t" data-t="window">最佳区判据 Operating Window</p><div id="thresh" class="scanbox"></div></div>
-    <div class="sec collapsed" data-sec="scan" data-tour="scan"><p class="sec-t" data-t="scan">POPCON 扫描轴 Scan Axes</p>
+    <div class="sec collapsed" data-sec="params" data-tour="params"><p class="sec-t" data-t="params">参数 <span class="n" data-t="liveN">编辑即重算</span></p><div id="params"></div></div>
+    <div class="sec collapsed" data-sec="window"><p class="sec-t" data-t="window">最佳区判据</p><div id="thresh" class="scanbox"></div></div>
+    <div class="sec collapsed" data-sec="scan" data-tour="scan"><p class="sec-t" data-t="scan">POPCON 扫描轴</p>
       <div class="scanbox">
         <div class="axis"><div class="hd"><span class="tag">X</span><span data-t="xax">横轴</span></div><select id="xkey"></select>
           <div class="row3"><div class="fld"><label>min</label><input id="xmin" type="number" step="any"></div>
@@ -465,8 +467,8 @@
   <div class="center">
     <div class="tabs">
       <div class="tab" data-v="popcon">POPCON</div>
-      <div class="tab on" data-v="shape" data-t="tabShape">几何/磁面 Geometry</div>
-      <div class="tab" data-v="profile" data-t="tabProf">剖面 Profiles</div>
+      <div class="tab on" data-v="shape" data-t="tabShape">几何/磁面</div>
+      <div class="tab" data-v="profile" data-t="tabProf">剖面</div>
     </div>
     <div class="plotbar"><span id="plotTitle">—</span><div class="chip" id="plotMeta"></div><span class="phsel" id="phControls"></span></div>
     <div id="plot"></div>
@@ -474,27 +476,27 @@
   <div class="col right">
     <div class="col-title" data-t="scanTitle">扫描结果</div>
     <div class="fold-actions"><button id="expandOutputs" data-t="expandAll">全部展开</button><button id="collapseOutputs" data-t="collapseAll">全部折叠</button></div>
-    <div class="sec no-collapse" data-sec="results" data-tour="results"><p class="sec-t" data-t="opPoint">工作点 Operating Point <span class="badge" id="caseBadge"></span></p>
+    <div class="sec no-collapse" data-sec="results" data-tour="results"><p class="sec-t" data-t="opPoint">工作点 <span class="badge" id="caseBadge"></span></p>
       <div id="results"></div>
-      <div class="sec contour-sec" data-sec="contours"><p class="sec-t" data-t="contours">显示等值线 Contours</p><div id="plotOpts" class="opts"></div></div>
-      <div class="exports">
-        <button id="expScan" data-t="expScan">⬇ 保存扫描结果</button>
-        <button id="expPng" data-t="expPng">⬇ 保存扫描图像</button>
-        <button id="saveHist" class="auth-only" title="登录后可保存到云端扫描历史">存入扫描历史</button><button id="openHist" class="auth-only" title="登录后查看云端历史记录">查看历史记录</button>
-        <button id="genReport" data-t="genReport" style="grid-column:1/-1;background:var(--amber);color:var(--btn-ink);border-color:var(--amber);font-weight:700">📋 生成完整报告</button>
-      </div>
-      <input id="fileIn" type="file" accept=".json" style="display:none">
-      <input id="equilibriumFileIn" type="file" accept=".nc,.h5,.hdf5" style="display:none">
     </div>
+    <div class="sec contour-sec" data-sec="contours" data-tour="contours"><p class="sec-t" data-t="contours">显示等值线</p><div id="plotOpts" class="opts"></div></div>
+    <div class="exports">
+      <button id="expScan" data-t="expScan">⬇ 保存扫描结果</button>
+      <button id="expPng" data-t="expPng">⬇ 保存扫描图像</button>
+      <button id="saveHist" class="auth-only" data-t="saveHist" title="登录后可保存到云端扫描历史">存入扫描历史</button><button id="openHist" class="auth-only" data-t="openHist" title="登录后查看云端历史记录">查看历史记录</button>
+      <button id="genReport" data-t="genReport" style="grid-column:1/-1;background:var(--amber);color:var(--btn-ink);border-color:var(--amber);font-weight:700">📋 生成完整报告</button>
+    </div>
+    <input id="fileIn" type="file" accept=".json" style="display:none">
+    <input id="equilibriumFileIn" type="file" accept=".nc,.h5,.hdf5" style="display:none">
   </div>
 </div>
 <div class="modal" id="help"><div class="box"><span class="x" id="helpX">×</span><div id="helpBody"></div></div></div>
 <aside id="manualPanel">
-  <div class="mp-head"><h3 id="mpTitle">说明书 Manual</h3><span class="x" id="mpX">×</span></div>
+  <div class="mp-head"><h3 id="mpTitle" data-t="manualTitle">说明书</h3><span class="x" id="mpX">×</span></div>
   <div class="mp-body" id="mpBody"><div class="mp-empty">加载中…</div></div>
   <div class="mp-foot">
-    <button id="mpRefresh">刷新 Refresh</button>
-    <button id="mpExport">导出 HTML Export</button>
+    <button id="mpRefresh" data-t="refresh">刷新</button>
+    <button id="mpExport" data-t="exportHtml">导出 HTML</button>
   </div>
 </aside>
 <div id="tour" aria-live="polite">
@@ -503,9 +505,9 @@
   <div class="tour-card" id="tourCard"></div>
 </div>
 <aside id="historyPanel">
-  <div class="hp-head"><h3 id="histTitle">计算历史 History</h3><span class="x" id="histX">×</span></div>
+  <div class="hp-head"><h3 id="histTitle">扫描历史</h3><span class="x" id="histX">×</span></div>
   <div class="hp-body" id="histBody"><div class="hist-empty">登录后可保存和载入云端历史。</div></div>
-  <div class="hp-foot"><button id="histRefresh">刷新 Refresh</button><button id="histClose">关闭 Close</button></div>
+  <div class="hp-foot"><button id="histRefresh">刷新</button><button id="histClose">关闭</button></div>
 </aside>
 <script>
 const COLORS=['#ffb02e','#36e2c4','#ff5d73','#7aa2ff','#c792ff','#9be564','#ffd166','#5ad1ff'];
@@ -584,8 +586,9 @@ const PR={Pfus:'P<sub>fus</sub>',Pheat:'P<sub>heat</sub>',Pbrem:'P<sub>brem</sub
 const pk=k=>PR[k]?`<span class="sym">${PR[k]}</span>`:k;
 const chipLab=s=>{const u=(s.label.match(/\[[^\]]+\]/)||[''])[0];return (PR[s.f]?`<span class="sym">${PR[s.f]}</span>`:s.f)+(u?' '+u:'');};
 const GROUPS=[['rx','反应','Reaction'],['geo','几何','Geometry'],['prof','剖面','Profile'],['plasma','等离子体','Plasma'],['field','场·电流','Field·Current'],['fuel','燃料·杂质','Fuel·Impurity'],['conf','约束·修正','Confinement·Factors']];
-const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Eth:'MJ',Eth_e:'MJ',Pwall:'MW/m²',Vp:'m³',Sp:'m²',Sw:'m²',A_flux:'m²',a_vol:'m',C_sec_mean:'m',C_wall_mean:'m',Vp_geom:'m³',Sp_geom:'m²',Sw_geom:'m²',ne0:'m⁻³',ni0:'m⁻³',tau_m:'s',tauC_eff:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',ntau:'s/m³',P_line:'MW',tau_eta:'s',Te0:'keV',tauE_used:'s',P_LH:'MW',tau_ITPA20:'s',tau_classical:'s',tau_Bohm:'s',
-  PL_ISS04:'MW',Te_line_geom:'keV',Ti_line_geom:'keV',n_Sudo:'m⁻³',nbar_geom:'m⁻³',shaf_shift:'m'};
+const UNIT={Pfus:'MW',Pheat:'MW',Pbrem:'MW',Pcycl:'MW',Pn:'MW',Ptrans:'MW',Pth:'MW',Eth:'MJ',Eth_e:'MJ',Pwall:'MW/m²',P_end_flux:'MW/m²',P_coll_flux:'MW/m²',P_alpha_loss:'MW',Vp:'m³',Sp:'m²',Sw:'m²',A_flux:'m²',a_vol:'m',C_sec_mean:'m',C_wall_mean:'m',Vp_geom:'m³',Sp_geom:'m²',Sw_geom:'m²',ne0:'m⁻³',ni0:'m⁻³',nbar:'m⁻³',tau_m:'s',tauC_eff:'s',tau_Past:'s',tau_gd:'s',tau_rho:'s',tau_E:'s',tau_ISS04:'s',phi_i:'keV',phi_e:'keV',B0:'T',B_int:'T',B_in:'T',B_out:'T',L_ax:'m',L_in:'m',A_throat:'m²',flux_p:'Wb',lambda_ii:'m',ntau:'s/m³',P_line:'MW',tau_eta:'s',Te0:'keV',tauE_used:'s',P_LH:'MW',tau_ITPA20:'s',tau_classical:'s',tau_Bohm:'s',
+  PL_ISS04:'MW',Te_line_geom:'keV',Ti_line_geom:'keV',n_Sudo:'m⁻³',nbar_geom:'m⁻³',shaf_shift:'m',etabar:'m⁻¹'};
+const OUT_EXPR={Qfus:['P_fus/P_heat','P_fus/P_heat'],Qfus_raw:['P_fus/P_heat(raw)','P_fus/P_heat(raw)'],H98:['τ_E/τ_IPB98(y,2)','τ_E/τ_IPB98(y,2)'],HST:['τ_E/τ_ST','τ_E/τ_ST'],H_ITPA20:['τ_E/τ_ITPA20','τ_E/τ_ITPA20'],H_ISS04:['τ_E/τ_ISS04','τ_E/τ_ISS04'],betaT:['2μ₀p/B_T²','2μ₀p/B_T²'],betaN:['β_T aB_T/I_p','β_T aB_T/I_p'],beta:['2μ₀p/B²','2μ₀p/B²'],beta_avg:['⟨2μ₀p/B²⟩','⟨2μ₀p/B²⟩'],beta_null:['β at field null','β at field null'],beta_o_limit:['β/β_limit','β/β_limit'],beta_soft_limit:['β_soft','β_soft'],betap:['2μ₀p/B_p²','2μ₀p/B_p²'],q:['安全因子 q','safety factor q'],iota:['旋转变换 ι','rotational transform ι'],nbar_o_nGw:['n̄/n_Gw','n̄/n_Gw'],nbar_o_Sudo:['n̄/n_Sudo','n̄/n_Sudo'],nbar_geom_o_nbar:['n̄_geom/n̄','n̄_geom/n̄'],x_s:['r_s/a','r_s/a'],s_param:['磁镜稳定参数 s','mirror stability parameter s'],s_over_E:['s/E','s/E'],elongation:['b/a','b/a'],R_mc:['R_mirror,crit','R_mirror,crit'],iota_geom:['ι_geom','ι_geom'],K_rr:['压力曲率稳定因子 K','pressure-curvature stability factor K'],beta_in:['2μ₀p/B_in²','2μ₀p/B_in²'],beta_out:['2μ₀p/B_out²','2μ₀p/B_out²'],U_ratio:['U_out/U_in','U_out/U_in'],p_slope:['dlnp/dlnL','dlnp/dlnL'],Past_domain:['P_ast 在定义域内','P_ast in valid domain'],LH_ratio:['P_sep/P_LH','P_sep/P_LH'],a_over_rhoi:['a/ρ_i','a/ρ_i'],aspect_geom:['R/a_geom','R/a_geom'],aspect_vol:['R/a_vol','R/a_vol'],geom_volume_ratio:['V_p/V_geom','V_p/V_geom'],geom_wall_ratio:['S_w/S_w,geom','S_w/S_w,geom'],cyclotron_B25_factor:['⟨B²·⁵⟩/B₀²·⁵','⟨B²·⁵⟩/B₀²·⁵'],fnavg:['n̄/n₀','n̄/n₀'],fTavg:['T̄/T₀','T̄/T₀'],fpavg:['p̄/p₀','p̄/p₀'],Zeff:['Σn_jZ_j²/n_e','Σn_jZ_j²/n_e'],M:['平均离子质量数','mean ion mass number'],G1:['几何因子 G₁','geometry factor G₁'],G2:['几何因子 G₂','geometry factor G₂'],GB:['B 几何因子','B geometry factor'],GB25:['B²·⁵ 几何因子','B²·⁵ geometry factor'],p_shape:['剖面形状因子','profile shape factor'],f_shape_calc:['V/(πr_s²l_s)','V/(πr_s²l_s)'],geom_weighted:['几何加权开关','geometry weighting flag'],sep_model:['分离面模型编号','separatrix model id'],m_shape:['形状指数 m','shape exponent m'],coll_ratio:['λ_ii/R_L','λ_ii/R_L'],kappa_eff:['b/a','b/a'],elong_max:['max(b/a)','max(b/a)'],helicity:['螺旋谐波指标','helical harmonic index'],N_fp:['场周期数','field periods'],f_alpha_used:['α 沉积份额','alpha deposition fraction'],nu_eff_ang:['有效碰撞频率角因子','effective angular collisionality'],Sn_sugg:['Angioni 密度峰化建议','Angioni density peaking suggestion'],tauN_o_taueta:['τ_N/τ_η','τ_N/τ_η'],ring_model:['环模型编号','ring model id'],valid:['有效点标志','valid-point flag'],ignited:['点火标志','ignition flag']};
 const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','Pth','Ptrans','Pwall','P_end_flux','P_coll_flux','P_alpha_loss','Eth','Eth_e']],
   ['增益约束 Gain·Confinement',['Qfus','Qfus_raw','ignited','H98','HST','H_ITPA20','H_ISS04','tau_m','tauC_eff','tau_Past','tau_gd','tau_rho','tau_E','tau_ISS04','tau_ITPA20','tauE_used','taue_mode','tau_eta','tauN_o_taueta','tau_classical','tau_Bohm','ntau','PL_ISS04']],
   ['稳定极限 Stability·Limits',['betaT','betaN','beta','beta_avg','beta_null','beta_o_limit','beta_soft_limit','betap','q','iota','nbar_o_nGw','nbar_o_Sudo','nbar_geom_o_nbar','x_s','s_param','elongation','R_mc','iota_geom','K_rr','beta_in','beta_out','U_ratio','p_slope','Past_domain','P_LH','LH_ratio','a_over_rhoi']],
@@ -593,18 +596,22 @@ const RGRP=[['功率 Power',['Pfus','Pn','Pheat','Pbrem','Pcycl','P_line','Pth',
   ['等离子体 Plasma',['ne0','ni0','nbar','n_Sudo','Vp','Sp','Sw','Zeff','M','B0','B_int','B_in','B_out','phi_i','phi_e','L_ax','L_in','A_throat','flux_p','G1','G2','GB','GB25','p_shape','f_shape_calc','geom_weighted','sep_model','m_shape','lambda_ii','coll_ratio','kappa_eff','elong_max','helicity','N_fp','Te0','f_alpha_used','nu_eff_ang','Sn_sugg','etabar','ring_model','valid']]];
 const HOT=new Set(['Pfus','Qfus','H_ISS04','H98']),COOL=new Set(['tau_m','tau_E','tau_ISS04','ntau','beta','beta_ring','betaT']),WARN=new Set(['nbar_o_nGw','nbar_o_Sudo','nbar_geom_o_nbar','beta_o_limit','beta_soft_limit']);
 const CONFIG_ICON={tokamak:'/assets/config-icons/tokamak.svg',mirror:'/assets/config-icons/mirror.svg',frc:'/assets/config-icons/frc.svg',dipole:'/assets/config-icons/dipole.svg',stellarator:'/assets/config-icons/stellarator.svg'};
-const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'参数 Parameters',liveN:'编辑即重算',window:'最佳区判据 Operating Window',
-  contours:'显示等值线 Contours',scan:'POPCON 扫描轴 Scan Axes',xax:'横轴',yax:'纵轴',runBtn:'▶ 运行 POPCON 扫描',
-  opPoint:'工作点 Operating Point',inputTitle:'输入参数',scanTitle:'扫描结果',expandAll:'全部展开',collapseAll:'全部折叠',saveP:'⬇ 保存输入参数',loadP:'⬆ 加载历史参数',expScan:'⬇ 保存扫描结果',expPng:'⬇ 保存扫描图像',
-  tabShape:'几何/磁面 Geometry',tabProf:'剖面 Profiles',sub:'多位形聚变装置零维系统设计台',cfgL:'位形',rxL:'反应',
-  emailInvalid:'请输入有效的邮箱地址',emailRequired:'请输入邮箱',confirmPassword:'确认密码 Confirm password',passwordMismatch:'两次输入的密码不一致',registerFailed:'注册失败，用户名或邮箱可能已被使用',
+const T={zh:{config:'位形',preset:'机型预设',params:'参数',liveN:'编辑即重算',window:'最佳区判据',
+  contours:'显示等值线',scan:'POPCON 扫描轴',xax:'横轴',yax:'纵轴',runBtn:'▶ 运行 POPCON 扫描',
+  opPoint:'工作点',inputTitle:'输入参数',scanTitle:'扫描结果',expandAll:'全部展开',collapseAll:'全部折叠',saveP:'⬇ 保存输入参数',loadP:'⬆ 加载历史参数',expScan:'⬇ 保存扫描结果',expPng:'⬇ 保存扫描图像',
+  tabShape:'几何/磁面',tabProf:'剖面',sub:'多位形聚变装置零维系统设计台',cfgL:'位形',rxL:'反应',
+  navConfig:'① 位形',navPreset:'② 预设',navParams:'③ 参数',navWindow:'④ 判据',navScan:'⑤ 扫描',navContours:'⑥ 等值线',navResults:'⑦ 结果',
+  saveHist:'存入扫描历史',openHist:'查看历史记录',manualTitle:'说明书',refresh:'刷新',exportHtml:'导出 HTML',histTitle:'扫描历史',close:'关闭',
+  emailInvalid:'请输入有效的邮箱地址',emailRequired:'请输入邮箱',confirmPassword:'确认密码',passwordMismatch:'两次输入的密码不一致',registerFailed:'注册失败，用户名或邮箱可能已被使用',
   verifyEmailPrompt:'请查收验证邮件',verifyEmailSub:'我们已向 {{email}} 发送一封验证邮件，请点击邮件中的链接完成验证后再登录。',
   emailNotVerified:'邮箱未验证',resendVerification:'重新发送验证邮件',resendSent:'验证邮件已重新发送，请查收。',rateLimited:'请求过于频繁，请稍后再试。',
   help:'<h3>VSC 新手说明</h3><p><b>它做什么：</b>VSC（veloalpha system code）用 0-D 功率平衡快速比较不同聚变位形的工作点和 POPCON 扫描窗口，适合做早期筛选，不等同于工程设计定案。</p><ol><li><b>选位形与预设</b>：先用内置机型理解典型参数范围。</li><li><b>看输入参数</b>：在输入参数栏中，将光标停留在输入框可查看该输入参数说明。</li><li><b>先读关键输出</b>：优先看 P_fus、Q、P_heat、P_wall、密度/β/安全因子等限制。</li><li><b>再做 POPCON 扫描</b>：选择两个变量作为横纵轴，观察哪些区域满足最佳区判据。</li><li><b>保存与报告</b>：可保存扫描历史、导出图像/数据，并生成含 AI 解读的完整报告。</li></ol><p><b>结果怎么看：</b>通过最佳区不代表可建堆；不通过通常提示需要调整密度、温度、磁场、几何或约束假设。</p><button class="help-tour" data-tour-start>开始 1 分钟新手向导</button><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
  en:{config:'Configuration',preset:'Preset',params:'Parameters',liveN:'live recompute',window:'Operating Window',
-  contours:'Contours shown',scan:'POPCON Scan Axes',xax:'X axis',yax:'Y axis',runBtn:'▶ Run POPCON Scan',
+  contours:'Contours',scan:'POPCON Scan Axes',xax:'X axis',yax:'Y axis',runBtn:'▶ Run POPCON Scan',
   opPoint:'Operating Point',inputTitle:'Input Parameters',scanTitle:'Scan Results',expandAll:'Expand All',collapseAll:'Collapse All',saveP:'⬇ Save Input Params',loadP:'⬆ Load Historical Params',expScan:'⬇ Save Scan Results',expPng:'⬇ Save Scan Image',
   tabShape:'Geometry/Flux',tabProf:'Profiles',sub:'Zero-D Multi-Configuration Fusion Device Design Console',cfgL:'CONFIG',rxL:'FUEL',
+  navConfig:'① Configuration',navPreset:'② Preset',navParams:'③ Parameters',navWindow:'④ Window',navScan:'⑤ Scan',navContours:'⑥ Contours',navResults:'⑦ Results',
+  saveHist:'Save scan history',openHist:'View history',manualTitle:'Manual',refresh:'Refresh',exportHtml:'Export HTML',histTitle:'Scan History',close:'Close',
   emailInvalid:'Please enter a valid email address',emailRequired:'Please enter your email',confirmPassword:'Confirm password',passwordMismatch:'Passwords do not match',registerFailed:'Registration failed. Username or email may already be in use.',
   verifyEmailPrompt:'Check your inbox',verifyEmailSub:'We sent a verification link to {{email}}. Click the link in the email to verify your address, then log in.',
   emailNotVerified:'Email unverified',resendVerification:'Resend verification email',resendSent:'Verification email resent. Please check your inbox.',rateLimited:'Too many requests. Please try again later.',
@@ -993,9 +1000,18 @@ function setAuthMode(mode){
   if(pass2Wrap)pass2Wrap.style.display=mode==='register'?'':'none';
   if(pass)pass.setAttribute('autocomplete',mode==='login'?'current-password':'new-password');
   if(pass2)pass2.setAttribute('autocomplete','new-password');
+  document.getElementById('atabLogin').textContent=L('登录','Login');
+  document.getElementById('atabReg').textContent=L('注册','Register');
+  document.querySelector('#authUserWrap label').textContent=L('用户名','Username');
+  document.querySelector('#authEmailWrap label').textContent=L('邮箱','Email');
+  document.getElementById('authEmail').placeholder=L('邮箱','Email');
+  document.querySelector('#authAffWrap label').innerHTML=L('单位 <span>(可选)</span>','Affiliation <span>(optional)</span>');
+  document.querySelector('#authPass').closest('.fld').querySelector('label').textContent=L('密码','Password');
+  document.querySelector('#authPass2Wrap label').textContent=T[LANG].confirmPassword;
+  document.getElementById('authPass2').placeholder=T[LANG].confirmPassword;
   document.getElementById('authErr').textContent='';
-  if(mode==='login'){btn.textContent=L('登录 Login','Login');hint.textContent=L('扫描结果可生成分析报告，注册登录支持保存历史记录','Generate analysis reports from scan results; sign in to save history');}
-  else{btn.textContent=L('注册 Register','Register');hint.textContent=L('扫描结果可生成分析报告，注册登录支持保存历史记录','Generate analysis reports from scan results; sign in to save history');}
+  if(mode==='login'){btn.textContent=L('登录','Login');hint.textContent=L('扫描结果可生成分析报告，注册登录支持保存历史记录','Generate analysis reports from scan results; sign in to save history');}
+  else{btn.textContent=L('注册','Register');hint.textContent=L('扫描结果可生成分析报告，注册登录支持保存历史记录','Generate analysis reports from scan results; sign in to save history');}
 }
 function showVerifyEmailPanel(email){
   const w=document.getElementById('authWall');if(!w)return;
@@ -1358,19 +1374,21 @@ function applyLang(){
   document.querySelectorAll('[data-t]').forEach(e=>{const k=e.dataset.t;if(T[LANG][k])e.firstChild&&e.childNodes[0].nodeType===3?e.childNodes[0].textContent=T[LANG][k]+' ':e.textContent=T[LANG][k];});
   // simpler: set known elements
   const set=(id,txt)=>{const e=document.getElementById(id);if(e)e.textContent=txt;};
-  document.getElementById('subTitle').textContent=T[LANG].sub;
+  document.getElementById('subTitleZh').textContent=T.zh.sub;
+  document.getElementById('subTitleEn').textContent=T.en.sub;
   document.getElementById('stCfgL').textContent=T[LANG].cfgL;document.getElementById('stRxL').textContent=T[LANG].rxL;
   document.querySelectorAll('.sec-t[data-t]').forEach(e=>{const n=e.querySelector('.n');e.childNodes[0].textContent=T[LANG][e.dataset.t]+' ';if(n&&e.dataset.t==='params')n.textContent=T[LANG].liveN;});
   document.querySelectorAll('[data-t]').forEach(e=>{if(e.classList.contains('sec-t'))return;const k=e.dataset.t;if(T[LANG][k]&&!e.querySelector('*'))e.textContent=T[LANG][k];});
   run.textContent=T[LANG].runBtn;
   document.getElementById('saveAsP').textContent='★ '+L('另存为预设','Save preset');
   document.getElementById('delP').textContent='✕ '+L('删除预设','Delete preset');
-  document.getElementById('saveHist').textContent=L('存入扫描历史','Save scan history');
-  document.getElementById('openHist').textContent=L('查看历史记录','View history');
-  document.getElementById('histTitle').textContent=L('扫描历史 Scan History','Scan History');
-  document.getElementById('histRefresh').textContent=L('刷新 Refresh','Refresh');
-  document.getElementById('histClose').textContent=L('关闭 Close','Close');
+  document.getElementById('saveHist').textContent=T[LANG].saveHist;
+  document.getElementById('openHist').textContent=T[LANG].openHist;
+  document.getElementById('histTitle').textContent=T[LANG].histTitle;
+  document.getElementById('histRefresh').textContent=T[LANG].refresh;
+  document.getElementById('histClose').textContent=T[LANG].close;
   document.getElementById('helpBody').innerHTML=T[LANG].help;
+  setAuthMode(AUTH_MODE||'login');
   updateHistoryControls();
 }
 let TOUR_STEP=0;
@@ -1380,6 +1398,7 @@ const TOUR_STEPS=[
   {target:'params',zh:['第三步：理解输入参数','输入参数栏按几何、等离子体、燃料和约束分组。把光标停在输入框上，可查看该参数的物理含义和注意事项。'],en:['Step 3: Understand inputs','The input panel groups geometry, plasma, fuel and confinement fields. Focus a field to keep its explanation visible.']},
   {target:'scan',zh:['第四步：运行 POPCON 扫描','选择两个变量作为 X/Y 轴，设置最佳区判据后运行扫描。满足判据的区域是候选窗口，不代表工程已经可行。'],en:['Step 4: Run a POPCON scan','Choose two variables as X/Y axes, set operating-window criteria, then run the scan. Passing regions are candidate windows, not proof of engineering viability.']},
   {target:'results',zh:['第五步：先读关键输出','右侧输出参数栏优先看 P_fus、Q、P_heat、P_wall 以及密度、β、安全因子等限制。点击变量名可查看输出含义。'],en:['Step 5: Read key outputs','In the output panel, start from P_fus, Q, P_heat, P_wall and density/beta/safety-factor limits. Click a variable name for its meaning.']},
+  {target:'contours',zh:['第六步：选择显示等值线','在“显示等值线”中勾选要叠加到 POPCON 图上的物理约束线，用来快速判断候选窗口受哪些限制影响。'],en:['Step 6: Choose contour overlays','Use Contours to select which physics constraint lines are overlaid on the POPCON plot, so you can see what limits each candidate window.']},
   {target:'manual',zh:['继续学习：打开说明书与报告','说明书提供当前位形的详细输入/输出解释；完整报告可汇总算例、图像和 AI 分析，适合保存复查。'],en:['Keep learning: manual and reports','The manual explains current inputs/outputs in detail. Full reports bundle the case, figures and AI interpretation for later review.']},
 ];
 function tourCopy(step){const t=LANG==='zh'?step.zh:step.en;return {title:t[0],body:t[1]};}
@@ -2743,7 +2762,7 @@ async function loadManual(force){
   body.innerHTML='<div class="mp-empty">加载中…</div>';
   try{
     const m=await fetchManualData(force);
-    document.getElementById('mpTitle').textContent=m.title||'说明书 Manual';
+    document.getElementById('mpTitle').textContent=m.title||T[LANG].manualTitle;
     body.innerHTML=renderManualBody(m);
   }catch(e){body.innerHTML=`<div class="mp-empty">${esc(e.message||e)}</div>`;}
 }
@@ -2797,7 +2816,12 @@ function bindScanAxisExplanations(){
     inputs.forEach(el=>{el.dataset.docParam=sel.value;bindDocExplanation(el,()=>sel.value);});
   });
 }
-function outputKeyHtml(k){return `<span class="k out-help" role="button" tabindex="0" data-out="${esc(k)}" title="${L('点击查看输出解释','click for output explanation')}">${pk(k)}</span>`;}
+function outExpr(k){const e=OUT_EXPR[k];return e?L(e[0],e[1]):'';}
+function outputKeyHtml(k){
+  const expr=outExpr(k),unit=UNIT[k]||'';
+  const title=[L('点击查看输出解释','click for output explanation'),expr&&L(`无量纲表达式：${expr}`,`dimensionless expression: ${expr}`),unit&&L(`单位：${unit}`,`unit: ${unit}`)].filter(Boolean).join(' · ');
+  return `<span class="k out-help" role="button" tabindex="0" data-out="${esc(k)}" title="${esc(title)}">${pk(k)}${expr?`<span class="expr">= ${esc(expr)}</span>`:''}</span>`;
+}
 function outputHelpPop(){
   let pop=document.getElementById('explainPop');
   if(!pop){pop=document.createElement('div');pop.id='explainPop';pop.className='explain-pop';document.body.appendChild(pop);}

@@ -1,4 +1,4 @@
-"""Minimal local web server for the PolyFusion (option A, confirmed stack).
+"""Minimal local web server for VSC (option A, confirmed stack).
 
 Stdlib only (no Flask): serves a single Plotly page and exposes the
 config-agnostic compute core over a narrow JSON API.  Works for every
@@ -464,7 +464,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, json.dumps({"error": "vendor asset not found"}))
         if self.path.startswith("/assets/config-icons/"):
             name = os.path.basename(unquote(self.path))
-            if not name.endswith((".png", ".svg")):
+            if not name.endswith(".svg"):
                 return self._send(404, json.dumps({"error": "asset not found"}))
             fpath = os.path.join(HERE, "assets", "config-icons", name)
             if os.path.isfile(fpath):
