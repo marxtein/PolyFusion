@@ -538,20 +538,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         self._begin_request()
-        if self.path in ("/", "/index.html"):
+        _path_only = urlparse(self.path).path
+        if _path_only in ("/", "/index.html"):
             return self._send_file(
                 os.path.join(HERE, "index.html"),
                 "text/html; charset=utf-8",
                 cache_control="no-cache",
             )
-        if self.path.startswith("/vendor/"):
-            name = os.path.basename(unquote(self.path))
+        if _path_only.startswith("/vendor/"):
+            name = os.path.basename(unquote(_path_only))
             fpath = os.path.join(HERE, "vendor", name)
             if os.path.isfile(fpath):
                 return self._send_file(fpath)
             return self._send(404, json.dumps({"error": "vendor asset not found"}))
-        if self.path.startswith("/assets/config-icons/"):
-            name = os.path.basename(unquote(self.path))
+        if _path_only.startswith("/assets/config-icons/"):
+            name = os.path.basename(unquote(_path_only))
             if not name.endswith(".svg"):
                 return self._send(404, json.dumps({"error": "asset not found"}))
             fpath = os.path.join(HERE, "assets", "config-icons", name)
@@ -624,10 +625,6 @@ class Handler(BaseHTTPRequestHandler):
                     }
                 ),
             )
-        # Strip the query string before matching — GET /api/history?limit=...
-        # arrives here as a single ``self.path`` and would otherwise miss an
-        # equality check against the bare path.
-        _path_only = urlparse(self.path).path
         if _path_only == "/api/history" or _path_only.startswith("/api/history/"):
             return self._handle_history_get()
         if _path_only == "/api/admin/stats":

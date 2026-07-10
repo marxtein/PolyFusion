@@ -191,6 +191,14 @@ def test_meta_reports_guest_mode_off(strict_server):
     assert payload["guest_mode"] is False
 
 
+def test_index_allows_reset_token_query(guest_server):
+    status, body, hdrs = _get(guest_server, "/?reset_token=smoke")
+    assert status == 200
+    assert isinstance(body, str)
+    assert "resetPasswordPanel" in body
+    assert "text/html" in hdrs.get("Content-Type", "")
+
+
 def test_guest_mode_me_returns_guest_identity(guest_server):
     status, payload, _ = _get(guest_server, "/api/auth/me")
     assert status == 200
