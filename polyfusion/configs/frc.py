@@ -31,8 +31,9 @@ from dataclasses import dataclass, asdict
 
 import numpy as np
 
-from ..constants import QE, MP, MU0, MEC2
+from ..constants import QE, MP, MU0
 from ..reactivity import reactivity
+from ..bremsstrahlung import brems_power_uniform_xie2024, ion_species_from_mix
 from ..tokamak import _REACTIONS, twotemp_diagnostics
 from ..impurity import lz_line_net, SPECIES as _IMP_SPECIES
 from ..cyclotron import resolve_cyclotron_power
@@ -720,6 +721,7 @@ def solve_frc(
     Zeff = (
         (n10 * Z1**2 + n20 * Z2**2) / (1 + d12) + nHe0 * ZHe**2 + nimp0 * Zimp**2
     ) / ne_m
+    brems_species = ion_species_from_mix(rx, ni_m, f1, fHe, fimp, Zimp)
     M = (x1 * rx["A1"] + x2 * rx["A2"]) / (1 + d12)
     mi = M * MP
 
@@ -733,16 +735,7 @@ def solve_frc(
     Pn = Pfus * (1 - rx["fion"])
 
     # ---------- radiation ----------
-    t = Te / MEC2
-    Pbrem = (
-        5.34e-37
-        * ne_m**2
-        * G2
-        * math.sqrt(Te)
-        * (Zeff + 0.7936 * t + 1.874 * t**2 + 3 / math.sqrt(2) * t)
-        * 1e-6
-        * Vp
-    )
+    Pbrem = brems_power_uniform_xie2024(ne_m, Te, brems_species, G2, Vp)
     B_int = B_e * GB
     formula_Pcycl = (
         4.14e-7

@@ -13,7 +13,7 @@ from dataclasses import dataclass, asdict
 
 import numpy as np
 
-from .constants import QE, MU0, MEC2
+from .constants import QE, MU0
 from .reactivity import reactivity
 from dataclasses import replace as _dc_replace
 
@@ -24,6 +24,7 @@ from .twotemp import (
     p_ei_exchange,
     solve_channel_balance,
 )
+from .bremsstrahlung import brems_power_profile_xie2024, ion_species_from_mix
 from .impurity import lz_line_net, SPECIES as _IMP_SPECIES
 from .tokageom import tokamak_geometry
 from .cyclotron import tokamak_B25_factor
@@ -383,7 +384,7 @@ def funsc(
         #   Keep the scan + bisect path for that case.
         _mono = fT != 0
         t, res, r, conv = solve_channel_balance(
-            _eval_t, _resid_t, 1e-3, 50.0, monotone=_mono
+            _eval_t, _resid_t, 1e-3, 50.0, iters=28, monotone=_mono
         )
         return _dc_replace(res, taue_mode=1.0 if conv else 0.5, tauE_used=t)
     if fT == 0:
@@ -484,6 +485,7 @@ def funsc(
     Zeff = (
         (n10 * Z1**2 + n20 * Z2**2) / (1 + d12) + nHe0 * ZHe**2 + nimp0 * Zimp_**2
     ) / ne0
+    brems_species = ion_species_from_mix(rx, ni0, f1, fHe, fimp, Zimp_)
     M = (x1 * rx["A1"] + x2 * rx["A2"]) / (1 + d12)
 
     # --- profiles and volume averages ---
@@ -505,14 +507,8 @@ def funsc(
     Pfus = rx["Y"] / (1 + d12) * n10 * n20 * Phi * Vp * 1e-6
     Pn = Pfus * (1 - rx["fion"])
 
-    # --- bremsstrahlung (relativistic-corrected, profile-weighted) ---
-    term1 = Zeff * (1 / (1 + 2 * Sn + 0.5 * ST))
-    term2 = 0.7936 / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
-    term3 = 1.874 / (1 + 2 * Sn + 2.5 * ST) * (Te0 / MEC2) ** 2
-    term4 = 3 / math.sqrt(2) / (1 + 2 * Sn + 1.5 * ST) * (Te0 / MEC2)
-    Pbrem = (
-        5.34e-37 * ne0**2 * math.sqrt(Te0) * (term1 + term2 + term3 + term4) * 1e-6 * Vp
-    )
+    # --- bremsstrahlung (Xie 2024 Gaunt factors, species-resolved) ---
+    Pbrem = brems_power_profile_xie2024(ne0, Te0, brems_species, Sn, ST, Vp, x, dx)
 
     # --- cyclotron radiation (empirical) ---
     neff = ne0 / 1e20 / (1 + Sn)

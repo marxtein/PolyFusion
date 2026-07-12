@@ -30,8 +30,9 @@ from dataclasses import dataclass, asdict
 
 import numpy as np
 
-from ..constants import QE, MU0, MEC2
+from ..constants import QE, MU0
 from ..reactivity import reactivity
+from ..bremsstrahlung import brems_power_shell_xie2024
 from ..tokamak import _REACTIONS, twotemp_diagnostics
 from ..twotemp import p_ei_exchange
 from ..impurity import lz_line_net, SPECIES as _IMP_SPECIES
@@ -289,7 +290,9 @@ def solve_dipole(
     Te = Te0 * Tfac
     n120 = f12 * ni
     n10, n20 = x1 * n120, x2 * n120
-    ne = (n10 * Z1 + n20 * Z2) / (1 + d12) + (fHe * ni) * ZHe + (fimp * ni) * Zimp
+    nHe = fHe * ni
+    nimp = fimp * ni
+    ne = (n10 * Z1 + n20 * Z2) / (1 + d12) + nHe * ZHe + nimp * Zimp
     ne0 = float(ne[0])
     Zeff = float(
         (
@@ -324,13 +327,13 @@ def solve_dipole(
     Pn = Pfus * (1 - rx["fion"])
 
     # ---------- radiation (per-shell forms) ----------
-    rel = (
-        Zeff
-        + 0.7936 * (Te / MEC2)
-        + 1.874 * (Te / MEC2) ** 2
-        + 3 / math.sqrt(2) * (Te / MEC2)
-    )
-    Pbrem = 5.34e-37 * float(np.trapezoid(ne**2 * np.sqrt(Te) * rel * w, L)) * 1e-6
+    brems_species = [
+        (n10 / (1.0 + d12), Z1),
+        (n20 / (1.0 + d12), Z2),
+        (nHe, ZHe),
+        (nimp, Zimp),
+    ]
+    Pbrem = brems_power_shell_xie2024(ne, Te, brems_species, w, L)
     formula_Pcycl = 4.14e-7 * float(
         np.trapezoid(
             (ne / 1e20) ** 0.5
@@ -352,10 +355,7 @@ def solve_dipole(
             raise ValueError(
                 f"unknown impurity species {imp_name!r}; have {_IMP_SPECIES}"
             )
-        nimp_L = fimp * ni
-        P_line = (
-            float(np.trapezoid(ne * nimp_L * lz_line_net(imp_name, Te) * w, L)) * 1e-6
-        )
+        P_line = float(np.trapezoid(ne * nimp * lz_line_net(imp_name, Te) * w, L)) * 1e-6
     else:
         P_line = 0.0
 

@@ -1,10 +1,11 @@
-"""Validate the Python core against golden values from the JS reference.
+"""Validate the Python core against representative golden values.
 
-Golden values in ``golden.json`` are produced by running the authors' own
-JS ``funsc`` (extracted from ``etsc.html``) over representative cases
-covering reactions icase = 1..5.  Geometry/density quantities must match to
-machine precision; reactivity-coupled quantities are allowed a small grid
-tolerance (linspace vs JS accumulation differ in the energy grid).
+The original ``golden.json`` came from the authors' JS ``funsc`` extracted from
+``etsc.html``.  After adopting the Xie 2024 species-resolved bremsstrahlung
+kernel, ``P_brem`` and power-balance quantities are generated from the current
+Python model because the legacy JS reference still carries the old scalar-Zeff
+bremsstrahlung fit.  Geometry/density quantities must match to machine
+precision; reactivity-coupled quantities are allowed a small grid tolerance.
 """
 
 import json

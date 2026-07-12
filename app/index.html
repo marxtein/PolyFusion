@@ -649,6 +649,7 @@ let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,LASTSCAN_INPUTS=nul
 let PRESET_LOAD_TOKEN=0,RECOMPUTE_TOKEN=0,VIEW_RENDER_TOKEN=0,PLOTLY_LOAD=null;
 let PARAM_GROUP_COLLAPSED={};
 let THEME=((()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}}))();
+const AI_REPORT_ENABLED=false;
 let FRC_VIEW=(()=>{try{return localStorage.getItem('polyfusion_frc_view')||'half'}catch(e){return'half'}})();
 let MIRROR_VIEW=(()=>{try{return localStorage.getItem('polyfusion_mirror_view')||'half'}catch(e){return'half'}})();
 let AUTH_REQUIRED=false,GUEST_MODE=false,AUTH_MODE='login',AUTH_USER=null;
@@ -2743,10 +2744,11 @@ async function generateSimulationReport(opts){
     const w=window.open('','_blank');
     if(!w){if(ee)ee.textContent=L('新窗口被浏览器拦截，请允许弹出窗口后重试。','Pop-up blocked. Please allow pop-ups and retry.');return;}
     w.document.open();w.document.write(cached.html);w.document.close();
-    const aiState={text:cached.ai_analysis||''};
+    const aiState={text:AI_REPORT_ENABLED?(cached.ai_analysis||''):''};
     w.POLYFUSION_BASE_REPORT_HTML=cached.html;
     attachReportSave(w,cacheKey,basePayload,aiState);
-    if(cached.ai_analysis)setAiReportContent(w,cached.ai_analysis,false);
+    if(AI_REPORT_ENABLED&&cached.ai_analysis)setAiReportContent(w,cached.ai_analysis,false);
+    else hideAiReportContent(w);
     setReportSaveStatus(w,L('已从缓存加载。','Loaded from cache.'));
     if(ee)ee.textContent=L('已从报告缓存加载。','Loaded from report cache.');
     return;
@@ -2781,7 +2783,8 @@ async function generateSimulationReport(opts){
     const aiState={text:''};
     w.POLYFUSION_BASE_REPORT_HTML=html;
     attachReportSave(w,cacheKey,payload,aiState);
-    requestAiReport(payload,w,ee,cacheKey,aiState);
+    if(AI_REPORT_ENABLED)requestAiReport(payload,w,ee,cacheKey,aiState);
+    else hideAiReportContent(w);
   }catch(e){if(ee)ee.textContent=L('生成报告失败：','Report generation failed: ')+(e&&e.message?e.message:String(e));}
 }
 function setAiReportContent(reportWindow,text,isError){
@@ -2796,6 +2799,16 @@ function setAiReportContent(reportWindow,text,isError){
     if(!box)return;
     box.className='ai-report'+(isError?' error':'');
     box.textContent=text;
+  }catch(e){}
+}
+function hideAiReportContent(reportWindow){
+  try{
+    const doc=reportWindow&&reportWindow.document;
+    const box=doc&&doc.getElementById('aiReport');
+    if(!box)return;
+    box.style.display='none';
+    const title=box.previousElementSibling;
+    if(title&&title.classList.contains('part-title'))title.style.display='none';
   }catch(e){}
 }
 async function requestAiReport(payload,reportWindow,ee,cacheKey,aiState){

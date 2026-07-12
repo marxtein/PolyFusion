@@ -8,9 +8,10 @@ rate L_z(Te) for 11 elements, 0.1--100 keV:
 
 L_z is the TOTAL cooling rate: line radiation + recombination +
 bremsstrahlung of that ion.  Our solvers already count the impurity
-*bremsstrahlung* inside P_brem (through Z_eff), so the net new channel is
+*bremsstrahlung* inside P_brem with the Xie 2024 species-resolved kernel, so
+the net new channel is
 
-    L_line = max( L_z - 5.34e-37 * Z^2 * sqrt(Te) , 0 )
+    L_line = max( L_z - C_B * Z^2 * sqrt(Te) * g_ei(Te/511, Z) , 0 )
 
 (:func:`lz_line_net`), which avoids double counting and vanishes for
 fully-stripped low-Z species at high Te — e.g. helium, where Mavrin's fit
@@ -28,6 +29,8 @@ from __future__ import annotations
 
 
 import numpy as np
+
+from .bremsstrahlung import brems_ei_cooling_xie2024
 
 # name -> (Z, Te bin borders [keV], coefficient rows c0..c4 per bin)
 _MAVRIN = {
@@ -120,7 +123,6 @@ _MAVRIN = {
 }
 
 SPECIES = tuple(_MAVRIN)
-_BREMS_CONST = 5.34e-37  # same constant as the solvers' P_brem [W m^3 keV^-1/2]
 
 
 def atomic_number(name: str) -> int:
@@ -145,11 +147,11 @@ def lz_total(name: str, Te_keV) -> np.ndarray:
 
 
 def lz_line_net(name: str, Te_keV) -> np.ndarray:
-    """Cooling rate NET of the bremsstrahlung already counted via Z_eff.
+    """Cooling rate NET of the bremsstrahlung already counted in P_brem.
 
-    Subtracts 5.34e-37 Z^2 sqrt(Te) (the impurity share of the solvers'
-    P_brem) and clamps at zero, so adding this channel never double-counts.
+    Subtracts the species-resolved Xie 2024 electron-ion bremsstrahlung share
+    and clamps at zero, so adding this channel never double-counts.
     """
     Z = _MAVRIN[name][0]
     Te = np.clip(np.asarray(Te_keV, dtype=float), 0.1, 100.0)
-    return np.maximum(lz_total(name, Te) - _BREMS_CONST * Z * Z * np.sqrt(Te), 0.0)
+    return np.maximum(lz_total(name, Te) - brems_ei_cooling_xie2024(Te, Z), 0.0)
