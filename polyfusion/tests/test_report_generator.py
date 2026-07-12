@@ -489,6 +489,10 @@ def test_frontend_exposes_report_buttons_and_handlers():
     assert "POLYFUSION_SET_AI_REPORT" in html
     assert "reportCacheKey" in html
     assert "lookupReportCache" in html
+    assert "const AI_REPORT_ENABLED=false" in html
+    assert "if(AI_REPORT_ENABLED)requestAiReport" in html
+    assert "含 AI 解读" not in html
+    assert "with AI interpretation" not in html
     assert "saveReportCache" in html
     assert "capturePlotImage" in html
     # beginner guide and tour entry points exist

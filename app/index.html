@@ -602,7 +602,7 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   emailInvalid:'请输入有效的邮箱地址',emailRequired:'请输入邮箱',confirmPassword:'确认密码 Confirm password',passwordMismatch:'两次输入的密码不一致',registerFailed:'注册失败，用户名或邮箱可能已被使用',
   verifyEmailPrompt:'请查收验证邮件',verifyEmailSub:'我们已向 {{email}} 发送一封验证邮件，请点击邮件中的链接完成验证后再登录。',
   emailNotVerified:'邮箱未验证',resendVerification:'重新发送验证邮件',resendSent:'验证邮件已重新发送，请查收。',rateLimited:'请求过于频繁，请稍后再试。',
-  help:'<h3>VSC 新手说明</h3><p><b>它做什么：</b>VSC（veloalpha system code）用 0-D 功率平衡快速比较不同聚变位形的工作点和 POPCON 扫描窗口，适合做早期筛选，不等同于工程设计定案。</p><ol><li><b>选位形与预设</b>：先用内置机型理解典型参数范围。</li><li><b>看输入参数</b>：在输入参数栏中，将光标停留在输入框可查看该输入参数说明。</li><li><b>先读关键输出</b>：优先看 P_fus、Q、P_heat、P_wall、密度/β/安全因子等限制。</li><li><b>再做 POPCON 扫描</b>：选择两个变量作为横纵轴，观察哪些区域满足最佳区判据。</li><li><b>保存与报告</b>：可保存扫描历史、导出图像/数据，并生成含 AI 解读的完整报告。</li></ol><p><b>结果怎么看：</b>通过最佳区不代表可建堆；不通过通常提示需要调整密度、温度、磁场、几何或约束假设。</p><button class="help-tour" data-tour-start>开始 1 分钟新手向导</button><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
+  help:'<h3>VSC 新手说明</h3><p><b>它做什么：</b>VSC（veloalpha system code）用 0-D 功率平衡快速比较不同聚变位形的工作点和 POPCON 扫描窗口，适合做早期筛选，不等同于工程设计定案。</p><ol><li><b>选位形与预设</b>：先用内置机型理解典型参数范围。</li><li><b>看输入参数</b>：在输入参数栏中，将光标停留在输入框可查看该输入参数说明。</li><li><b>先读关键输出</b>：优先看 P_fus、Q、P_heat、P_wall、密度/β/安全因子等限制。</li><li><b>再做 POPCON 扫描</b>：选择两个变量作为横纵轴，观察哪些区域满足最佳区判据。</li><li><b>保存与报告</b>：可保存扫描历史、导出图像/数据，并生成完整报告。</li></ol><p><b>结果怎么看：</b>通过最佳区不代表可建堆；不通过通常提示需要调整密度、温度、磁场、几何或约束假设。</p><button class="help-tour" data-tour-start>开始 1 分钟新手向导</button><p style="color:#4b566c">注：非托卡马克位形为定性模型，绝对值待标定。</p>'},
  en:{config:'Configuration',preset:'Preset',params:'Parameters',liveN:'live recompute',window:'Operating Window',
   contours:'Contours shown',scan:'POPCON Scan Axes',xax:'X axis',yax:'Y axis',runBtn:'▶ Run POPCON Scan',
   opPoint:'Operating Point',inputTitle:'Input Parameters',scanTitle:'Scan Results',expandAll:'Expand All',collapseAll:'Collapse All',saveP:'⬇ Save Input Params',loadP:'⬆ Load Historical Params',expScan:'⬇ Save Scan Results',expPng:'⬇ Save Scan Image',
@@ -610,10 +610,11 @@ const T={zh:{config:'位形 Configuration',preset:'机型预设 Preset',params:'
   emailInvalid:'Please enter a valid email address',emailRequired:'Please enter your email',confirmPassword:'Confirm password',passwordMismatch:'Passwords do not match',registerFailed:'Registration failed. Username or email may already be in use.',
   verifyEmailPrompt:'Check your inbox',verifyEmailSub:'We sent a verification link to {{email}}. Click the link in the email to verify your address, then log in.',
   emailNotVerified:'Email unverified',resendVerification:'Resend verification email',resendSent:'Verification email resent. Please check your inbox.',rateLimited:'Too many requests. Please try again later.',
-  help:'<h3>VSC Beginner Guide</h3><p><b>What it does:</b> VSC (veloalpha system code) uses 0-D power balance to compare fusion configurations, operating points and POPCON windows. It is for early screening, not final engineering validation.</p><ol><li><b>Choose a configuration and preset</b>: start from built-in machines to learn typical ranges.</li><li><b>Read input parameters</b>: in the input-parameter panel, focus a field to view its input explanation.</li><li><b>Inspect key outputs first</b>: start from P_fus, Q, P_heat, P_wall, density/beta/safety-factor limits.</li><li><b>Run POPCON scans</b>: choose two variables as X/Y axes and see which regions satisfy the operating-window criteria.</li><li><b>Save and report</b>: save scan history, export plots/data, and generate a full report with AI interpretation.</li></ol><p><b>How to read results:</b> passing the best-region mask does not prove viability; failing usually shows which density, temperature, field, geometry or confinement assumption needs adjustment.</p><button class="help-tour" data-tour-start>Start 1-minute guided tour</button><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
+  help:'<h3>VSC Beginner Guide</h3><p><b>What it does:</b> VSC (veloalpha system code) uses 0-D power balance to compare fusion configurations, operating points and POPCON windows. It is for early screening, not final engineering validation.</p><ol><li><b>Choose a configuration and preset</b>: start from built-in machines to learn typical ranges.</li><li><b>Read input parameters</b>: in the input-parameter panel, focus a field to view its input explanation.</li><li><b>Inspect key outputs first</b>: start from P_fus, Q, P_heat, P_wall, density/beta/safety-factor limits.</li><li><b>Run POPCON scans</b>: choose two variables as X/Y axes and see which regions satisfy the operating-window criteria.</li><li><b>Save and report</b>: save scan history, export plots/data, and generate a full report.</li></ol><p><b>How to read results:</b> passing the best-region mask does not prove viability; failing usually shows which density, temperature, field, geometry or confinement assumption needs adjustment.</p><button class="help-tour" data-tour-start>Start 1-minute guided tour</button><p style="color:#4b566c">Note: non-tokamak configs are qualitative, pending calibration.</p>'}};
 let CONFIGS=null,CUR=null,VALS={},LASTSCAN=null,LASTRUN=null,LASTSCAN_INPUTS=null,VIEW='shape',timer=null,LANG='zh',PLOTSEL=new Set(),SHAPE_PHASE=-1,ADVANCED=false,SLIDER_FRAC=null,_sliderRAF=null,TOK_EQ_STASH=null;
 let PARAM_GROUP_COLLAPSED={};
 let THEME=((()=>{try{return localStorage.getItem('polyfusion_theme')||'light'}catch(e){return'light'}}))();
+const AI_REPORT_ENABLED=false;
 let FRC_VIEW=(()=>{try{return localStorage.getItem('polyfusion_frc_view')||'half'}catch(e){return'half'}})();
 let MIRROR_VIEW=(()=>{try{return localStorage.getItem('polyfusion_mirror_view')||'half'}catch(e){return'half'}})();
 let AUTH_REQUIRED=false,GUEST_MODE=false,AUTH_MODE='login',AUTH_USER=null;
@@ -1382,7 +1383,7 @@ const TOUR_STEPS=[
   {target:'params',zh:['第三步：理解输入参数','输入参数栏按几何、等离子体、燃料和约束分组。把光标停在输入框上，可查看该参数的物理含义和注意事项。'],en:['Step 3: Understand inputs','The input panel groups geometry, plasma, fuel and confinement fields. Focus a field to keep its explanation visible.']},
   {target:'scan',zh:['第四步：运行 POPCON 扫描','选择两个变量作为 X/Y 轴，设置最佳区判据后运行扫描。满足判据的区域是候选窗口，不代表工程已经可行。'],en:['Step 4: Run a POPCON scan','Choose two variables as X/Y axes, set operating-window criteria, then run the scan. Passing regions are candidate windows, not proof of engineering viability.']},
   {target:'results',zh:['第五步：先读关键输出','右侧输出参数栏优先看 P_fus、Q、P_heat、P_wall 以及密度、β、安全因子等限制。点击变量名可查看输出含义。'],en:['Step 5: Read key outputs','In the output panel, start from P_fus, Q, P_heat, P_wall and density/beta/safety-factor limits. Click a variable name for its meaning.']},
-  {target:'manual',zh:['继续学习：打开说明书与报告','说明书提供当前位形的详细输入/输出解释；完整报告可汇总算例、图像和 AI 分析，适合保存复查。'],en:['Keep learning: manual and reports','The manual explains current inputs/outputs in detail. Full reports bundle the case, figures and AI interpretation for later review.']},
+  {target:'manual',zh:['继续学习：打开说明书与报告','说明书提供当前位形的详细输入/输出解释；完整报告可汇总算例与图像，适合保存复查。'],en:['Keep learning: manual and reports','The manual explains current inputs/outputs in detail. Full reports bundle the case and figures for later review.']},
 ];
 function tourCopy(step){const t=LANG==='zh'?step.zh:step.en;return {title:t[0],body:t[1]};}
 function closeTour(state){document.getElementById('tour').classList.remove('on');try{localStorage.setItem('polyfusion_tour_state',state||'skipped');}catch(e){}}
@@ -2568,10 +2569,11 @@ async function generateSimulationReport(opts){
     const w=window.open('','_blank');
     if(!w){if(ee)ee.textContent=L('新窗口被浏览器拦截，请允许弹出窗口后重试。','Pop-up blocked. Please allow pop-ups and retry.');return;}
     w.document.open();w.document.write(cached.html);w.document.close();
-    const aiState={text:cached.ai_analysis||''};
+    const aiState={text:AI_REPORT_ENABLED?(cached.ai_analysis||''):''};
     w.POLYFUSION_BASE_REPORT_HTML=cached.html;
     attachReportSave(w,cacheKey,basePayload,aiState);
-    if(cached.ai_analysis)setAiReportContent(w,cached.ai_analysis,false);
+    if(AI_REPORT_ENABLED&&cached.ai_analysis)setAiReportContent(w,cached.ai_analysis,false);
+    else hideAiReportContent(w);
     setReportSaveStatus(w,L('已从缓存加载。','Loaded from cache.'));
     if(ee)ee.textContent=L('已从报告缓存加载。','Loaded from report cache.');
     return;
@@ -2606,7 +2608,8 @@ async function generateSimulationReport(opts){
     const aiState={text:''};
     w.POLYFUSION_BASE_REPORT_HTML=html;
     attachReportSave(w,cacheKey,payload,aiState);
-    requestAiReport(payload,w,ee,cacheKey,aiState);
+    if(AI_REPORT_ENABLED)requestAiReport(payload,w,ee,cacheKey,aiState);
+    else hideAiReportContent(w);
   }catch(e){if(ee)ee.textContent=L('生成报告失败：','Report generation failed: ')+(e&&e.message?e.message:String(e));}
 }
 function setAiReportContent(reportWindow,text,isError){
@@ -2621,6 +2624,16 @@ function setAiReportContent(reportWindow,text,isError){
     if(!box)return;
     box.className='ai-report'+(isError?' error':'');
     box.textContent=text;
+  }catch(e){}
+}
+function hideAiReportContent(reportWindow){
+  try{
+    const doc=reportWindow&&reportWindow.document;
+    const box=doc&&doc.getElementById('aiReport');
+    if(!box)return;
+    box.style.display='none';
+    const title=box.previousElementSibling;
+    if(title&&title.classList.contains('part-title'))title.style.display='none';
   }catch(e){}
 }
 async function requestAiReport(payload,reportWindow,ee,cacheKey,aiState){
