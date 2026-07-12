@@ -45,7 +45,7 @@
     border:1px solid var(--line2);border-radius:6px;padding:4px 9px;cursor:pointer;transition:.15s}
   .hbtn:hover{color:var(--fg);border-color:var(--teal)}
   .hbtn.on{color:var(--btn-ink);background:var(--amber);border-color:var(--amber);font-weight:700}
-  .wrap{position:relative;z-index:1;display:grid;grid-template-columns:362px 1fr 300px;height:calc(100vh - 52px)}
+  .wrap{position:relative;z-index:1;display:grid;grid-template-columns:362px 1fr 300px;height:calc(100vh - 86px);height:calc(100dvh - 86px)}
   .col{overflow-y:auto;overflow-x:hidden}
   .col::-webkit-scrollbar{width:8px}.col::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
   .left{border-right:1px solid var(--line);padding:14px}.right{border-left:1px solid var(--line);padding:14px}
@@ -286,7 +286,7 @@
   #manualPanel .mp-foot button{flex:1;padding:8px;font-size:11px;border:1px solid var(--line2);border-radius:6px;
     background:var(--panel2);color:var(--mut);cursor:pointer}
   @media (max-width:720px){
-    .wrap{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,46vh) minmax(360px,54vh);grid-template-areas:"input output" "plot plot";height:calc(100vh - 52px);overflow:hidden}
+    .wrap{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:minmax(0,46vh) minmax(360px,54vh);grid-template-areas:"input output" "plot plot";height:calc(100vh - 86px);height:calc(100dvh - 86px);overflow:hidden}
     .left{grid-area:input;border-right:1px solid var(--line);padding:10px;min-width:0}
     .right{grid-area:output;border-left:1px solid var(--line);padding:10px;min-width:0}
     .center{grid-area:plot;border-top:1px solid var(--line);min-height:360px}
@@ -1235,6 +1235,18 @@ async function doLogout(){
   try{await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin'});}catch(e){}
   enterGuestOrLoginState();
 }
+async function revalidateSharedAccount(){
+  if(!AUTH_REQUIRED)return;
+  try{
+    const r=await fetch('/api/auth/me',{credentials:'same-origin'});
+    if(!r.ok){enterGuestOrLoginState();return;}
+    const me=await r.json();
+    if(me&&me.user&&me.user!=='__guest__')applyAuthState(me);
+    else enterGuestOrLoginState();
+  }catch(e){}
+}
+window.addEventListener('focus',revalidateSharedAccount);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')revalidateSharedAccount();});
 async function doDeleteAccount(){
   if(!AUTH_STATE||AUTH_STATE.is_guest)return;
   const msg=L('确认注销当前账户？此操作会删除账户资料和云端计算历史，且不可撤销。','Delete this account? This permanently removes the account profile and cloud computation history.');
