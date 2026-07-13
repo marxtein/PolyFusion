@@ -324,7 +324,7 @@ def _report_markdown(
             "",
             _md_fmt(disclaimer),
             "",
-            "## AI 分析报告" if is_zh else "## AI Analysis Report",
+            "## 规则分析报告" if is_zh else "## Rule-based Analysis Report",
             "",
             "加载中…" if is_zh else "Loading…",
             "",
@@ -374,7 +374,7 @@ def _report_script(markdown_doc: str, filename: str) -> str:
     const content=String(text||'');
     if(isError){{box.className='ai-report error';box.textContent=content;return;}}
     box.className='ai-report';box.innerHTML=renderMarkdown(content);
-    const aiTitle=baseMarkdown.includes('## AI 分析报告')?'## AI 分析报告':'## AI Analysis Report';
+    const aiTitle=baseMarkdown.includes('## 规则分析报告')?'## 规则分析报告':'## Rule-based Analysis Report';
     const aiStart=baseMarkdown.indexOf(aiTitle);
     window.POLYFUSION_REPORT_MARKDOWN=(aiStart>=0?baseMarkdown.slice(0,aiStart):baseMarkdown+'\n\n')+aiTitle+'\n\n'+content+'\n';
   }};
@@ -523,7 +523,7 @@ def generate_report(data: dict) -> str:
     sections.append(f"<div class='note'>{_esc(disclaimer)}</div>")
 
     sections.append(
-        f"<h2 class='part-title'>{t('AI 分析报告', 'AI Analysis Report')}</h2>"
+        f"<h2 class='part-title'>{t('规则分析报告', 'Rule-based Analysis Report')}</h2>"
     )
     sections.append(
         f"<div id='aiReport' class='ai-report loading'>{t('加载中…', 'Loading…')}</div>"

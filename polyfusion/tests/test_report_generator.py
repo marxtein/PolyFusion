@@ -14,6 +14,9 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from polyfusion import ai_report  # noqa: E402
+from polyfusion.deterministic_report import (  # noqa: E402
+    generate_deterministic_report_analysis,
+)
 from polyfusion.report_generator import generate_report  # noqa: E402
 from polyfusion.report_templates import build_ai_report_prompt  # noqa: E402
 
@@ -156,7 +159,8 @@ def test_report_lang_switch_changes_section_titles():
 def test_report_includes_basic_and_ai_sections():
     html = generate_report(_sample_data())
     assert "基础报告" in html
-    assert "AI 分析报告" in html
+    assert "规则分析报告" in html
+    assert "AI 分析报告" not in html
     assert "id='aiReport'" in html
     assert "加载中" in html
 
@@ -419,7 +423,9 @@ def test_ai_report_endpoint_serves_json(monkeypatch):
     import app.server as srv
 
     monkeypatch.setattr(srv, "REQUIRE_AUTH", False)
-    monkeypatch.setattr(srv, "generate_ai_report_analysis", lambda _req: "AI ok")
+    monkeypatch.setattr(
+        srv, "generate_deterministic_report_analysis", lambda _req: "Rules ok"
+    )
     from app.server import Handler, ThreadingHTTPServer
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -439,7 +445,95 @@ def test_ai_report_endpoint_serves_json(monkeypatch):
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
-    assert payload == {"analysis": "AI ok"}
+    assert payload == {"analysis": "Rules ok"}
+
+
+def test_analysis_endpoint_uses_rules_without_api_key(monkeypatch):
+    import app.server as srv
+
+    monkeypatch.setattr(srv, "REQUIRE_AUTH", False)
+    monkeypatch.delenv("CODEX_API_KEY", raising=False)
+    from app.server import Handler, ThreadingHTTPServer
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        body = jsonlib.dumps(_sample_data()).encode()
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/api/report/ai",
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req) as response:
+            payload = jsonlib.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+    assert "核心结论" in payload["analysis"]
+    assert "下一步建议" in payload["analysis"]
+
+
+def test_deterministic_analysis_has_required_sections():
+    first = generate_deterministic_report_analysis(_sample_data())
+    second = generate_deterministic_report_analysis(_sample_data())
+    assert first == second
+    for title in ("核心结论", "关键指标解读", "风险与不确定性", "下一步建议"):
+        assert title in first
+    for key in ("config=tokamak", "preset=DEMO", "Pfus", "Qfus", "Pwall"):
+        assert key in first
+
+
+def test_deterministic_analysis_reports_empty_best_region():
+    data = _sample_data()
+    data["last_scan"]["best"] = [[0, 0], [0, 0]]
+    analysis = generate_deterministic_report_analysis(data)
+    assert "当前准则下未找到最佳区" in analysis
+    assert "不等于所有网格点都数值无效" in analysis
+
+
+def test_deterministic_analysis_handles_invalid_point_and_missing_scan():
+    data = _sample_data()
+    data["last_run"]["outputs"].update({"valid": 0.0, "ignited": 0.0})
+    data["last_scan"] = None
+    analysis = generate_deterministic_report_analysis(data)
+    assert "当前点被标记为无效" in analysis
+    assert "扫描网格证据不足" in analysis
+    assert "当前准则下未找到最佳区" not in analysis
+
+
+def test_deterministic_analysis_discloses_fixed_tau_and_simple_geometry():
+    data = _sample_data()
+    data["params"].update({"use_tauE": 1.0, "geom_model": 0.0})
+    analysis = generate_deterministic_report_analysis(data)
+    assert "结果依赖固定约束时间假设" in analysis
+    assert "几何模型较简化" in analysis
+    assert "简化几何会影响体积、壁面积" in analysis
+
+
+def test_deterministic_analysis_checks_default_window_criteria():
+    data = _sample_data()
+    data["last_run"]["outputs"].update(
+        {"valid": 1.0, "Pfus": 0.1, "Qfus": 0.2, "nbar_o_nGw": 1.2, "Pheat": 150}
+    )
+    analysis = generate_deterministic_report_analysis(data)
+    assert "`Pfus=0.1` 不满足 `>=10`" in analysis
+    assert "`Qfus=0.2` 不满足 `>=1`" in analysis
+    assert "`nbar_o_nGw=1.2` 不满足 `<=1`" in analysis
+    assert "`Pheat=150` 不满足 `<=100`" in analysis
+
+
+@pytest.mark.parametrize("config", ["tokamak", "mirror", "frc", "dipole", "stellarator"])
+def test_deterministic_analysis_supports_every_configuration(config):
+    data = _sample_data()
+    data["config"] = config
+    data["last_run"]["config"] = config
+    analysis = generate_deterministic_report_analysis(data)
+    assert f"config={config}" in analysis
+    assert "工程可行" not in analysis
+    assert "保证进入 H 模" not in analysis
 
 
 def test_report_endpoint_rejects_oversized_body(monkeypatch):

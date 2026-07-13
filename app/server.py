@@ -57,7 +57,9 @@ from polyfusion import auth as auth_mod  # noqa: E402
 from polyfusion.auth import AuthError  # noqa: E402
 from polyfusion.docs_generator import generate_manual  # noqa: E402
 from polyfusion.report_generator import generate_report  # noqa: E402
-from polyfusion.ai_report import AiReportError, generate_ai_report_analysis  # noqa: E402
+from polyfusion.deterministic_report import (  # noqa: E402
+    generate_deterministic_report_analysis,
+)
 from polyfusion import history as history_mod  # noqa: E402
 from polyfusion import admin as admin_mod  # noqa: E402
 from polyfusion import profile as profile_mod  # noqa: E402
@@ -764,13 +766,9 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 req = json.loads(self.rfile.read(n) or b"{}")
                 req.setdefault("user", principal)
-                analysis = generate_ai_report_analysis(req)
+                analysis = generate_deterministic_report_analysis(req)
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
                 return self._send(400, json.dumps({"error": f"bad json: {e}"}))
-            except AiReportError as e:
-                return self._send(
-                    502, json.dumps({"error": str(e)}, ensure_ascii=False)
-                )
             except Exception as e:
                 return self._send(
                     400, json.dumps({"error": f"{type(e).__name__}: {e}"})

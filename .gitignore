@@ -40,3 +40,4 @@ polyfusion-project-docs/
 .worktrees/
 .claude/worktrees/
 .trash
+.ai-batch.lock

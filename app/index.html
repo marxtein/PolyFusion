@@ -2820,18 +2820,18 @@ async function requestAiReport(payload,reportWindow,ee,cacheKey,aiState){
       body:JSON.stringify(aiPayload),
       credentials:'same-origin',
     });
-    if(r.status===401){_handleAuthResponse(r);setAiReportContent(reportWindow,L('AI 报告生成失败：请重新登录。','AI report failed: please sign in again.'),true);return;}
+    if(r.status===401){_handleAuthResponse(r);setAiReportContent(reportWindow,L('规则报告生成失败：请重新登录。','Rule-based report failed: please sign in again.'),true);return;}
     const d=await r.json().catch(()=>({}));
-    if(!r.ok){setAiReportContent(reportWindow,L('AI 报告生成失败：','AI report failed: ')+(d.error||r.status),true);return;}
-    const analysis=d.analysis||L('AI 未返回分析内容。','AI returned no analysis.');
+    if(!r.ok){setAiReportContent(reportWindow,L('规则报告生成失败：','Rule-based report failed: ')+(d.error||r.status),true);return;}
+    const analysis=d.analysis||L('规则引擎未返回分析内容。','Rule engine returned no analysis.');
     if(aiState)aiState.text=analysis;
     setAiReportContent(reportWindow,analysis,false);
     attachReportSave(reportWindow,cacheKey,payload,aiState);
     saveReportCache(cacheKey,payload,reportWindow,analysis,false);
   }catch(e){
     const msg=e&&e.message?e.message:String(e);
-    setAiReportContent(reportWindow,L('AI 报告生成失败：','AI report failed: ')+msg,true);
-    if(ee)ee.textContent=L('AI 报告生成失败：','AI report failed: ')+msg;
+    setAiReportContent(reportWindow,L('规则报告生成失败：','Rule-based report failed: ')+msg,true);
+    if(ee)ee.textContent=L('规则报告生成失败：','Rule-based report failed: ')+msg;
   }
 }
 function snapshotParamsForReport(){
