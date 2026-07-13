@@ -22,6 +22,14 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+SITE_ROOT = ROOT.parent
+if (SITE_ROOT / "velo_shared").is_dir() and str(SITE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SITE_ROOT))
+
+try:
+    from velo_shared.ai import load_brioi_profile
+except ImportError:
+    load_brioi_profile = None
 
 from polyfusion.ai_report import (  # noqa: E402
     DEFAULT_BASE_URL,
@@ -69,6 +77,18 @@ def _primary_api_profile() -> dict[str, Any]:
 
 
 def _backup_api_profile(config_dir: Path) -> dict[str, Any]:
+    if load_brioi_profile is not None:
+        profile = load_brioi_profile(config_dir)
+        return {
+            "name": profile.name,
+            "api_key": profile.api_key,
+            "base_url": profile.base_url,
+            "model": profile.model,
+            "endpoint": profile.endpoint,
+            "reasoning_effort": profile.reasoning_effort,
+            "reasoning_summary": "auto",
+            "text_verbosity": "low",
+        }
     config_path = config_dir / "config.toml.brioi"
     auth_path = config_dir / "auth.json.brioi"
     config = tomllib.loads(config_path.read_text(encoding="utf-8"))
