@@ -2589,7 +2589,7 @@ function drawShape(){
     const ar=(w>50&&h>50)?w/h:1.1;
     let xmn=1e30,xmx=-1e30,ymn=1e30,ymx=-1e30;
     if(lay.__fixbox){({xmn,xmx,ymn,ymx}=lay.__fixbox);}  // stable phi-scrub view
-    else tr.forEach(t=>{(t.x||[]).forEach(x=>{if(x!=null&&isFinite(x)){if(x<xmn)xmn=x;if(x>xmx)xmx=x;}}); 
+    else tr.forEach(t=>{(t.x||[]).forEach(x=>{if(x!=null&&isFinite(x)){if(x<xmn)xmn=x;if(x>xmx)xmx=x;}});
                    (t.y||[]).forEach(y=>{if(y!=null&&isFinite(y)){if(y<ymn)ymn=y;if(y>ymx)ymx=y;}});});
     if(xmx>xmn&&ymx>ymn){
       const cx=(xmn+xmx)/2,cy=(ymn+ymx)/2;let hx=(xmx-xmn)/2*1.12,hy=(ymx-ymn)/2*1.12;
