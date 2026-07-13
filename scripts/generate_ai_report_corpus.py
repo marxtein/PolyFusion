@@ -570,7 +570,8 @@ def main() -> int:
             return 2
         primary_profile = _primary_api_profile()
         primary_concurrency = max(0, min(args.primary_concurrency, 5))
-        backup_enabled = args.enable_backup
+        requested_workers = max(1, min(args.workers, 16))
+        backup_enabled = args.enable_backup or requested_workers > primary_concurrency
         if backup_enabled:
             backup_profile = _backup_api_profile(args.backup_config_dir.expanduser())
         else:
@@ -581,7 +582,7 @@ def main() -> int:
             delay=max(args.delay, 0),
             retries=max(args.retries, 0),
             force=args.force,
-            workers=max(1, min(args.workers, 4)),
+            workers=requested_workers,
             configs=set(args.configs) if args.configs else None,
             hard_timeout=max(args.hard_timeout, 0),
             primary_profile=primary_profile,

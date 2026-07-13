@@ -72,6 +72,14 @@ def test_sixth_concurrent_request_uses_backup_profile():
     assert _choose_api_profile(primary, backup, enabled, active, 5) is primary
 
 
+def test_cli_allows_parallelism_above_primary_limit():
+    script = (ROOT / "scripts" / "generate_ai_report_corpus.py").read_text(
+        encoding="utf-8"
+    )
+    assert "min(args.workers, 16)" in script
+    assert "requested_workers > primary_concurrency" in script
+
+
 def test_disabled_profile_falls_back_to_remaining_api():
     primary = {"name": "primary"}
     backup = {"name": "backup-brioi"}
