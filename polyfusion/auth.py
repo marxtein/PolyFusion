@@ -1,9 +1,9 @@
-"""User authentication and session management for PolyFusion.
+"""Local user authentication and session management for PolyFusion/VSC.
 
-This module is normally a thin adapter over Supabase Auth. When
-``POLYFUSION_REQUIRE_EMAIL_CONFIRMATION=0``, registration/login use a local
-SQLite auth store so the web process can avoid confirmation emails without
-loading a Supabase service-role key.
+Accounts, password hashes, verification state, and JWT secrets live in the
+local SQLite auth store. SMTP is optional and only controls email delivery;
+Supabase is retained solely for legacy migration helpers and is never used by
+the public authentication API.
 
 Public surface used by ``app/server.py``:
     - ``register(username, email, password, password2) -> dict``
@@ -93,6 +93,7 @@ _LOCAL_RESET_PROVIDER = "local-password-reset"
 _LOCAL_RESET_TTL = 3_600  # 1 hour
 _LOCAL_AUTH_ITERATIONS = 210_000
 _PUBLIC_BASE_URL_ENV = "PUBLIC_BASE_URL"
+_LEGACY_SUPABASE_ENV = "POLYFUSION_LEGACY_SUPABASE_AUTH"
 
 
 class AuthError(Exception):
@@ -105,6 +106,12 @@ def email_confirmation_required() -> bool:
         "false",
         "no",
         "off",
+    }
+
+
+def _legacy_supabase_auth_enabled() -> bool:
+    return os.environ.get(_LEGACY_SUPABASE_ENV, "0").strip().lower() in {
+        "1", "true", "yes", "on"
     }
 
 
@@ -199,8 +206,8 @@ def _local_email_verified(row: sqlite3.Row) -> bool:
 def smtp_verification_active() -> bool:
     """True when the in-app SMTP verification path should be used.
 
-    Requires both email confirmation and SMTP to be enabled; otherwise the
-    no-confirm local path or the Supabase path applies.
+    Requires both email confirmation and SMTP to be enabled. Authentication
+    remains local when this is false.
     """
     return email_confirmation_required() and email_send.smtp_enabled()
 
@@ -748,8 +755,7 @@ def _local_get_user(access_token: str) -> Optional[dict]:
 
 def is_local_token(access_token: Optional[str]) -> bool:
     return bool(
-        (not email_confirmation_required() or smtp_verification_active())
-        and access_token
+        access_token
         and _local_claims(access_token) is not None
     )
 
@@ -895,10 +901,9 @@ def verify_jwt(token: str) -> Optional[dict]:
         except Exception:
             pass
 
-    if not email_confirmation_required() or smtp_verification_active():
-        local = _local_claims(token)
-        if local is not None:
-            return local
+    local = _local_claims(token)
+    if local is not None:
+        return local
 
     try:
         unverified_header = _pyjwt.get_unverified_header(token)
@@ -1017,13 +1022,24 @@ def register(
     if password2 != password:
         raise AuthError("passwords do not match")
 
-    if not email_confirmation_required():
-        return _local_register(
-            username,
-            email,
-            password,
-            affiliation=affiliation.strip() if affiliation else None,
-        )
+    if _legacy_supabase_auth_enabled() and email_confirmation_required() and not smtp_verification_active():
+        client = supabase_client()
+        try:
+            data = {"username": username}
+            if affiliation:
+                data["affiliation"] = affiliation.strip()
+            resp = client.auth.sign_up({"email": email, "password": password, "options": {"data": data}})
+        except Exception as exc:
+            raise _translate_supabase_error(exc) from exc
+        user = getattr(resp, "user", None)
+        if user is None:
+            raise AuthError("registration failed")
+        return {
+            "user_id": getattr(user, "id", None),
+            "username": username,
+            "email": email,
+            "email_verification_sent": bool(getattr(user, "confirmation_sent_at", None)),
+        }
 
     if smtp_verification_active():
         return _local_register_with_verification(
@@ -1033,35 +1049,12 @@ def register(
             affiliation=affiliation.strip() if affiliation else None,
         )
 
-    client = supabase_client()
-    try:
-        data = {"username": username}
-        if affiliation:
-            data["affiliation"] = affiliation.strip()
-        resp = client.auth.sign_up(
-            {
-                "email": email,
-                "password": password,
-                "options": {"data": data},
-            }
-        )
-    except Exception as exc:
-        raise _translate_supabase_error(exc) from exc
-
-    user = getattr(resp, "user", None)
-    if user is None:
-        # Should not happen for a successful sign_up, but stay defensive.
-        raise AuthError("registration failed")
-    user_id = getattr(user, "id", None)
-    # Supabase sets confirmation_sent_at when "Confirm email" is ON; that's our
-    # signal that a verification email was dispatched.
-    verification_sent = bool(getattr(user, "confirmation_sent_at", None))
-    return {
-        "user_id": user_id,
-        "username": username,
-        "email": email,
-        "email_verification_sent": verification_sent,
-    }
+    return _local_register(
+        username,
+        email,
+        password,
+        affiliation=affiliation.strip() if affiliation else None,
+    )
 
 
 def debug_create_verified_user(
@@ -1137,25 +1130,20 @@ def login(email: str, password: str) -> tuple[str, str, dict]:
     email = validate_email(email)
     if not isinstance(password, str) or not password:
         raise AuthError("invalid credentials")
-    if not email_confirmation_required() or smtp_verification_active():
-        local = _local_login(email, password)
-        if local is not None:
-            return local
-    client = supabase_client()
-    try:
-        resp = client.auth.sign_in_with_password({"email": email, "password": password})
-    except Exception as exc:
-        raise _translate_supabase_error(exc) from exc
-
-    session = getattr(resp, "session", None)
-    user = getattr(resp, "user", None)
-    if session is None or user is None:
+    if _legacy_supabase_auth_enabled() and email_confirmation_required() and not smtp_verification_active():
+        try:
+            resp = supabase_client().auth.sign_in_with_password({"email": email, "password": password})
+        except Exception as exc:
+            raise _translate_supabase_error(exc) from exc
+        session = getattr(resp, "session", None)
+        user = getattr(resp, "user", None)
+        if session is None or user is None:
+            raise AuthError("invalid credentials")
+        return session.access_token, session.refresh_token, _user_dict(user)
+    local = _local_login(email, password)
+    if local is None:
         raise AuthError("invalid credentials")
-    access_token = getattr(session, "access_token", None)
-    refresh_token = getattr(session, "refresh_token", None)
-    if not access_token or not refresh_token:
-        raise AuthError("invalid credentials")
-    return access_token, refresh_token, _user_dict(user)
+    return local
 
 
 def logout(access_token: Optional[str], refresh_token: Optional[str] = None) -> None:
@@ -1164,35 +1152,26 @@ def logout(access_token: Optional[str], refresh_token: Optional[str] = None) -> 
     """
     if not access_token:
         return
-    if (
-        not email_confirmation_required() or smtp_verification_active()
-    ) and _local_claims(access_token) is not None:
-        return
-    client = supabase_client()
-    try:
-        client.auth.sign_out(access_token)
-    except Exception:
-        # Best effort: caller always clears its own cookies regardless.
-        return
+    if _legacy_supabase_auth_enabled() and _local_claims(access_token) is None:
+        try:
+            supabase_client().auth.sign_out(access_token)
+        except Exception:
+            pass
+    return
 
 
 def get_user(access_token: Optional[str]) -> Optional[dict]:
     """Return the public-shape user dict for ``access_token`` or ``None``."""
     if not access_token:
         return None
-    if not email_confirmation_required() or smtp_verification_active():
-        local = _local_get_user(access_token)
-        if local is not None:
-            return local
-    client = supabase_client()
-    try:
-        resp = client.auth.get_user(access_token)
-    except Exception:
-        return None
-    user = getattr(resp, "user", None) if resp is not None else None
-    if user is None:
-        return None
-    return _user_dict(user)
+    if _legacy_supabase_auth_enabled() and _local_claims(access_token) is None:
+        try:
+            resp = supabase_client().auth.get_user(access_token)
+        except Exception:
+            return None
+        user = getattr(resp, "user", None) if resp is not None else None
+        return _user_dict(user) if user is not None else None
+    return _local_get_user(access_token)
 
 
 def resend_verification(email: str) -> None:
@@ -1202,32 +1181,33 @@ def resend_verification(email: str) -> None:
     A missing user is not an error on either path (anti-enumeration).
     """
     email = validate_email(email)
+    if _legacy_supabase_auth_enabled() and not smtp_verification_active():
+        try:
+            supabase_client().auth.resend({"email": email, "type": "signup"})
+        except Exception as exc:
+            raise _translate_supabase_error(exc) from exc
+        return
     if smtp_verification_active():
         _local_resend_verification(email)
-        return
-    client = supabase_client()
-    try:
-        client.auth.resend({"email": email, "type": "signup"})
-    except Exception as exc:
-        raise _translate_supabase_error(exc) from exc
+    return
 
 
 def request_password_reset(email: str) -> None:
     email = validate_email(email)
-    if smtp_verification_active():
+    if _legacy_supabase_auth_enabled() and not email_send.smtp_enabled():
+        try:
+            supabase_client().auth.reset_password_for_email(email)
+        except Exception as exc:
+            raise _translate_supabase_error(exc) from exc
+        return
+    if email_send.smtp_enabled():
         _local_request_password_reset(email)
         return
-    client = supabase_client()
-    try:
-        client.auth.reset_password_for_email(email)
-    except Exception as exc:
-        raise _translate_supabase_error(exc) from exc
+    raise AuthError("password reset email is not configured")
 
 
 def reset_password(token: str, password: str, password2: str) -> dict:
-    if smtp_verification_active():
-        return _local_reset_password(token, password, password2)
-    raise AuthError("password reset unavailable")
+    return _local_reset_password(token, password, password2)
 
 
 def change_password(
@@ -1235,7 +1215,7 @@ def change_password(
 ) -> dict:
     if not access_token:
         raise AuthError("unauthorized")
-    if smtp_verification_active() and _local_claims(access_token) is not None:
+    if _local_claims(access_token) is not None:
         return _local_change_password(
             access_token, current_password, password, password2
         )
@@ -1260,6 +1240,9 @@ def validate_session(
     sub = claims.get("sub")
     if not sub:
         return None
+
+    if _local_claims(access_token) is not None:
+        return sub
 
     exp = claims.get("exp")
     now = int(time.time())

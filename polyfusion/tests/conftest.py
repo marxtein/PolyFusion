@@ -225,6 +225,8 @@ def _fake_supabase(monkeypatch, tmp_path):
     monkeypatch.setattr(auth, "_fetch_jwks", lambda: {"keys": []})
     monkeypatch.setenv(auth._TEST_SECRET_ENV, TEST_JWT_SECRET)
     monkeypatch.setenv(auth._EMAIL_CONFIRM_ENV, "1")
+    monkeypatch.setenv(auth._LEGACY_SUPABASE_ENV, "1")
+    monkeypatch.setenv(auth._LOCAL_AUTH_DB_ENV, str(tmp_path / "auth.sqlite3"))
     # SMTP path must be explicitly opted-in per test; otherwise .env leakage
     # would route register/login through the local SQLite+SMTP branch and
     # break every Supabase-path test.
