@@ -28,6 +28,10 @@ body{font-family:system-ui,"Microsoft YaHei","PingFang SC",sans-serif;
   font-size:13px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .wrap{max-width:1040px;margin:0 auto;padding:32px 40px}
 h1{font-size:22px;margin:0 0 4px;color:#0c3a5e}
+.report-head{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:4px}
+.report-head h1{margin:0}
+.report-back{flex:none;display:inline-flex;align-items:center;justify-content:center;border:1px solid #c3cddc;background:#fff;color:#0c3a5e;border-radius:5px;padding:6px 11px;text-decoration:none;font-size:12px;font-weight:600;cursor:pointer}
+.report-back:hover{border-color:#0c8678;color:#0c8678}
 h2{font-size:15px;color:#0c8678;border-bottom:1px solid #c3cddc;
   padding-bottom:4px;margin:28px 0 10px}
 .sub{color:#51607a;font-size:12px;margin-bottom:4px}
@@ -38,7 +42,11 @@ h2{font-size:15px;color:#0c8678;border-bottom:1px solid #c3cddc;
 .actions button{border:1px solid #c3cddc;background:#fff;color:#0c3a5e;border-radius:5px;
   padding:6px 10px;cursor:pointer;font-size:12px;margin-left:6px}
 .actions button:hover{border-color:#0c8678;color:#0c8678}
+.actions button.report-locked{opacity:.45;cursor:not-allowed;filter:grayscale(.8);border-color:#c3cddc;color:#8995a8;background:#eef1f5}
+.actions button.report-locked:hover{border-color:#c3cddc;color:#8995a8}
 .actions .status{display:inline-block;margin-left:8px;color:#8995a8;font-size:12px}
+.report-access-pop{position:fixed;z-index:20;display:none;max-width:330px;padding:10px 12px;border:1px solid #c3cddc;border-radius:8px;background:#f8fafc;box-shadow:0 14px 34px -22px #000;color:#49586f;font-size:12px;line-height:1.55;text-align:left}
+.report-access-pop.on{display:block}.report-access-pop b{display:block;color:#a35f00;margin-bottom:3px}
 table{width:100%;border-collapse:collapse;margin:6px 0 14px;background:#fff}
 th,td{padding:5px 9px;border-bottom:1px solid #e6ebf2;text-align:left;font-size:12px}
 th{background:#f0f4f9;color:#0c3a5e;font-weight:600}
@@ -324,7 +332,7 @@ def _report_markdown(
             "",
             _md_fmt(disclaimer),
             "",
-            "## 规则分析报告" if is_zh else "## Rule-based Analysis Report",
+            "## 结论分析" if is_zh else "## Conclusion Analysis",
             "",
             "加载中…" if is_zh else "Loading…",
             "",
@@ -333,14 +341,17 @@ def _report_markdown(
     return "\n".join(lines)
 
 
-def _report_script(markdown_doc: str, filename: str) -> str:
+def _report_script(markdown_doc: str, filename: str, report_authenticated: bool) -> str:
     markdown_json = json.dumps(markdown_doc, ensure_ascii=False)
     filename_json = json.dumps(filename, ensure_ascii=False)
+    access_json = "true" if report_authenticated else "false"
     return rf"""
 <script>
 (function(){{
   const baseMarkdown={markdown_json};
   const filename={filename_json};
+  let reportAccess={access_json};
+  let accessPopTimer=0;
   window.POLYFUSION_REPORT_MARKDOWN=baseMarkdown;
   function escapeHtml(s){{return String(s||'').replace(/[&<>\"]/g,c=>({{'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}}[c]));}}
   function inline(s){{return escapeHtml(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');}}
@@ -374,23 +385,52 @@ def _report_script(markdown_doc: str, filename: str) -> str:
     const content=String(text||'');
     if(isError){{box.className='ai-report error';box.textContent=content;return;}}
     box.className='ai-report';box.innerHTML=renderMarkdown(content);
-    const aiTitle=baseMarkdown.includes('## 规则分析报告')?'## 规则分析报告':'## Rule-based Analysis Report';
-    const aiStart=baseMarkdown.indexOf(aiTitle);
+    const zhReport=baseMarkdown.includes('## 结论分析')||baseMarkdown.includes('## 规则分析报告');
+    const aiTitle=zhReport?'## 结论分析':'## Conclusion Analysis';
+    const previousTitles=['## 结论分析','## Conclusion Analysis','## 规则分析报告','## Rule-based Analysis Report'];
+    const previousTitle=previousTitles.find(title=>baseMarkdown.includes(title));
+    const aiStart=previousTitle?baseMarkdown.indexOf(previousTitle):-1;
     window.POLYFUSION_REPORT_MARKDOWN=(aiStart>=0?baseMarkdown.slice(0,aiStart):baseMarkdown+'\n\n')+aiTitle+'\n\n'+content+'\n';
   }};
+  function hideAccessNotice(){{const pop=document.getElementById('reportAccessPop');if(pop)pop.classList.remove('on');if(accessPopTimer)clearTimeout(accessPopTimer);accessPopTimer=0;}}
+  function showAccessNotice(target,requestLogin){{
+    let pop=document.getElementById('reportAccessPop');
+    if(!pop){{pop=document.createElement('div');pop.id='reportAccessPop';pop.className='report-access-pop';document.body.appendChild(pop);}}
+    pop.innerHTML='<b>需要登录 / Sign-in required</b>请先登录后使用保存报告和导出 Markdown。<br>Sign in to save reports or export Markdown.';
+    const rect=target.getBoundingClientRect();
+    pop.style.left=Math.min(window.innerWidth-350,Math.max(12,rect.left))+'px';
+    pop.style.top=Math.min(window.innerHeight-120,Math.max(12,rect.bottom+8))+'px';
+    pop.classList.add('on');
+    accessPopTimer=setTimeout(hideAccessNotice,5000);
+    if(requestLogin&&window.opener&&typeof window.opener.POLYFUSION_REQUEST_REPORT_LOGIN==='function')window.opener.POLYFUSION_REQUEST_REPORT_LOGIN();
+  }}
+  function guardReportAction(button,action){{
+    if(!button)return;
+    button.addEventListener('mouseenter',()=>{{if(!reportAccess)showAccessNotice(button,false);}});
+    button.addEventListener('mouseleave',()=>{{if(accessPopTimer){{clearTimeout(accessPopTimer);accessPopTimer=setTimeout(hideAccessNotice,300);}}}});
+    button.onclick=function(event){{if(!reportAccess){{event.preventDefault();showAccessNotice(button,true);return;}}hideAccessNotice();action();}};
+  }}
+  window.POLYFUSION_SET_REPORT_AUTH=function(allowed){{
+    reportAccess=!!allowed;
+    for(const id of ['saveReport','exportMarkdown']){{const button=document.getElementById(id);if(!button)continue;button.classList.toggle('report-locked',!reportAccess);button.setAttribute('aria-disabled',String(!reportAccess));}}
+    if(reportAccess)hideAccessNotice();
+  }};
   const btn=document.getElementById('exportMarkdown');
-  if(btn)btn.onclick=function(){{
+  guardReportAction(btn,function(){{
     const blob=new Blob([window.POLYFUSION_REPORT_MARKDOWN||baseMarkdown],{{type:'text/markdown;charset=utf-8'}});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(a.href);
-  }};
+  }});
   const saveBtn=document.getElementById('saveReport');
-  if(saveBtn)saveBtn.onclick=function(){{
+  guardReportAction(saveBtn,function(){{
     const status=document.getElementById('saveReportStatus');
     if(typeof window.POLYFUSION_SAVE_REPORT==='function'){{
       if(status)status.textContent='保存中… / Saving…';
       window.POLYFUSION_SAVE_REPORT();
     }}else if(status){{status.textContent='请在 VSC 登录后保存 / Sign in from VSC to save';status.style.color='#7a1f2c';}}
-  }};
+  }});
+  const backBtn=document.getElementById('backToVsc');
+  if(backBtn)backBtn.onclick=function(event){{if(window.opener&&!window.opener.closed){{event.preventDefault();window.opener.focus();window.close();}}}};
+  window.POLYFUSION_SET_REPORT_AUTH(reportAccess);
 }})();
 </script>
 """
@@ -411,6 +451,7 @@ def generate_report(data: dict) -> str:
     - ``timestamp`` (str): ISO-8601; defaults to now UTC
     - ``user`` (str): authenticated username
     - ``lang`` (str): ``"zh"`` (default) or ``"en"``
+    - ``return_url`` (str): same-origin VSC path used when no opener exists
     """
     data = data or {}
     lang = (data.get("lang") or "zh").lower().startswith("zh") and "zh" or "en"
@@ -423,6 +464,10 @@ def generate_report(data: dict) -> str:
     config_label = data.get("config_label") or config
     preset = data.get("preset") or "—"
     user = data.get("user") or "anonymous"
+    report_authenticated = user not in {"anonymous", "__anon__", "__guest__"}
+    return_url = str(data.get("return_url") or "/")
+    if not return_url.startswith("/") or return_url.startswith("//") or "\\" in return_url or any(ord(char) < 32 for char in return_url):
+        return_url = "/"
     ts = data.get("timestamp") or datetime.now(timezone.utc).isoformat(
         timespec="seconds"
     )
@@ -523,7 +568,7 @@ def generate_report(data: dict) -> str:
     sections.append(f"<div class='note'>{_esc(disclaimer)}</div>")
 
     sections.append(
-        f"<h2 class='part-title'>{t('规则分析报告', 'Rule-based Analysis Report')}</h2>"
+        f"<h2 class='part-title'>{t('结论分析', 'Conclusion Analysis')}</h2>"
     )
     sections.append(
         f"<div id='aiReport' class='ai-report loading'>{t('加载中…', 'Loading…')}</div>"
@@ -547,13 +592,15 @@ def generate_report(data: dict) -> str:
         is_zh=is_zh,
     )
     safe_filename = re.sub(r"[^A-Za-z0-9_.-]+", "_", f"polyfusion-{config}-{ts}.md")
-    report_script = _report_script(markdown_doc, safe_filename)
+    report_script = _report_script(markdown_doc, safe_filename, report_authenticated)
     html_doc = (
         "<!DOCTYPE html>"
         f"<html lang='{lang}'><head><meta charset='utf-8'>"
         f"<title>{_esc(title)}</title>"
         f"<style>{_REPORT_CSS}</style></head><body>"
-        f"<div class='wrap'><h1>{_esc(title)}</h1>"
+        f"<div class='wrap'><div class='report-head'><h1>{_esc(title)}</h1>"
+        f"<a id='backToVsc' class='report-back' href='{_esc(return_url)}'>"
+        f"← {t('返回 VSC', 'Back to VSC')}</a></div>"
         f"<div class='sub'>{_esc(config)} · preset {_esc(preset)}</div>"
         f"{meta}<div class='actions'><button id='saveReport'>"
         f"{t('保存报告', 'Save Report')}</button><button id='exportMarkdown'>"

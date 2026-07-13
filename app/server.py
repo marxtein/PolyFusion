@@ -729,7 +729,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
             try:
                 req = json.loads(self.rfile.read(n) or b"{}")
-                req.setdefault("user", principal)
+                req["user"] = principal
                 html_body = generate_report(req)
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
                 return self._send(400, json.dumps({"error": f"bad json: {e}"}))
